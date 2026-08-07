@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kairos by Exousia — The Scheduling OS for Those Whose Time Matters Most</title>
+<meta name="description" content="Kairos is the scheduling and life-management operating system for those whose time is structurally scarce, and for the people who manage that time on their behalf. Join the waitlist." />
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<a class="skip-link" href="#waitlist">Skip to waitlist form</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">Kairos</span>
+      <span class="brand-sub">by Exousia</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#product">Product</a>
+      <a href="#audience">Who it's for</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#security">Security</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href="#waitlist">Join the waitlist</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero" id="waitlist">
+    <div class="wrap hero-inner">
+      <p class="eyebrow">Now taking early access requests</p>
+      <h1 class="display">The scheduling OS for those<br class="lg-only" /> whose time matters most.</h1>
+      <p class="lede">
+        Kairos is the scheduling and life-management operating system for people whose time is
+        structurally scarce — and for the assistants, chiefs of staff, and teams who protect that
+        time on their behalf. Not a booking link repositioned for a niche. Built from the ground up
+        around who is actually asking for the meeting.
+      </p>
+
+      <form id="waitlist-form" class="waitlist-form" novalidate aria-label="Join the Kairos waitlist">
+        <div class="field-row">
+          <label class="sr-only" for="email">Email address</label>
+          <input id="email" name="email" type="email" placeholder="you@company.com" autocomplete="email" required />
+          <button type="submit" class="btn btn-primary">
+            <span class="btn-label">Join the waitlist</span>
+          </button>
+        </div>
+
+        <div class="field-row field-row-secondary">
+          <label class="sr-only" for="name">Name</label>
+          <input id="name" name="name" type="text" placeholder="Name (optional)" autocomplete="name" />
+
+          <label class="sr-only" for="role">You are a...</label>
+          <select id="role" name="role" required>
+            <option value="" disabled selected>You are a…</option>
+            <option value="individual_professional">Individual professional (doctor, lawyer, consultant)</option>
+            <option value="pa_ea_chief_of_staff">PA / EA / Chief of Staff</option>
+            <option value="organisation">Organisation (church, firm, clinic, startup)</option>
+            <option value="hni_family_office">HNI / Family Office principal</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <!-- Honeypot field — hidden from real users, catches simple bots -->
+        <div class="hp-field" aria-hidden="true">
+          <label for="company">Company</label>
+          <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+
+      <p class="social-proof">
+        <span id="waitlist-count">A growing list</span> of people whose time matters have already joined.
+      </p>
+    </div>
+  </section>
+
+  <!-- POSITIONING / THE FIVE GAPS -->
+  <section class="section" id="product">
+    <div class="wrap">
+      <p class="eyebrow">Why not just use Calendly</p>
+      <h2 class="section-title">Every existing scheduling tool was built for the person booking the meeting.<br class="lg-only" /> Kairos was built for the person whose time is being protected.</h2>
+
+      <div class="gap-table" role="table" aria-label="Gaps in existing scheduling tools and how Kairos closes them">
+        <div class="gap-row gap-head" role="row">
+          <div role="columnheader">In Calendly, Cal.com, Acuity</div>
+          <div role="columnheader">In Kairos</div>
+        </div>
+        <div class="gap-row" role="row">
+          <div role="cell">Every booking is treated the same</div>
+          <div role="cell"><strong>4-tier access control</strong> — a stranger and a board member are never routed the same way</div>
+        </div>
+        <div class="gap-row" role="row">
+          <div role="cell">No intelligence about context</div>
+          <div role="cell"><strong>Smart buffers, protected times, and relationship intelligence</strong> that remembers who someone is</div>
+        </div>
+        <div class="gap-row" role="row">
+          <div role="cell">The assistant is an afterthought</div>
+          <div role="cell"><strong>PA Home</strong> — a first-class, dedicated interface, not a restricted owner view</div>
+        </div>
+        <div class="gap-row" role="row">
+          <div role="cell">No communication architecture</div>
+          <div role="cell"><strong>Brief builder, instructions vault, and a communications engine</strong> that sends on the principal's behalf</div>
+        </div>
+        <div class="gap-row" role="row">
+          <div role="cell">Not built for how Africa actually communicates</div>
+          <div role="cell"><strong>WhatsApp-native</strong>, USSD-aware, and designed offline-first from day one</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHO IT SERVES -->
+  <section class="section section-alt" id="audience">
+    <div class="wrap">
+      <p class="eyebrow">Who Kairos is for</p>
+      <h2 class="section-title">A wide market, with one tier built for the busiest people in it.</h2>
+      <p class="section-lede">Kairos serves everyone from a solo consultant guarding their calendar, to a full family office running a principal's entire operation. High-net-worth individuals and their teams are the highest-margin tier — not the only one.</p>
+
+      <div class="audience-grid">
+        <div class="audience-card">
+          <span class="audience-index">01</span>
+          <h3>Individual professionals</h3>
+          <p>Doctors, lawyers, consultants who need professional scheduling without a PA.</p>
+        </div>
+        <div class="audience-card">
+          <span class="audience-index">02</span>
+          <h3>Small organisations</h3>
+          <p>Churches, startups, clinics, and firms coordinating scheduling across staff.</p>
+        </div>
+        <div class="audience-card">
+          <span class="audience-index">03</span>
+          <h3>Growing ministries</h3>
+          <p>Counselling and leadership scheduling for single-campus churches.</p>
+        </div>
+        <div class="audience-card">
+          <span class="audience-index">04</span>
+          <h3>Students &amp; young professionals</h3>
+          <p>Simple, low-cost scheduling to start building the habit early.</p>
+        </div>
+        <div class="audience-card">
+          <span class="audience-index">05</span>
+          <h3>Creative &amp; media professionals</h3>
+          <p>Shoot bookings and production calls, handled without back-and-forth.</p>
+        </div>
+        <div class="audience-card">
+          <span class="audience-index">06</span>
+          <h3>Corporate teams</h3>
+          <p>HR, sales, and training teams scheduling internally without needing IT.</p>
+        </div>
+        <div class="audience-card audience-card-featured">
+          <span class="audience-index">07</span>
+          <h3>HNIs and their full team</h3>
+          <p>A complete life and team operating system — principal, PA, driver, security, and accountant, all on one platform.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FIVE INTEGRATED SYSTEMS -->
+  <section class="section" id="architecture">
+    <div class="wrap">
+      <p class="eyebrow">What Kairos actually is</p>
+      <h2 class="section-title">Not a scheduling app that added features. Five integrated systems.</h2>
+
+      <div class="pillar-list">
+        <article class="pillar">
+          <div class="pillar-head">
+            <span class="pillar-index">I</span>
+            <h3>Scheduling Infrastructure</h3>
+          </div>
+          <p>The core loop, done properly: onboarding, multi-group management, availability with protected times, tiered meeting types, a public booking flow, calendar, and in-app video — with time zones and reschedules handled correctly from day one.</p>
+        </article>
+
+        <article class="pillar">
+          <div class="pillar-head">
+            <span class="pillar-index">II</span>
+            <h3>PA Operating Layer</h3>
+          </div>
+          <p>PA Home is a dedicated, first-class interface: an approval queue for sensitive bookings, a brief builder, an instructions vault with voice capture, a communications engine that sends on the principal's behalf, and contact intelligence that remembers every relationship.</p>
+        </article>
+
+        <article class="pillar">
+          <div class="pillar-head">
+            <span class="pillar-index">III</span>
+            <h3>Document &amp; Asset Infrastructure</h3>
+          </div>
+          <p>For the Family Office tier: a zero-knowledge encrypted document vault, a full family office module for properties, investments, vehicles, and staff, travel itineraries, and expense approval — with a permissions matrix controlling exactly who sees what.</p>
+        </article>
+
+        <article class="pillar">
+          <div class="pillar-head">
+            <span class="pillar-index">IV</span>
+            <h3>Relationship Intelligence</h3>
+          </div>
+          <p>A three-tier birthday and anniversary system — Inner Circle, Close, Professional — plus an AI scheduling assistant that proposes but never acts alone. Every output waits for the PA's approval.</p>
+        </article>
+
+        <article class="pillar pillar-future">
+          <div class="pillar-head">
+            <span class="pillar-index">V</span>
+            <h3>Concierge Marketplace</h3>
+            <span class="pillar-badge">Coming later</span>
+          </div>
+          <p>Travel, chauffeurs, private aviation, security, gifting, and more — commercial relationships layered on data the platform already has, once the community that makes those partnerships credible exists.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- PA CALLOUT -->
+  <section class="section section-callout">
+    <div class="wrap callout-inner">
+      <div class="callout-copy">
+        <p class="eyebrow">If you're the one holding the calendar</p>
+        <h2 class="section-title">Kairos was built for the assistant, not just the principal.</h2>
+        <p class="section-lede">
+          Most scheduling tools give the assistant a restricted version of the owner's view.
+          Kairos gives PAs, EAs, and Chiefs of Staff a dedicated home: approvals, briefs,
+          instructions, and communications, built around how the role actually works. Bring your
+          principal onto Kairos, and you're the one who set it up.
+        </p>
+      </div>
+      <a class="btn btn-secondary" href="#waitlist">Join as a PA or EA</a>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="section section-alt" id="security">
+    <div class="wrap">
+      <p class="eyebrow">Trust &amp; security</p>
+      <h2 class="section-title">This will hold passports, property records, and a principal's daily pattern. It is built like it knows that.</h2>
+      <p class="section-lede">Security is not a phase-two cleanup item. It is the foundation the rest of the platform sits on, engineered in from the first line of code.</p>
+
+      <ul class="security-grid">
+        <li>
+          <h3>Passkeys &amp; mandatory MFA</h3>
+          <p>FIDO2 passkeys as the primary identity layer, biometric on mobile, short session windows for the most sensitive tier.</p>
+        </li>
+        <li>
+          <h3>Encryption throughout</h3>
+          <p>AES-256 at rest, TLS 1.3 in transit, with field-level encryption for the most sensitive data.</p>
+        </li>
+        <li>
+          <h3>Zero-knowledge document vault</h3>
+          <p>End-to-end encrypted storage for passports, contracts, and insurance — not even Kairos staff can read your documents.</p>
+        </li>
+        <li>
+          <h3>Independently tested</h3>
+          <p>Third-party penetration testing before any Family Office feature ever touches real user data. No exceptions for speed.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section" id="pricing">
+    <div class="wrap">
+      <p class="eyebrow">Pricing</p>
+      <h2 class="section-title">Five tiers. One built for the person whose time is scarcest.</h2>
+
+      <div class="pricing-grid">
+        <article class="price-card">
+          <h3>Free</h3>
+          <p class="price-amount">₦0</p>
+          <p class="price-who">Individuals testing the product</p>
+          <p class="price-unlock">Your entry point — no card required.</p>
+        </article>
+
+        <article class="price-card">
+          <h3>Standard</h3>
+          <p class="price-amount">₦5,000<span>/mo</span></p>
+          <p class="price-sub">or ₦50,000/yr</p>
+          <p class="price-who">Professionals, small orgs, ministries, creatives</p>
+          <p class="price-unlock">5 groups, unlimited meeting types, 1 delegate.</p>
+        </article>
+
+        <article class="price-card price-card-featured">
+          <span class="price-badge">Founding Member</span>
+          <h3>Executive</h3>
+          <p class="price-amount">₦25,000<span>/mo</span></p>
+          <p class="price-sub">or ₦250,000/yr</p>
+          <p class="price-who">Senior professionals, pastors, founders, HNIs</p>
+          <p class="price-unlock">PA Home, brief builder, instructions vault, relationship intelligence.</p>
+          <p class="price-founding">First 100 subscribers lock in <strong>₦15,000/month for life</strong>.</p>
+        </article>
+
+        <article class="price-card">
+          <h3>Family Office</h3>
+          <p class="price-amount">₦75,000<span>/mo</span></p>
+          <p class="price-sub">or ₦750,000/yr</p>
+          <p class="price-who">HNIs and their full team</p>
+          <p class="price-unlock">Document vault, family office module, driver &amp; security modules.</p>
+        </article>
+
+        <article class="price-card">
+          <h3>Enterprise</h3>
+          <p class="price-amount">Custom</p>
+          <p class="price-who">Organisations deploying Kairos team-wide</p>
+          <p class="price-unlock">Multiple principals, API access, white-label.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="section section-final-cta" id="cta-final">
+    <div class="wrap final-cta-inner">
+      <h2 class="section-title">Be first in line when Kairos opens.</h2>
+      <p class="section-lede">The first 100 Executive subscribers become Founding Members — locked-in pricing for life, in exchange for honest feedback along the way.</p>
+      <a class="btn btn-primary btn-large" href="#waitlist" id="scroll-to-form">Join the waitlist</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div>
+      <span class="brand-mark">Kairos</span>
+      <span class="brand-sub">by Exousia</span>
+      <p class="footer-tagline">The scheduling OS for those whose time matters most.</p>
+    </div>
+    <p class="footer-legal">Exousia Prime Emporium Ltd. &copy; <span id="year"></span>. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="/script.js"></script>
+</body>
+</html>
