@@ -5,6 +5,11 @@ const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const { sendEmail } = require('../lib/email');
 const { formatForEmail } = require('../lib/format');
+const { daysUntilNextOccurrence } = require('../lib/relationships');
+const { getOpenSlots } = require('../lib/availability');
+const { parseRequest, filterSlots } = require('../lib/aiAssist');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const BRIEF_SECTION_KEYS = ['who', 'why', 'background', 'talkingPoints', 'desiredOutcome', 'logistics', 'sensitiveNotes'];
 
@@ -99,6 +104,8 @@ function serializeContact(c) {
     name: c.name,
     notes: c.notes,
     relationshipTier: c.relationship_tier,
+    birthday: c.birthday,
+    anniversary: c.anniversary,
     meetingCount: c.meeting_count,
     lastMeetingAt: c.last_meeting_at,
   };
@@ -119,18 +126,27 @@ router.get('/:ownerId/contacts', requirePaAccess, (req, res) => {
 });
 
 const RELATIONSHIP_TIERS = new Set(['inner_circle', 'close', 'professional']);
+const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Contact not found.' });
 
-  const { notes, relationshipTier } = req.body || {};
+  const { notes, relationshipTier, birthday, anniversary } = req.body || {};
   const updates = [];
   const values = [];
   if (notes !== undefined) { updates.push('notes = ?'); values.push(String(notes)); }
   if (relationshipTier !== undefined) {
     if (!RELATIONSHIP_TIERS.has(relationshipTier)) return res.status(400).json({ error: 'Invalid relationship tier.' });
     updates.push('relationship_tier = ?'); values.push(relationshipTier);
+  }
+  if (birthday !== undefined) {
+    if (birthday !== '' && !MONTH_DAY_RE.test(birthday)) return res.status(400).json({ error: 'Birthday must be MM-DD.' });
+    updates.push('birthday = ?'); values.push(birthday || null);
+  }
+  if (anniversary !== undefined) {
+    if (anniversary !== '' && !MONTH_DAY_RE.test(anniversary)) return res.status(400).json({ error: 'Anniversary must be MM-DD.' });
+    updates.push('anniversary = ?'); values.push(anniversary || null);
   }
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
@@ -146,6 +162,27 @@ router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
     GROUP BY c.id
   `).get(row.id);
   res.json({ contact: serializeContact(updated) });
+});
+
+router.get('/:ownerId/relationships/upcoming', requirePaAccess, (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM contacts WHERE owner_id = ? AND (birthday IS NOT NULL OR anniversary IS NOT NULL)
+  `).all(req.principal.id);
+
+  const upcoming = [];
+  for (const c of rows) {
+    if (c.birthday) {
+      const days = daysUntilNextOccurrence(c.birthday);
+      if (days !== null) upcoming.push({ contactId: c.id, name: c.name || c.email, email: c.email, relationshipTier: c.relationship_tier, kind: 'birthday', monthDay: c.birthday, daysUntil: days });
+    }
+    if (c.anniversary) {
+      const days = daysUntilNextOccurrence(c.anniversary);
+      if (days !== null) upcoming.push({ contactId: c.id, name: c.name || c.email, email: c.email, relationshipTier: c.relationship_tier, kind: 'anniversary', monthDay: c.anniversary, daysUntil: days });
+    }
+  }
+  upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
+
+  res.json({ upcoming });
 });
 
 // Upcoming confirmed bookings for this principal — used by the Briefs tab's
@@ -305,6 +342,88 @@ router.post('/:ownerId/comms', requirePaAccess, (req, res) => {
   });
 
   res.status(201).json({ ok: true });
+});
+
+router.post('/:ownerId/ai-assist/parse', requirePaAccess, (req, res) => {
+  const { message } = req.body || {};
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ error: 'Please describe what you want to schedule.' });
+  }
+
+  const contacts = db.prepare('SELECT id, name, email FROM contacts WHERE owner_id = ?').all(req.principal.id);
+  const meetingTypes = db.prepare('SELECT id, name, slug, duration_minutes, location_type FROM meeting_types WHERE owner_id = ? AND is_active = 1 ORDER BY created_at').all(req.principal.id);
+
+  if (meetingTypes.length === 0) {
+    return res.status(400).json({ error: 'No active meeting types to schedule against.' });
+  }
+
+  const hints = parseRequest(String(message), { contacts, meetingTypes });
+  if (!hints.meetingType) {
+    return res.status(400).json({ error: "Couldn't match a meeting type — try naming one explicitly." });
+  }
+
+  const meetingType = {
+    id: hints.meetingType.id,
+    duration_minutes: hints.meetingType.duration_minutes,
+    buffer_before_minutes: 0,
+    buffer_after_minutes: 0,
+  };
+  const allSlots = getOpenSlots({ owner: req.principal, meetingType });
+  const filtered = filterSlots(allSlots, hints, req.principal.timezone);
+  const candidates = (filtered.length > 0 ? filtered : allSlots).slice(0, 5);
+
+  res.json({
+    contact: hints.contact ? { id: hints.contact.id, name: hints.contact.name, email: hints.contact.email } : null,
+    meetingType: { id: hints.meetingType.id, name: hints.meetingType.name, slug: hints.meetingType.slug, durationMinutes: hints.meetingType.duration_minutes },
+    matchedFilter: filtered.length > 0,
+    candidates: candidates.map((s) => ({ startAt: s.startUtc.toISOString(), endAt: s.endUtc.toISOString() })),
+  });
+});
+
+// A PA directly creating a booking is itself the approval — always lands as
+// 'confirmed', regardless of the meeting type's tier, unlike the public
+// booking flow. Still requires an explicit click; nothing here is automatic.
+router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
+  const { meetingTypeId, startAt, contactEmail, contactName } = req.body || {};
+  const meetingType = db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ? AND is_active = 1').get(meetingTypeId, req.principal.id);
+  if (!meetingType) return res.status(404).json({ error: 'Meeting type not found.' });
+  if (!contactEmail || !EMAIL_RE.test(String(contactEmail).trim())) {
+    return res.status(400).json({ error: 'A valid contact email is required.' });
+  }
+  const start = new Date(startAt);
+  if (!startAt || Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'Please choose a valid future time.' });
+  }
+
+  const stillOpen = getOpenSlots({ owner: req.principal, meetingType }).some((s) => s.startUtc.getTime() === start.getTime());
+  if (!stillOpen) return res.status(409).json({ error: 'That slot was just taken. Please pick another time.' });
+
+  const end = new Date(start.getTime() + meetingType.duration_minutes * 60000);
+  const cleanEmail = String(contactEmail).trim().toLowerCase();
+  const cleanName = String(contactName || cleanEmail).trim();
+  const videoRoom = meetingType.location_type === 'video' ? `kairos-${crypto.randomBytes(8).toString('hex')}` : null;
+  const id = crypto.randomUUID();
+
+  db.prepare(`
+    INSERT INTO bookings (id, meeting_type_id, owner_id, booker_name, booker_email, booker_timezone, start_at, end_at, status, video_room, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)
+  `).run(id, meetingType.id, req.principal.id, cleanName, cleanEmail, req.principal.timezone, start.toISOString(), end.toISOString(), videoRoom, new Date().toISOString());
+
+  const existingContact = db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
+  if (!existingContact) {
+    db.prepare(`
+      INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, created_at, updated_at)
+      VALUES (?, ?, ?, ?, '', 'professional', ?, ?)
+    `).run(crypto.randomUUID(), req.principal.id, cleanEmail, cleanName, new Date().toISOString(), new Date().toISOString());
+  }
+
+  sendEmail({
+    ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: cleanEmail, relatedBookingId: id, category: 'transactional',
+    subject: `Confirmed: ${meetingType.name} with ${req.principal.name}`,
+    body: `Hi ${cleanName},\n\nYou're confirmed for ${formatForEmail(start.toISOString(), req.principal.timezone)} (${req.principal.timezone}).\n\nManage this booking: /book/manage/${id}`,
+  });
+
+  res.status(201).json({ booking: { id, startAt: start.toISOString(), endAt: end.toISOString(), videoRoom } });
 });
 
 module.exports = router;

@@ -2,18 +2,28 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
 const TIER_LABELS = { inner_circle: 'Inner Circle', close: 'Close', professional: 'Professional' };
+const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 function ContactCard({ contact, ownerId, onSaved }) {
   const [notes, setNotes] = useState(contact.notes);
   const [tier, setTier] = useState(contact.relationshipTier);
+  const [birthday, setBirthday] = useState(contact.birthday || '');
+  const [anniversary, setAnniversary] = useState(contact.anniversary || '');
   const [saving, setSaving] = useState(false);
-  const dirty = notes !== contact.notes || tier !== contact.relationshipTier;
+  const [error, setError] = useState('');
+  const dirty = notes !== contact.notes || tier !== contact.relationshipTier
+    || birthday !== (contact.birthday || '') || anniversary !== (contact.anniversary || '');
 
   async function save() {
+    if (birthday && !MONTH_DAY_RE.test(birthday)) return setError('Birthday must be MM-DD, e.g. 03-21.');
+    if (anniversary && !MONTH_DAY_RE.test(anniversary)) return setError('Anniversary must be MM-DD, e.g. 09-14.');
+    setError('');
     setSaving(true);
     try {
-      const data = await api.patch(`/pa/${ownerId}/contacts/${contact.id}`, { notes, relationshipTier: tier });
+      const data = await api.patch(`/pa/${ownerId}/contacts/${contact.id}`, { notes, relationshipTier: tier, birthday, anniversary });
       onSaved(data.contact);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -28,10 +38,29 @@ function ContactCard({ contact, ownerId, onSaved }) {
             {contact.email} · {contact.meetingCount} meeting{contact.meetingCount === 1 ? '' : 's'}
             {contact.lastMeetingAt ? ` · last ${new Date(contact.lastMeetingAt).toLocaleDateString()}` : ''}
           </div>
-          <div className="field" style={{ marginTop: 10, marginBottom: 8 }}>
+
+          {error && <div className="alert alert-error" style={{ marginTop: 8 }}>{error}</div>}
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 8 }}>
             <select aria-label={`Relationship tier for ${contact.name || contact.email}`} value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: 'auto', fontSize: '0.82rem', padding: '6px 8px' }}>
               {Object.entries(TIER_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
+            <input
+              type="text"
+              aria-label={`Birthday for ${contact.name || contact.email}`}
+              placeholder="Birthday MM-DD"
+              value={birthday}
+              onChange={(e) => setBirthday(e.target.value)}
+              style={{ width: 130, fontSize: '0.82rem', padding: '6px 8px' }}
+            />
+            <input
+              type="text"
+              aria-label={`Anniversary for ${contact.name || contact.email}`}
+              placeholder="Anniversary MM-DD"
+              value={anniversary}
+              onChange={(e) => setAnniversary(e.target.value)}
+              style={{ width: 150, fontSize: '0.82rem', padding: '6px 8px' }}
+            />
           </div>
           <textarea
             value={notes}

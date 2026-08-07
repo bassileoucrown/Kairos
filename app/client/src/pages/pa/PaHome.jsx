@@ -7,13 +7,17 @@ import ContactsTab from './ContactsTab.jsx';
 import BriefsTab from './BriefsTab.jsx';
 import InstructionsTab from './InstructionsTab.jsx';
 import CommsTab from './CommsTab.jsx';
+import RelationshipsTab from './RelationshipsTab.jsx';
+import AiAssistTab from './AiAssistTab.jsx';
 
 const TABS = [
   { id: 'approvals', label: 'Approvals' },
   { id: 'contacts', label: 'Contacts' },
+  { id: 'relationships', label: 'Relationships' },
   { id: 'briefs', label: 'Briefs' },
   { id: 'instructions', label: 'Instructions' },
   { id: 'comms', label: 'Comms' },
+  { id: 'ai_assist', label: 'AI Assist' },
 ];
 
 const ROLE_LABELS = { owner: 'You', pa: 'PA', delegate: 'Delegate' };
@@ -100,9 +104,11 @@ export default function PaHome() {
 
             {tab === 'approvals' && <ApprovalsTab ownerId={ownerId} />}
             {tab === 'contacts' && <ContactsTab ownerId={ownerId} />}
+            {tab === 'relationships' && <RelationshipsTab ownerId={ownerId} />}
             {tab === 'briefs' && <BriefsTab ownerId={ownerId} />}
             {tab === 'instructions' && <InstructionsTab ownerId={ownerId} />}
             {tab === 'comms' && <CommsTab ownerId={ownerId} />}
+            {tab === 'ai_assist' && <AiAssistTab ownerId={ownerId} />}
           </>
         )}
       </div>

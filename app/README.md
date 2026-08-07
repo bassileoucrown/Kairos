@@ -93,6 +93,25 @@ themselves, so the approval workflow is useful even solo, before ever inviting a
 - **Communications Engine** — the PA composes and sends email to a contact on the principal's
   behalf, through the same email service (and outbox) as the rest of the app.
 
+## Phase 2B — Relationship Intelligence + AI Assistant (complete)
+
+Deepens Executive retention per the blueprint (Section 7.4), built on top of Phase 2A's Contact
+Intelligence:
+
+- **Relationship Calendar** — contacts get an optional birthday and anniversary (`MM-DD`, set from
+  the Contacts tab). The Relationships tab shows what's coming up, soonest first, with Inner Circle
+  contacts flagged — the 3-tier system from the blueprint's positioning (Section 1.1), reusing the
+  same relationship tier as Contact Intelligence rather than a second, separate one.
+- **AI Scheduling Assistant** — a PA types a plain-language request ("book a call with Jane next
+  Tuesday afternoon"); it extracts a contact, meeting type, and date/time hint
+  (`server/lib/aiAssist.js`) and filters the *real* computed open slots down to matching candidates.
+  No LLM API key is configured in this environment, so extraction is pattern-based rather than a
+  model call — but it's a genuine working feature on real data, not a stub, and nothing books
+  itself: every candidate still needs an explicit PA click (`POST /:ownerId/ai-assist/book`),
+  matching the blueprint's "PA approves every output — never autonomous" (Section 3.2). A PA
+  booking directly this way lands as `confirmed` immediately, regardless of the meeting type's
+  tier — the PA's click *is* the approval.
+
 ## Timezone handling
 
 Every stored instant (bookings, computed slots) is UTC. Availability rules are stored as
@@ -107,8 +126,8 @@ is handled from the start here rather than retrofitted.
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling
-environments per group, group switcher), Relationship Intelligence's birthday/anniversary system,
-the AI Scheduling Assistant, Family Office infrastructure (Phase 3), and everything past Phase 2A.
+environments per group, group switcher), Family Office infrastructure (Phase 3), and everything
+past Phase 2B.
 
 ## Moving to Supabase
 

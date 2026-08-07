@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS contacts (
   name              TEXT NOT NULL DEFAULT '',
   notes             TEXT NOT NULL DEFAULT '',
   relationship_tier TEXT NOT NULL DEFAULT 'professional', -- inner_circle | close | professional
+  birthday          TEXT, -- 'MM-DD', year optional and not stored (a birthday recurs every year)
+  anniversary       TEXT, -- 'MM-DD'
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL,
   UNIQUE(owner_id, email)
