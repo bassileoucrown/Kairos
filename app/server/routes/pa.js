@@ -7,7 +7,7 @@ const { sendEmail } = require('../lib/email');
 const { formatForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { getOpenSlots } = require('../lib/availability');
-const { parseRequest, filterSlots } = require('../lib/aiAssist');
+const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -128,6 +128,40 @@ router.get('/:ownerId/contacts', requirePaAccess, (req, res) => {
 const RELATIONSHIP_TIERS = new Set(['inner_circle', 'close', 'professional']);
 const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
+// Most contacts appear automatically the first time someone books, but a PA
+// also needs to add people the principal knows who haven't booked yet —
+// board members, family, an assistant reaching out cold on the principal's
+// behalf — so this is a manual, PA-initiated entry point.
+router.post('/:ownerId/contacts', requirePaAccess, (req, res) => {
+  const { email, name, notes, relationshipTier, birthday, anniversary } = req.body || {};
+  if (!email || !EMAIL_RE.test(String(email).trim())) {
+    return res.status(400).json({ error: 'Please provide a valid email address.' });
+  }
+  const cleanEmail = String(email).trim().toLowerCase();
+  const tier = relationshipTier && RELATIONSHIP_TIERS.has(relationshipTier) ? relationshipTier : 'professional';
+  if (birthday && !MONTH_DAY_RE.test(birthday)) return res.status(400).json({ error: 'Birthday must be MM-DD.' });
+  if (anniversary && !MONTH_DAY_RE.test(anniversary)) return res.status(400).json({ error: 'Anniversary must be MM-DD.' });
+
+  const existing = db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
+  if (existing) return res.status(409).json({ error: 'A contact with that email already exists.' });
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, birthday, anniversary, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.principal.id, cleanEmail, String(name || '').trim(), String(notes || '').trim(), tier, birthday || null, anniversary || null, now, now);
+
+  const row = db.prepare(`
+    SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at
+    FROM contacts c
+    LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
+    WHERE c.id = ?
+    GROUP BY c.id
+  `).get(id);
+  res.status(201).json({ contact: serializeContact(row) });
+});
+
 router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Contact not found.' });
@@ -221,6 +255,62 @@ router.get('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
   const brief = db.prepare('SELECT * FROM briefs WHERE booking_id = ?').get(booking.id);
   const sections = brief ? { ...emptySections(), ...JSON.parse(brief.sections) } : emptySections();
   res.json({ sections, updatedAt: brief?.updated_at || null });
+});
+
+// Pre-fills brief sections from whatever the system already knows about
+// this contact and booking — meeting history, relationship tier, PA notes,
+// upcoming birthday/anniversary — so the PA edits a first draft instead of
+// filling seven blank textareas per meeting. Doesn't touch sections the PA
+// has already written (only fills ones that are still empty), and never
+// saves on its own — the PA still hits "Save brief" explicitly.
+router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, (req, res) => {
+  const booking = db.prepare(`
+    SELECT b.*, mt.name as meeting_type_name FROM bookings b
+    JOIN meeting_types mt ON mt.id = b.meeting_type_id
+    WHERE b.id = ? AND b.owner_id = ?
+  `).get(req.params.bookingId, req.principal.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  const contact = db.prepare(`
+    SELECT c.*, COUNT(pb.id) as meeting_count, MAX(pb.start_at) as last_meeting_at
+    FROM contacts c
+    LEFT JOIN bookings pb ON pb.owner_id = c.owner_id AND pb.booker_email = c.email AND pb.status = 'confirmed' AND pb.id != ?
+    WHERE c.owner_id = ? AND c.email = ?
+    GROUP BY c.id
+  `).get(booking.id, req.principal.id, booking.booker_email);
+
+  const TIER_LABELS = { inner_circle: 'Inner Circle', close: 'Close', professional: 'Professional' };
+  const who = contact?.name || booking.booker_name;
+  const tierLabel = contact ? TIER_LABELS[contact.relationship_tier] : null;
+  const priorCount = contact?.meeting_count || 0;
+
+  const whoLines = [`${who} (${booking.booker_email}), meeting for: ${booking.meeting_type_name}.`];
+  if (tierLabel) whoLines.push(`Relationship tier: ${tierLabel}.`);
+
+  const backgroundLines = [];
+  if (priorCount > 0) {
+    backgroundLines.push(`${priorCount} prior confirmed meeting${priorCount === 1 ? '' : 's'}${contact.last_meeting_at ? `, most recently ${formatForEmail(contact.last_meeting_at, req.principal.timezone)}` : ''}.`);
+  } else {
+    backgroundLines.push('No prior meetings on record — this looks like a first meeting.');
+  }
+  if (contact?.notes) backgroundLines.push(`PA notes: ${contact.notes}`);
+  if (contact?.birthday) backgroundLines.push(`Birthday on file: ${contact.birthday}.`);
+  if (contact?.anniversary) backgroundLines.push(`Anniversary on file: ${contact.anniversary}.`);
+
+  const draftSections = {
+    who: whoLines.join(' '),
+    background: backgroundLines.join(' '),
+    logistics: `${formatForEmail(booking.start_at, req.principal.timezone)} (${req.principal.timezone}).`,
+  };
+
+  const existing = db.prepare('SELECT sections FROM briefs WHERE booking_id = ?').get(booking.id);
+  const currentSections = existing ? JSON.parse(existing.sections) : {};
+  const merged = { ...emptySections(), ...currentSections };
+  for (const key of Object.keys(draftSections)) {
+    if (!merged[key] || !merged[key].trim()) merged[key] = draftSections[key];
+  }
+
+  res.json({ sections: merged });
 });
 
 router.put('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
@@ -424,6 +514,50 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
   });
 
   res.status(201).json({ booking: { id, startAt: start.toISOString(), endAt: end.toISOString(), videoRoom } });
+});
+
+// Drafts an email (subject + body) for the PA to review, edit, and send via
+// the Comms endpoint above — the AI assistant's second job beyond finding
+// times: taking a first pass at the writing itself so the PA edits instead
+// of starting from a blank box. Optional contactId/bookingId pull in real
+// names and times; without them the draft stays generic.
+router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, (req, res) => {
+  const { instruction, contactId, bookingId } = req.body || {};
+  if (!instruction || !String(instruction).trim()) {
+    return res.status(400).json({ error: 'Describe what the message needs to say.' });
+  }
+
+  let contact = null;
+  if (contactId) {
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(contactId, req.principal.id);
+  }
+
+  let booking = null;
+  if (bookingId) {
+    booking = db.prepare(`
+      SELECT b.*, mt.name as meeting_type_name FROM bookings b
+      JOIN meeting_types mt ON mt.id = b.meeting_type_id
+      WHERE b.id = ? AND b.owner_id = ?
+    `).get(bookingId, req.principal.id);
+    if (booking && !contact) {
+      contact = db.prepare('SELECT * FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, booking.booker_email);
+    }
+  }
+
+  const draft = draftMessage(String(instruction), {
+    contactName: contact?.name || booking?.booker_name || '',
+    principalName: req.principal.name,
+    principalSlug: req.principal.slug,
+    meetingTypeName: booking?.meeting_type_name || '',
+    bookingWhen: booking ? formatForEmail(booking.start_at, req.principal.timezone) : '',
+  });
+
+  res.json({
+    intent: draft.intent,
+    subject: draft.subject,
+    body: draft.body,
+    toEmail: contact?.email || booking?.booker_email || '',
+  });
 });
 
 module.exports = router;

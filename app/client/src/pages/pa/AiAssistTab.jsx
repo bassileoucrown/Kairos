@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
@@ -9,7 +9,138 @@ const EXAMPLES = [
   'Set up a meeting Friday at 3pm',
 ];
 
+const DRAFT_EXAMPLES = [
+  'Reschedule with Jane, something came up',
+  'Follow up thank-you after today\'s call with the board member',
+  'Confirm tomorrow\'s meeting',
+];
+
+function DraftMessageTab({ ownerId }) {
+  const [instruction, setInstruction] = useState('');
+  const [contacts, setContacts] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [contactId, setContactId] = useState('');
+  const [bookingId, setBookingId] = useState('');
+  const [draft, setDraft] = useState(null);
+  const [toEmail, setToEmail] = useState('');
+  const [error, setError] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    api.get(`/pa/${ownerId}/contacts`).then((data) => setContacts(data.contacts)).catch(() => {});
+    api.get(`/pa/${ownerId}/bookings`).then((data) => setBookings(data.bookings)).catch(() => {});
+  }, [ownerId]);
+
+  async function handleDraft(e) {
+    e.preventDefault();
+    setError('');
+    setSent(false);
+    setDrafting(true);
+    try {
+      const data = await api.post(`/pa/${ownerId}/ai-assist/draft-message`, {
+        instruction,
+        contactId: contactId || undefined,
+        bookingId: bookingId || undefined,
+      });
+      setDraft({ subject: data.subject, body: data.body });
+      setToEmail(data.toEmail || '');
+    } catch (err) {
+      setError(err.message);
+      setDraft(null);
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  async function handleSend() {
+    if (!toEmail.trim()) {
+      setError("Enter the recipient's email before sending.");
+      return;
+    }
+    setError('');
+    setSending(true);
+    try {
+      await api.post(`/pa/${ownerId}/comms`, { toEmail, subject: draft.subject, body: draft.body });
+      setSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="tz-note" style={{ marginBottom: 16 }}>
+        Describe what the message needs to say. This drafts a subject and body you can edit before
+        sending — nothing goes out until you click Send. (Pattern-based templates in this
+        environment, not a live model call — no LLM API key is configured here.)
+      </p>
+
+      {error && <div className="alert alert-error">{error}</div>}
+      {sent && <div className="alert alert-success">Sent.</div>}
+
+      <form onSubmit={handleDraft} className="card" style={{ marginBottom: 16 }}>
+        <div className="field">
+          <label htmlFor="draft-instruction">What's the message about?</label>
+          <textarea
+            id="draft-instruction"
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            placeholder={DRAFT_EXAMPLES[0]}
+            required
+            style={{ minHeight: 60 }}
+          />
+          <p className="hint">Try: "{DRAFT_EXAMPLES.join('" · "')}"</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <select aria-label="Contact for draft" value={contactId} onChange={(e) => setContactId(e.target.value)} style={{ width: 'auto' }}>
+            <option value="">No contact selected</option>
+            {contacts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name || c.email}</option>
+            ))}
+          </select>
+          <select aria-label="Booking for draft" value={bookingId} onChange={(e) => setBookingId(e.target.value)} style={{ width: 'auto' }}>
+            <option value="">No booking selected</option>
+            {bookings.map((b) => (
+              <option key={b.id} value={b.id}>{b.meetingTypeName} with {b.bookerName} · {dayLabelInZone(b.startAt, 'UTC')}</option>
+            ))}
+          </select>
+        </div>
+
+        <button className="btn btn-primary" type="submit" disabled={drafting}>
+          {drafting ? 'Drafting…' : 'Draft message'}
+        </button>
+      </form>
+
+      {draft && (
+        <div className="card">
+          <div className="field">
+            <label htmlFor="draft-to">To</label>
+            <input id="draft-to" type="email" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder="recipient@example.com" />
+          </div>
+          <div className="field">
+            <label htmlFor="draft-subject">Subject</label>
+            <input id="draft-subject" type="text" value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="draft-body">Body</label>
+            <textarea id="draft-body" value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} style={{ minHeight: 180 }} />
+          </div>
+          <button className="btn btn-primary" type="button" onClick={handleSend} disabled={sending}>
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AiAssistTab({ ownerId }) {
+  const [mode, setMode] = useState('schedule');
   const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [result, setResult] = useState(null);
@@ -61,6 +192,48 @@ export default function AiAssistTab({ ownerId }) {
     }
   }
 
+  return (
+    <div>
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button type="button" className={'tab-btn' + (mode === 'schedule' ? ' is-active' : '')} onClick={() => setMode('schedule')}>
+          Find a time
+        </button>
+        <button type="button" className={'tab-btn' + (mode === 'draft' ? ' is-active' : '')} onClick={() => setMode('draft')}>
+          Draft a message
+        </button>
+      </div>
+
+      {mode === 'draft' ? (
+        <DraftMessageTab ownerId={ownerId} />
+      ) : (
+        <ScheduleTab
+          ownerId={ownerId}
+          user={user}
+          message={message}
+          setMessage={setMessage}
+          result={result}
+          error={error}
+          setError={setError}
+          parsing={parsing}
+          contactName={contactName}
+          setContactName={setContactName}
+          contactEmail={contactEmail}
+          setContactEmail={setContactEmail}
+          booking={booking}
+          busySlot={busySlot}
+          handleParse={handleParse}
+          handleBook={handleBook}
+        />
+      )}
+    </div>
+  );
+}
+
+function ScheduleTab({
+  user, message, setMessage, result, error, parsing,
+  contactName, setContactName, contactEmail, setContactEmail,
+  booking, busySlot, handleParse, handleBook,
+}) {
   return (
     <div>
       <p className="tz-note" style={{ marginBottom: 16 }}>

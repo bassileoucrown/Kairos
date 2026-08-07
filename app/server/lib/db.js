@@ -26,5 +26,6 @@ function ensureColumn(table, column, definition) {
 }
 ensureColumn('contacts', 'birthday', 'TEXT');
 ensureColumn('contacts', 'anniversary', 'TEXT');
+ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
 
 module.exports = db;

@@ -18,10 +18,24 @@ function BriefEditor({ ownerId, booking, onBack }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
+  const [drafting, setDrafting] = useState(false);
 
   useEffect(() => {
     api.get(`/pa/${ownerId}/briefs/${booking.id}`).then((data) => setSections(data.sections)).catch((err) => setError(err.message));
   }, [ownerId, booking.id]);
+
+  async function handleDraftWithAi() {
+    setError('');
+    setDrafting(true);
+    try {
+      const data = await api.post(`/pa/${ownerId}/briefs/${booking.id}/draft`);
+      setSections(data.sections);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -48,6 +62,13 @@ function BriefEditor({ ownerId, booking, onBack }) {
 
       {sections && (
         <div className="card">
+          <button className="btn btn-secondary btn-sm" type="button" onClick={handleDraftWithAi} disabled={drafting} style={{ marginBottom: 16 }}>
+            {drafting ? 'Drafting…' : 'Draft with AI'}
+          </button>
+          <p className="hint" style={{ marginTop: -12, marginBottom: 16 }}>
+            Fills in Who, Background, and Logistics from contact history and notes — only for
+            sections still empty. Talking points and outcomes are yours to write.
+          </p>
           {SECTION_FIELDS.map((f) => (
             <div className="field" key={f.key}>
               <label htmlFor={`brief-${f.key}`}>{f.label}</label>

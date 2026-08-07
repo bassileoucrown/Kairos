@@ -22,9 +22,15 @@ export default function ProfileStep() {
     setSubmitting(true);
     try {
       const { user: updated } = await api.patch('/profile', { name, slug, timezone });
-      const { user: stepped } = await api.post('/profile/onboarding-step', { step: 'availability' });
+      // PA/EA/Chief of Staff accounts don't need their own availability or
+      // meeting types to be useful — they land in PA Home and only touch
+      // those principal-only steps if they later choose to open their own
+      // bookable calendar (Dashboard's Settings still exposes them).
+      const isAssistant = user.accountCategory && user.accountCategory !== 'principal';
+      const nextStep = isAssistant ? 'done' : 'availability';
+      const { user: stepped } = await api.post('/profile/onboarding-step', { step: nextStep });
       updateUser({ ...updated, onboardingStep: stepped.onboardingStep });
-      navigate('/onboarding/availability');
+      navigate(isAssistant ? '/pa' : '/onboarding/availability');
     } catch (err) {
       setError(err.message);
     } finally {

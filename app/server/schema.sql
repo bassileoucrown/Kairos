@@ -12,6 +12,12 @@ CREATE TABLE IF NOT EXISTS users (
   timezone        TEXT NOT NULL DEFAULT 'UTC',
   email_verified  INTEGER NOT NULL DEFAULT 0,
   onboarding_step TEXT NOT NULL DEFAULT 'profile',
+  -- Self-declared at signup: principal | pa | ea | chief_of_staff. Assistant
+  -- categories all get identical PA Home capabilities once someone invites
+  -- them (the blueprint's Section 2.2 treats PA/EA/Chief of Staff as one
+  -- functional role) — this only drives which onboarding steps and which
+  -- dashboard they land on by default, not what they're permitted to do.
+  account_category TEXT NOT NULL DEFAULT 'principal',
   created_at      TEXT NOT NULL
 );
 

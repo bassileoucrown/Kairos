@@ -13,12 +13,22 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import PaHome from './pages/pa/PaHome.jsx';
 
-const ONBOARDING_ROUTE = {
+const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
   availability: '/onboarding/availability',
   meeting_type: '/onboarding/meeting-type',
-  done: '/dashboard',
 };
+
+// PA/EA/Chief of Staff accounts land in PA Home by default — that's where
+// their day-to-day work lives — while principals land on their own
+// calendar. Either can still reach the other view via the nav.
+function homeRouteFor(user) {
+  if (!user) return '/dashboard';
+  if (user.onboardingStep !== 'done') {
+    return ONBOARDING_STEP_ROUTE[user.onboardingStep] || '/onboarding/profile';
+  }
+  return user.accountCategory && user.accountCategory !== 'principal' ? '/pa' : '/dashboard';
+}
 
 function FullPageSpinner() {
   return <div className="spinner-page">Loading…</div>;
@@ -29,7 +39,7 @@ function RequireAuth({ children, enforceOnboarding = true }) {
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
   if (enforceOnboarding && user.onboardingStep !== 'done') {
-    return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/onboarding/profile'} replace />;
+    return <Navigate to={homeRouteFor(user)} replace />;
   }
   return children;
 }
@@ -38,9 +48,9 @@ function RequireOnboardingStep({ step, children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.onboardingStep === 'done') return <Navigate to="/dashboard" replace />;
+  if (user.onboardingStep === 'done') return <Navigate to={homeRouteFor(user)} replace />;
   if (user.onboardingStep !== step) {
-    return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/onboarding/profile'} replace />;
+    return <Navigate to={homeRouteFor(user)} replace />;
   }
   return children;
 }
@@ -52,7 +62,7 @@ function RedirectIfSignedIn({ children }) {
   if (loading) return <FullPageSpinner />;
   if (user) {
     if (next && user.onboardingStep === 'done') return <Navigate to={next} replace />;
-    return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/dashboard'} replace />;
+    return <Navigate to={homeRouteFor(user)} replace />;
   }
   return children;
 }
@@ -61,7 +71,7 @@ function Home() {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/dashboard'} replace />;
+  return <Navigate to={homeRouteFor(user)} replace />;
 }
 
 export default function App() {

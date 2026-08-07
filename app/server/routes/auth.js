@@ -26,6 +26,8 @@ function isResetRateLimited(email) {
 const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const ACCOUNT_CATEGORIES = new Set(['principal', 'pa', 'ea', 'chief_of_staff']);
+
 function publicUser(u) {
   return {
     id: u.id,
@@ -34,6 +36,7 @@ function publicUser(u) {
     slug: u.slug,
     timezone: u.timezone,
     onboardingStep: u.onboarding_step,
+    accountCategory: u.account_category,
   };
 }
 
@@ -50,7 +53,7 @@ function uniqueSlugFromName(name) {
 }
 
 router.post('/signup', (req, res) => {
-  const { email, password, name, timezone } = req.body || {};
+  const { email, password, name, timezone, accountCategory } = req.body || {};
 
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
@@ -62,6 +65,7 @@ router.post('/signup', (req, res) => {
     return res.status(400).json({ error: 'Please provide your name.' });
   }
   const tz = timezone && isValidTimeZone(timezone) ? timezone : 'UTC';
+  const category = ACCOUNT_CATEGORIES.has(accountCategory) ? accountCategory : 'principal';
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const existing = db.prepare('SELECT 1 FROM users WHERE email = ?').get(normalizedEmail);
@@ -74,9 +78,9 @@ router.post('/signup', (req, res) => {
   const passwordHash = hashPassword(String(password));
 
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified, onboarding_step, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 1, 'profile', ?)
-  `).run(id, normalizedEmail, passwordHash, String(name).trim(), slug, tz, new Date().toISOString());
+    INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified, onboarding_step, account_category, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, 'profile', ?, ?)
+  `).run(id, normalizedEmail, passwordHash, String(name).trim(), slug, tz, category, new Date().toISOString());
   // MVP note: email_verified is set to 1 immediately — there is no email
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.

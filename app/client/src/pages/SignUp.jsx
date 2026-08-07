@@ -4,6 +4,12 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { detectTimezone } from '../lib/timezones.js';
 import { stashPostOnboardingRedirect } from '../lib/postAuthRedirect.js';
 
+const CATEGORIES = [
+  { value: 'principal', label: 'Principal', hint: "It's my own calendar — clients or contacts book me directly." },
+  { value: 'pa', label: 'PA / EA', hint: "I manage someone else's calendar — approvals, briefs, contacts." },
+  { value: 'chief_of_staff', label: 'Chief of Staff', hint: 'Same PA Home access, broader remit across the principal’s operation.' },
+];
+
 export default function SignUp() {
   const { signup } = useAuth();
   const navigate = useNavigate();
@@ -12,6 +18,7 @@ export default function SignUp() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [accountCategory, setAccountCategory] = useState('principal');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,7 +27,7 @@ export default function SignUp() {
     setError('');
     setSubmitting(true);
     try {
-      await signup({ name, email, password, timezone: detectTimezone() });
+      await signup({ name, email, password, timezone: detectTimezone(), accountCategory });
       stashPostOnboardingRedirect(next);
       navigate('/onboarding/profile');
     } catch (err) {
@@ -39,6 +46,28 @@ export default function SignUp() {
         {error && <div className="alert alert-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label>You are a…</label>
+            <div className="role-picker">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  className={'role-option' + (accountCategory === c.value ? ' is-selected' : '')}
+                  onClick={() => setAccountCategory(c.value)}
+                  aria-pressed={accountCategory === c.value}
+                >
+                  <span className="role-option-label">{c.label}</span>
+                  <span className="role-option-hint">{c.hint}</span>
+                </button>
+              ))}
+            </div>
+            <p className="hint">
+              Either way you get your own calendar — this just decides where you land and what's
+              streamlined. PAs and EAs can always set up a bookable calendar of their own later too.
+            </p>
+          </div>
+
           <div className="field">
             <label htmlFor="name">Full name</label>
             <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />

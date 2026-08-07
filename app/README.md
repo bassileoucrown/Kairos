@@ -89,8 +89,10 @@ themselves, so the approval workflow is useful even solo, before ever inviting a
 
 - **Approval Queue** — Tier 3/4 bookings land here instead of the calendar; the PA approves
   (confirms + emails the booker) or declines (frees the slot + emails the booker).
-- **Contact Intelligence** — every booker becomes a contact automatically; the PA can add notes and
-  set a relationship tier (Inner Circle / Close / Professional).
+- **Contact Intelligence** — every booker becomes a contact automatically, and a PA can also add one
+  by hand (`POST /:ownerId/contacts`, an "+ Add contact" form on the Contacts tab) for people the
+  principal knows who haven't booked yet; either way the PA can add notes and set a relationship
+  tier (Inner Circle / Close / Professional).
 - **Brief Builder** — a structured, multi-section brief per booking.
 - **Instructions Vault** — free-text instructions with priority and open/done status. Voice capture
   is deferred — it needs a transcription API key (e.g. Whisper) that isn't configured.
@@ -115,6 +117,28 @@ Intelligence:
   matching the blueprint's "PA approves every output — never autonomous" (Section 3.2). A PA
   booking directly this way lands as `confirmed` immediately, regardless of the meeting type's
   tier — the PA's click *is* the approval.
+- **AI message drafting** — the AI Assist tab's second mode. A PA describes what a message needs to
+  say ("follow up thank-you after our call with Jane"), optionally picks a contact and/or booking
+  for context, and gets an editable subject/body drawn from a fixed set of intent-matched templates
+  (reschedule, cancel, follow-up, confirm, introduction, birthday/anniversary greeting, apology,
+  general — `draftMessage` in `server/lib/aiAssist.js`). Nothing sends until the PA clicks Send,
+  which goes through the same Comms endpoint (and Outbox) as a hand-written message.
+- **AI brief pre-fill** — a "Draft with AI" button on the Brief Builder (`POST
+  /:ownerId/briefs/:bookingId/draft`) fills the Who, Background, and Logistics sections from real
+  contact history (meeting count, last meeting, relationship tier, PA notes, birthday/anniversary)
+  — only for sections still empty, so it never clobbers what a PA already wrote. Talking points and
+  desired outcome are left for the PA, since those need actual judgment about the meeting.
+
+## Account categories
+
+At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**
+(`users.account_category`) — this only decides where onboarding lands and what the default view is,
+not what the account is permitted to do: every account can still be invited as a PA for someone
+else, and any PA/EA/Chief of Staff account can still open its own bookable calendar later via
+Dashboard → Settings. Principal accounts get the full onboarding (profile → availability → meeting
+type) and land on the Dashboard; PA/EA/Chief of Staff accounts skip straight to PA Home after the
+profile step, where they manage whichever principal(s) have invited them (or, before anyone has,
+their own account solo — the approval queue and AI Assist still work standalone).
 
 ## Timezone handling
 

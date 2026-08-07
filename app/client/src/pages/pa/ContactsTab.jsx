@@ -79,6 +79,70 @@ function ContactCard({ contact, ownerId, onSaved }) {
   );
 }
 
+function NewContactForm({ ownerId, onCreated }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const data = await api.post(`/pa/${ownerId}/contacts`, { email, name });
+      onCreated(data.contact);
+      setEmail('');
+      setName('');
+      setOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setOpen(true)} style={{ marginBottom: 16 }}>
+        + Add contact
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }}>
+      <div className="meeting-type-card" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+        <input
+          type="email"
+          placeholder="Email"
+          aria-label="New contact email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          style={{ width: 220 }}
+        />
+        <input
+          type="text"
+          placeholder="Name (optional)"
+          aria-label="New contact name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ width: 200 }}
+        />
+        <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>
+          {saving ? 'Adding…' : 'Add'}
+        </button>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && <div className="alert alert-error" style={{ marginTop: 8 }}>{error}</div>}
+    </form>
+  );
+}
+
 export default function ContactsTab({ ownerId }) {
   const [contacts, setContacts] = useState(null);
   const [error, setError] = useState('');
@@ -93,12 +157,17 @@ export default function ContactsTab({ ownerId }) {
     setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
+  function handleCreated(created) {
+    setContacts((prev) => [created, ...(prev || [])]);
+  }
+
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
+      {contacts !== null && <NewContactForm ownerId={ownerId} onCreated={handleCreated} />}
       {contacts === null && <p className="hint">Loading…</p>}
       {contacts && contacts.length === 0 && (
-        <div className="empty-state">No contacts yet — they're created automatically the first time someone books.</div>
+        <div className="empty-state">No contacts yet — add one above, or they'll appear automatically the first time someone books.</div>
       )}
       {contacts && contacts.map((c) => (
         <ContactCard key={c.id} contact={c} ownerId={ownerId} onSaved={handleSaved} />

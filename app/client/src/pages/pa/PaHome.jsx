@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import { consumePostOnboardingRedirect } from '../../lib/postAuthRedirect.js';
 import ApprovalsTab from './ApprovalsTab.jsx';
 import ContactsTab from './ContactsTab.jsx';
 import BriefsTab from './BriefsTab.jsx';
@@ -30,7 +31,25 @@ export default function PaHome() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState('approvals');
 
+  // Assistant-category users land here straight out of onboarding (never
+  // through Dashboard), so this is the other place a stashed post-onboarding
+  // destination (e.g. accepting a PA invite) needs to be consumed. Guarded
+  // with a ref because consumePostOnboardingRedirect() is a one-shot,
+  // non-idempotent read (it deletes from localStorage) — StrictMode's dev-only
+  // double-invoke of effects would otherwise run the *second* invocation
+  // straight into the fetch-and-navigate-to-self branch below, which fires
+  // after and silently overwrites the redirect from the first invocation.
+  const handledEntry = useRef(false);
+
   useEffect(() => {
+    if (handledEntry.current) return;
+    handledEntry.current = true;
+
+    const target = consumePostOnboardingRedirect();
+    if (target) {
+      navigate(target, { replace: true });
+      return;
+    }
     api.get('/pa/principals').then((data) => {
       setPrincipals(data.principals);
       if (!ownerId) {
@@ -89,6 +108,13 @@ export default function PaHome() {
               Managing <strong>{current.name}</strong>'s calendar as their {ROLE_LABELS[current.role]}.
               {current.role !== 'owner' && <> Your own calendar is separate — <Link to="/dashboard">open My Dashboard</Link> above.</>}
             </p>
+            {current.role === 'owner' && user.accountCategory !== 'principal' && principals.length === 1 && (
+              <div className="alert" style={{ marginBottom: 16 }}>
+                No principal has invited you yet — this is your own account, shown here so the
+                approval queue and AI Assist work solo in the meantime. Once someone invites you as
+                their PA, EA, or delegate and you accept, they'll appear in the switcher above.
+              </div>
+            )}
 
             <div className="tabs">
               {TABS.map((t) => (
