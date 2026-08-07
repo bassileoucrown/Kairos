@@ -43,6 +43,19 @@ cd app/client && npm run build
 cd ../server && npm start     # serves the built client + API on one port (4000)
 ```
 
+## Deploying
+
+`render.yaml` at the repo root is a Render Blueprint for exactly the above: one web service where
+the Express server serves the built client too. In the Render dashboard go to **New → Blueprint**,
+pick this repo, and apply — build and start commands, and the Node 22 requirement for
+`node:sqlite`, are already set.
+
+Two things to know on the free plan: instances sleep after ~15 minutes idle (first request back is
+slow), and the filesystem is ephemeral with no persistent disk, so `server/data/kairos.sqlite` —
+and every account in it — resets on each restart or deploy. Fine for trying the app out; for data
+that sticks around, use a paid instance with a disk mounted at the data directory, or port `db.js`
+to Postgres (see "Moving to Supabase" below).
+
 ## Phase 1 — the core loop (complete)
 
 - **Auth** — email/password signup and login, scrypt password hashing, httpOnly session cookies,

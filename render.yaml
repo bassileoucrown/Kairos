@@ -1,0 +1,30 @@
+# Render Blueprint for the Kairos app (the `app/` directory).
+#
+# One web service is enough: in production the Express server also serves the
+# built React client and hands unknown paths back to index.html for
+# client-side routing (see app/server/index.js).
+#
+# To deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply.
+#
+# Note on data: the free plan has an ephemeral filesystem and no persistent
+# disk, so the SQLite database at app/server/data/kairos.sqlite is wiped
+# whenever the service restarts or redeploys (free instances also sleep after
+# ~15 minutes idle). That's fine for kicking the tyres — accounts you create
+# won't survive a restart. For data that persists, move to a paid instance
+# with a disk mounted at /opt/render/project/src/app/server/data, or port
+# `db.js` to Postgres (see "Moving to Supabase" in app/README.md).
+services:
+  - type: web
+    name: kairos
+    runtime: node
+    plan: free
+    rootDir: app
+    buildCommand: cd client && npm install && npm run build && cd ../server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      # server/lib/db.js uses node:sqlite, which needs Node 22+.
+      - key: NODE_VERSION
+        value: "22"
+      # Optional: set a Resend API key in the Render dashboard to send real
+      # email. Without one, every message is still written to the in-app
+      # Outbox tab and the server log, which is enough to test the flows.
