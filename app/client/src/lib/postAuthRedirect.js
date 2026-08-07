@@ -14,3 +14,14 @@ export function consumePostOnboardingRedirect() {
     return null;
   }
 }
+
+// Non-destructive read — used by onboarding screens that want to react to
+// the stashed destination (e.g. show invite context) without clearing it,
+// since Dashboard's mount effect is what actually consumes it later.
+export function peekPostOnboardingRedirect() {
+  try {
+    return localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+}

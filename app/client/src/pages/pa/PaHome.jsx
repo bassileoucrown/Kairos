@@ -87,6 +87,7 @@ export default function PaHome() {
           <>
             <p className="tz-note" style={{ marginBottom: 16 }}>
               Managing <strong>{current.name}</strong>'s calendar as their {ROLE_LABELS[current.role]}.
+              {current.role !== 'owner' && <> Your own calendar is separate — <Link to="/dashboard">open My Dashboard</Link> above.</>}
             </p>
 
             <div className="tabs">
