@@ -184,20 +184,48 @@ textarea { resize: vertical; min-height: 70px; }
 .onboarding-card .subtitle { color: var(--text-muted); font-size: 0.92rem; margin-bottom: 24px; }
 .onboarding-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
 
-.week-editor { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.week-editor { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .week-row {
-  display: grid;
-  grid-template-columns: 34px 90px 1fr auto 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 .week-row.is-off { opacity: 0.55; }
+.week-row-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 104px;
+  padding-top: 6px;
+}
+.week-row-blocks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
 .week-row .day-label { font-size: 0.85rem; font-weight: 600; }
-.week-row .to-label { text-align: center; color: var(--text-muted); font-size: 0.8rem; }
-.week-row input[type="time"] { padding: 6px 8px; font-size: 0.85rem; }
+.week-row .to-label { color: var(--text-muted); font-size: 0.8rem; }
+.week-row input[type="time"] { padding: 6px 8px; font-size: 0.85rem; width: auto; }
+.day-off-label { font-size: 0.82rem; color: var(--text-muted); padding-top: 6px; }
+.time-block { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.block-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.block-remove:hover { color: var(--danger); background: var(--danger-soft); }
+.block-add { padding: 4px 10px; font-size: 0.78rem; }
 .day-toggle {
   width: 34px; height: 20px;
   border-radius: 999px;

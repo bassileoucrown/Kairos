@@ -27,10 +27,10 @@ export default function ProfileStep() {
       // those principal-only steps if they later choose to open their own
       // bookable calendar (Dashboard's Settings still exposes them).
       const isAssistant = user.accountCategory && user.accountCategory !== 'principal';
-      const nextStep = isAssistant ? 'done' : 'availability';
+      const nextStep = isAssistant ? 'done' : 'meeting_type';
       const { user: stepped } = await api.post('/profile/onboarding-step', { step: nextStep });
       updateUser({ ...updated, onboardingStep: stepped.onboardingStep });
-      navigate(isAssistant ? '/pa' : '/onboarding/availability');
+      navigate(isAssistant ? '/pa' : '/onboarding/meeting-type');
     } catch (err) {
       setError(err.message);
     } finally {

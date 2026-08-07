@@ -3,7 +3,6 @@ import { useAuth } from './lib/AuthContext.jsx';
 import SignUp from './pages/SignUp.jsx';
 import Login from './pages/Login.jsx';
 import ProfileStep from './pages/onboarding/ProfileStep.jsx';
-import AvailabilityStep from './pages/onboarding/AvailabilityStep.jsx';
 import MeetingTypeStep from './pages/onboarding/MeetingTypeStep.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
@@ -15,17 +14,26 @@ import PaHome from './pages/pa/PaHome.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
-  availability: '/onboarding/availability',
   meeting_type: '/onboarding/meeting-type',
 };
+
+// Availability is no longer an onboarding step — it's set from the dashboard
+// once you're in, so you pick real hours instead of rubber-stamping a default
+// mid-signup. Accounts left parked on the removed step resume at the next one
+// rather than dead-ending; normalizing here (not just in the route table)
+// keeps the guard's step comparison from bouncing them in a redirect loop.
+function effectiveStep(user) {
+  return user.onboardingStep === 'availability' ? 'meeting_type' : user.onboardingStep;
+}
 
 // PA/EA/Chief of Staff accounts land in PA Home by default — that's where
 // their day-to-day work lives — while principals land on their own
 // calendar. Either can still reach the other view via the nav.
 function homeRouteFor(user) {
   if (!user) return '/dashboard';
-  if (user.onboardingStep !== 'done') {
-    return ONBOARDING_STEP_ROUTE[user.onboardingStep] || '/onboarding/profile';
+  const step = effectiveStep(user);
+  if (step !== 'done') {
+    return ONBOARDING_STEP_ROUTE[step] || '/onboarding/profile';
   }
   return user.accountCategory && user.accountCategory !== 'principal' ? '/pa' : '/dashboard';
 }
@@ -38,7 +46,7 @@ function RequireAuth({ children, enforceOnboarding = true }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (enforceOnboarding && user.onboardingStep !== 'done') {
+  if (enforceOnboarding && effectiveStep(user) !== 'done') {
     return <Navigate to={homeRouteFor(user)} replace />;
   }
   return children;
@@ -48,8 +56,9 @@ function RequireOnboardingStep({ step, children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.onboardingStep === 'done') return <Navigate to={homeRouteFor(user)} replace />;
-  if (user.onboardingStep !== step) {
+  const current = effectiveStep(user);
+  if (current === 'done') return <Navigate to={homeRouteFor(user)} replace />;
+  if (current !== step) {
     return <Navigate to={homeRouteFor(user)} replace />;
   }
   return children;
@@ -85,7 +94,6 @@ export default function App() {
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
       <Route path="/onboarding/profile" element={<RequireOnboardingStep step="profile"><ProfileStep /></RequireOnboardingStep>} />
-      <Route path="/onboarding/availability" element={<RequireOnboardingStep step="availability"><AvailabilityStep /></RequireOnboardingStep>} />
       <Route path="/onboarding/meeting-type" element={<RequireOnboardingStep step="meeting_type"><MeetingTypeStep /></RequireOnboardingStep>} />
 
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { peekPostOnboardingRedirect } from '../../lib/postAuthRedirect.js';
 
-const STEPS = ['profile', 'availability', 'meeting_type'];
+const STEPS = ['profile', 'meeting_type'];
 const ROLE_LABELS = { pa: 'PA', delegate: 'delegate' };
 
 function InviteContextBanner() {

@@ -51,10 +51,17 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
   email matches an account, and never returns the reset link itself — only `sendEmail` sees it.
   No real email delivery is configured, so accounts are marked verified immediately on signup —
   replace this with real verification before any real user data touches it.
-- **Onboarding** — profile (name, booking-link slug, timezone) → weekly availability → first
-  meeting type → dashboard.
-- **Availability** — a weekly recurring schedule (day of week + start/end time, stored in the
-  owner's own timezone), editable after onboarding too.
+- **Onboarding** — profile (name, booking-link slug, timezone) → first meeting type → dashboard.
+  Availability is deliberately *not* an onboarding step: picking the hours you'll actually be
+  bookable is a real decision, not a form to rubber-stamp during signup. Nothing is defaulted on
+  your behalf either, so until you set hours your booking page offers nothing — the dashboard says
+  so plainly, with a button straight to the editor, rather than letting you find out from an empty
+  public page.
+- **Availability** — a weekly recurring schedule, set from the dashboard's Availability tab and
+  editable whenever. Each day holds **any number of time blocks**, not one unbroken stretch, so
+  "9–12 and 2–5" (lunch protected), mornings-only, or a separate evening window are all first-class.
+  Blocks are stored as `day_of_week` + `HH:MM` start/end in the owner's own timezone; the API
+  rejects blocks that overlap within a day, since overlapping windows would emit duplicate slots.
 - **Meeting types** — name, duration, format (video/phone/in-person), buffers, color, and a real
   **4-tier access control** (Public/Standard auto-confirm; Priority/Inner Circle hold as `pending`
   until approved) — the gap-closing feature named in the blueprint's own positioning (Section 1.1).
@@ -135,8 +142,8 @@ At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of 
 (`users.account_category`) — this only decides where onboarding lands and what the default view is,
 not what the account is permitted to do: every account can still be invited as a PA for someone
 else, and any PA/EA/Chief of Staff account can still open its own bookable calendar later via
-Dashboard → Settings. Principal accounts get the full onboarding (profile → availability → meeting
-type) and land on the Dashboard; PA/EA/Chief of Staff accounts skip straight to PA Home after the
+Dashboard → Settings. Principal accounts get the full onboarding (profile → meeting type) and land
+on the Dashboard; PA/EA/Chief of Staff accounts skip straight to PA Home after the
 profile step, where they manage whichever principal(s) have invited them (or, before anyone has,
 their own account solo — the approval queue and AI Assist still work standalone).
 

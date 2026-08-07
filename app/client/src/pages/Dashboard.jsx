@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext.jsx';
+import { api } from '../lib/api.js';
 import { consumePostOnboardingRedirect } from '../lib/postAuthRedirect.js';
 import BookingsTab from './dashboard/BookingsTab.jsx';
 import CalendarTab from './dashboard/CalendarTab.jsx';
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('calendar');
   const [copied, setCopied] = useState(false);
+  const [hasAvailability, setHasAvailability] = useState(null);
 
   const bookingPath = `/book/${user.slug}`;
   const bookingUrl = `${window.location.origin}${bookingPath}`;
@@ -37,6 +39,17 @@ export default function Dashboard() {
     const target = consumePostOnboardingRedirect();
     if (target) navigate(target, { replace: true });
   }, [navigate]);
+
+  // Availability is set here rather than during signup, so a brand-new
+  // account has none and its booking page can't offer a single slot. Say so
+  // plainly instead of leaving them to discover it from an empty page.
+  // Re-checked when leaving the Availability tab so the notice clears as
+  // soon as hours are saved.
+  useEffect(() => {
+    api.get('/availability')
+      .then((data) => setHasAvailability(data.rules.length > 0))
+      .catch(() => setHasAvailability(null));
+  }, [tab]);
 
   async function handleLogout() {
     await logout();
@@ -68,6 +81,18 @@ export default function Dashboard() {
         <div className="page-header">
           <h1>Dashboard</h1>
         </div>
+
+        {hasAvailability === false && (
+          <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, minWidth: 240 }}>
+              <strong>Your booking page isn't live yet.</strong> You haven't set any available hours,
+              so nobody can book you. Set them and you're open.
+            </span>
+            <button className="btn btn-primary btn-sm" type="button" onClick={() => setTab('availability')}>
+              Set your hours
+            </button>
+          </div>
+        )}
 
         <div className="booking-link-box">
           Your booking page: <code>{bookingUrl}</code>
