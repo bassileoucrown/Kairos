@@ -77,10 +77,11 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
   are set as env vars (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`,
   `WHATSAPP_BUSINESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`). Nothing pretends to sync or send.
 
-## Phase 2A — the PA layer (in progress)
+## Phase 2A — the PA layer (complete)
 
 The category-defining piece per the blueprint (Section 7.3: "what makes Kairos not-Calendly").
-An invited PA gets a PA Home (`/pa`) scoped to whichever principal(s) they support:
+An invited PA gets a PA Home (`/pa`) scoped to whichever principal(s) they support — including
+themselves, so the approval workflow is useful even solo, before ever inviting anyone:
 
 - **Approval Queue** — Tier 3/4 bookings land here instead of the calendar; the PA approves
   (confirms + emails the booker) or declines (frees the slot + emails the booker).
