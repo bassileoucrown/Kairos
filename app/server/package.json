@@ -1,0 +1,16 @@
+{
+  "name": "kairos-app-server",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --experimental-sqlite index.js",
+    "start": "NODE_ENV=production node --experimental-sqlite index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
