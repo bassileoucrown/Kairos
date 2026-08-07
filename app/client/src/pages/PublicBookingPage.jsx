@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
-import {
-  detectTimezone, listTimezones, dateKeyInZone, dayLabelInZone, timeLabelInZone,
-} from '../lib/timezones.js';
+import { detectTimezone, listTimezones, dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
+import { useOpenSlots } from '../lib/useOpenSlots.js';
+import SlotGrid from '../components/SlotGrid.jsx';
 
 const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
 const timezones = listTimezones();
@@ -36,8 +36,6 @@ function MeetingList({ owner, meetingTypes, slug }) {
 }
 
 function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
-  const [slots, setSlots] = useState(null);
-  const [ownerTimezone, setOwnerTimezone] = useState('UTC');
   const [bookerTimezone, setBookerTimezone] = useState(detectTimezone());
   const [selected, setSelected] = useState(null);
   const [name, setName] = useState('');
@@ -46,29 +44,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
 
-  useEffect(() => {
-    api.get(`/public/${slug}/${meetingSlug}/slots`)
-      .then((data) => {
-        setSlots(data.slots);
-        setOwnerTimezone(data.ownerTimezone);
-      })
-      .catch((err) => setError(err.message));
-  }, [slug, meetingSlug]);
-
-  const groupedByDay = useMemo(() => {
-    if (!slots) return [];
-    const groups = new Map();
-    for (const slot of slots) {
-      const key = dateKeyInZone(slot.startAt, bookerTimezone);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(slot);
-    }
-    return Array.from(groups.entries()).map(([key, daySlots]) => ({
-      key,
-      label: dayLabelInZone(daySlots[0].startAt, bookerTimezone),
-      slots: daySlots,
-    }));
-  }, [slots, bookerTimezone]);
+  const { slots, ownerTimezone, reload } = useOpenSlots({ ownerSlug: slug, meetingSlug });
 
   async function handleConfirm(e) {
     e.preventDefault();
@@ -83,7 +59,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
       if (err instanceof ApiError && err.status === 409) {
         setError(err.message);
         setSelected(null);
-        api.get(`/public/${slug}/${meetingSlug}/slots`).then((data) => setSlots(data.slots)).catch(() => {});
+        reload();
       } else {
         setError(err.message);
       }
@@ -106,7 +82,10 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
               <br />
               <span className="tz-note">({confirmation.bookerTimezone})</span>
             </p>
-            <Link to={`/book/${slug}`} className="btn btn-secondary">Book another meeting</Link>
+            <p className="tz-note" style={{ marginTop: 16 }}>
+              <Link to={`/book/manage/${confirmation.id}`}>Need to change or cancel this? Manage your booking</Link>
+            </p>
+            <Link to={`/book/${slug}`} className="btn btn-secondary" style={{ marginTop: 12 }}>Book another meeting</Link>
           </div>
         </div>
       </div>
@@ -134,27 +113,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
           </div>
 
           <div className="booking-layout">
-            <div>
-              {slots === null && <p className="hint">Loading available times…</p>}
-              {slots && slots.length === 0 && <div className="empty-state">No open times in the next two weeks.</div>}
-              {groupedByDay.map((group) => (
-                <div className="day-group" key={group.key}>
-                  <h3>{group.label}</h3>
-                  <div className="slot-grid">
-                    {group.slots.map((slot) => (
-                      <button
-                        key={slot.startAt}
-                        type="button"
-                        className={'slot-btn' + (selected?.startAt === slot.startAt ? ' is-selected' : '')}
-                        onClick={() => setSelected(slot)}
-                      >
-                        {timeLabelInZone(slot.startAt, bookerTimezone)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <SlotGrid slots={slots} timezone={bookerTimezone} selected={selected} onSelect={setSelected} />
 
             <div>
               {!selected && <p className="hint">Select a time to continue.</p>}

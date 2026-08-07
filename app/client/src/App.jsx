@@ -7,6 +7,7 @@ import AvailabilityStep from './pages/onboarding/AvailabilityStep.jsx';
 import MeetingTypeStep from './pages/onboarding/MeetingTypeStep.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
+import ManageBooking from './pages/ManageBooking.jsx';
 
 const ONBOARDING_ROUTE = {
   profile: '/onboarding/profile',
@@ -67,6 +68,7 @@ export default function App() {
 
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
 
+      <Route path="/book/manage/:id" element={<ManageBooking />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />
       <Route path="/book/:slug/:meetingSlug" element={<PublicBookingPage />} />
 

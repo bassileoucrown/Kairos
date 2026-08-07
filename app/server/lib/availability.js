@@ -8,7 +8,7 @@ const BOOKING_WINDOW_DAYS = 14;
  * BOOKING_WINDOW_DAYS, starting from "today" in the owner's timezone.
  * Returns an array of { startUtc: Date, endUtc: Date }, soonest first.
  */
-function getOpenSlots({ owner, meetingType }) {
+function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   const rules = db.prepare('SELECT * FROM availability_rules WHERE owner_id = ?').all(owner.id);
   if (rules.length === 0) return [];
 
@@ -20,9 +20,11 @@ function getOpenSlots({ owner, meetingType }) {
   }
 
   const now = new Date();
+  // excludeBookingId lets a reschedule ignore the booking's own current slot —
+  // otherwise it would appear to conflict with itself and block the move.
   const existingBookings = db
-    .prepare("SELECT start_at, end_at FROM bookings WHERE owner_id = ? AND status = 'confirmed' AND end_at > ?")
-    .all(owner.id, now.toISOString());
+    .prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status = 'confirmed' AND end_at > ? AND id != ?")
+    .all(owner.id, now.toISOString(), excludeBookingId || '');
 
   const durationMs = meetingType.duration_minutes * 60000;
   const bufferBeforeMs = meetingType.buffer_before_minutes * 60000;

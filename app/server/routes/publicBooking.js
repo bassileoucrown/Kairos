@@ -43,7 +43,9 @@ router.get('/:slug/:meetingSlug/slots', (req, res) => {
   const meetingType = getActiveMeetingType(owner.id, req.params.meetingSlug);
   if (!meetingType) return res.status(404).json({ error: 'This meeting type is not available.' });
 
-  const slots = getOpenSlots({ owner, meetingType });
+  // excludeBookingId: when rescheduling, omit the booking's own current slot
+  // from the conflict check so it doesn't block moving to a new time.
+  const slots = getOpenSlots({ owner, meetingType, excludeBookingId: req.query.excludeBookingId || null });
   res.json({
     ownerTimezone: owner.timezone,
     slots: slots.map((s) => ({ startAt: s.startUtc.toISOString(), endAt: s.endUtc.toISOString() })),
@@ -98,6 +100,93 @@ router.post('/:slug/:meetingSlug/book', (req, res) => {
       bookerTimezone,
     },
   });
+});
+
+function getBookingDetail(id) {
+  return db.prepare(`
+    SELECT
+      b.id, b.status, b.start_at, b.end_at, b.booker_name, b.booker_email, b.booker_timezone,
+      mt.name as meeting_type_name, mt.slug as meeting_type_slug, mt.duration_minutes, mt.location_type,
+      u.name as owner_name, u.slug as owner_slug, u.timezone as owner_timezone
+    FROM bookings b
+    JOIN meeting_types mt ON mt.id = b.meeting_type_id
+    JOIN users u ON u.id = b.owner_id
+    WHERE b.id = ?
+  `).get(id);
+}
+
+function serializeBookingDetail(b) {
+  return {
+    id: b.id,
+    status: b.status,
+    startAt: b.start_at,
+    endAt: b.end_at,
+    bookerName: b.booker_name,
+    bookerEmail: b.booker_email,
+    bookerTimezone: b.booker_timezone,
+    meetingTypeName: b.meeting_type_name,
+    meetingTypeSlug: b.meeting_type_slug,
+    durationMinutes: b.duration_minutes,
+    locationType: b.location_type,
+    ownerName: b.owner_name,
+    ownerSlug: b.owner_slug,
+    ownerTimezone: b.owner_timezone,
+  };
+}
+
+// Booking ids are random UUIDs (crypto.randomUUID), unguessable by
+// construction, so the id itself doubles as this link's access capability —
+// the same pattern most booking-confirmation "manage your reservation"
+// links use. No additional token needed.
+router.get('/bookings/:id', (req, res) => {
+  const booking = getBookingDetail(req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  res.json({ booking: serializeBookingDetail(booking) });
+});
+
+router.post('/bookings/:id/cancel', (req, res) => {
+  const booking = getBookingDetail(req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  if (booking.status === 'cancelled') {
+    return res.json({ booking: serializeBookingDetail(booking) });
+  }
+  db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
+  res.json({ booking: serializeBookingDetail(getBookingDetail(booking.id)) });
+});
+
+router.post('/bookings/:id/reschedule', (req, res) => {
+  const booking = getBookingDetail(req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  if (booking.status === 'cancelled') {
+    return res.status(400).json({ error: 'This booking was cancelled — book a new time instead.' });
+  }
+
+  const { startAt } = req.body || {};
+  const start = new Date(startAt);
+  if (!startAt || Number.isNaN(start.getTime())) {
+    return res.status(400).json({ error: 'Please choose a time slot.' });
+  }
+  if (start.getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'That time has already passed. Please pick another slot.' });
+  }
+
+  const owner = db.prepare('SELECT * FROM users WHERE slug = ?').get(booking.owner_slug);
+  const meetingType = getActiveMeetingType(owner.id, booking.meeting_type_slug);
+  if (!meetingType) {
+    return res.status(409).json({ error: 'This meeting type is no longer available for booking.' });
+  }
+
+  const stillOpen = getOpenSlots({ owner, meetingType, excludeBookingId: booking.id })
+    .some((s) => s.startUtc.getTime() === start.getTime());
+  if (!stillOpen) {
+    return res.status(409).json({ error: 'That slot was just taken. Please pick another time.' });
+  }
+
+  const end = new Date(start.getTime() + meetingType.duration_minutes * 60000);
+  db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
+    .run(start.toISOString(), end.toISOString(), booking.id);
+
+  res.json({ booking: serializeBookingDetail(getBookingDetail(booking.id)) });
 });
 
 module.exports = router;
