@@ -23,6 +23,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+CREATE TABLE IF NOT EXISTS password_resets (
+  id         TEXT PRIMARY KEY, -- the reset token itself, random
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+
 CREATE TABLE IF NOT EXISTS meeting_types (
   id                     TEXT PRIMARY KEY,
   owner_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

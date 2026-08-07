@@ -45,9 +45,12 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
 
 ## Phase 1 — the core loop (complete)
 
-- **Auth** — email/password signup and login, scrypt password hashing, httpOnly session cookies.
-  No email delivery is configured, so accounts are marked verified immediately on signup — replace
-  this with real verification before any real user data touches it.
+- **Auth** — email/password signup and login, scrypt password hashing, httpOnly session cookies,
+  and password reset (emailed single-use token, expires in 1 hour, invalidates every existing
+  session on use). The forgot-password endpoint gives an identical response whether or not the
+  email matches an account, and never returns the reset link itself — only `sendEmail` sees it.
+  No real email delivery is configured, so accounts are marked verified immediately on signup —
+  replace this with real verification before any real user data touches it.
 - **Onboarding** — profile (name, booking-link slug, timezone) → weekly availability → first
   meeting type → dashboard.
 - **Availability** — a weekly recurring schedule (day of week + start/end time, stored in the
@@ -65,10 +68,11 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
 - **In-app video** — video-format bookings get an auto-generated Jitsi room (`meet.jit.si`, no API
   key needed for basic rooms), surfaced on the confirmation, manage, and dashboard views.
 - **Email** — a swappable email service (`server/lib/email.js`) sends booking confirmations,
-  pending-approval notices, reschedule/cancel notices, and invites. Every email is also logged to
-  an `emails` table and viewable in the dashboard's Outbox tab — useful since no real provider is
-  configured by default. Set `RESEND_API_KEY` (and optionally `EMAIL_FROM`) to also deliver for
-  real.
+  pending-approval notices, reschedule/cancel notices, invites, and password resets. Every email
+  is logged to an `emails` table and viewable in the dashboard's Outbox tab — useful since no real
+  provider is configured by default — and also printed to the server console, which matters for
+  flows like password reset where the recipient is, by definition, locked out of their own Outbox.
+  Set `RESEND_API_KEY` (and optionally `EMAIL_FROM`) to also deliver for real.
 - **Members & Delegates** — invite a PA or delegate by email; they accept via a link (going through
   their own signup/onboarding first if needed) and get access to your account.
 - **Calendar sync / WhatsApp — stubbed, not faked.** Real architecture (`server/lib/calendarSync.js`,

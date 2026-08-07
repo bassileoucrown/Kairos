@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
 import ManageBooking from './pages/ManageBooking.jsx';
 import AcceptInvite from './pages/AcceptInvite.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import PaHome from './pages/pa/PaHome.jsx';
 
 const ONBOARDING_ROUTE = {
@@ -69,6 +71,8 @@ export default function App() {
       <Route path="/signup" element={<RedirectIfSignedIn><SignUp /></RedirectIfSignedIn>} />
       <Route path="/login" element={<RedirectIfSignedIn><Login /></RedirectIfSignedIn>} />
       <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
 
       <Route path="/onboarding/profile" element={<RequireOnboardingStep step="profile"><ProfileStep /></RequireOnboardingStep>} />
       <Route path="/onboarding/availability" element={<RequireOnboardingStep step="availability"><AvailabilityStep /></RequireOnboardingStep>} />

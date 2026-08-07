@@ -32,6 +32,14 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
     } catch (err) {
       console.error('Email provider send failed (outbox record still saved):', err.message);
     }
+  } else {
+    // No provider configured — the in-app Outbox (routes/emails.js) covers
+    // this for a logged-in user checking their own mail, but that doesn't
+    // help someone who's locked out (e.g. mid password reset) and can't log
+    // in to see it. Print it here too, since the server console isn't
+    // public — unlike showing the link in a response body, which would be a
+    // real account-takeover hole for the forgot-password flow.
+    console.log(`\n----- [dev] email to ${toEmail} -----\nSubject: ${subject}\n\n${body}\n----------------------------------------\n`);
   }
 
   return { id };
