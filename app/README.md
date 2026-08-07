@@ -60,8 +60,14 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
   bookings, lets the visitor pick their own timezone, and displays every slot converted to it.
   Booking is re-validated against the live schedule at submit time to close the race between
   viewing slots and confirming one (no double-booking).
-- **Dashboard** — upcoming/past bookings with cancel, plus in-place editors for availability and
-  meeting types (same underlying API the onboarding flow uses).
+- **Booker-side reschedule/cancel** — every confirmed booking gets a private manage link
+  (`/book/manage/:id`, the booking's own UUID doubling as its access token) where the booker can
+  move it to a different open slot or cancel it outright, no owner involvement required. This
+  closes the Phase 1 blocker in Section 3.6 (Gap 1) — an ungoverned reschedule path was a hole in
+  the product's own thesis. Reschedule re-validates the target slot live and excludes the
+  booking's own current slot from the conflict check so moving it doesn't collide with itself.
+- **Dashboard** — upcoming/past bookings with owner-side cancel, plus in-place editors for
+  availability and meeting types (same underlying API the onboarding flow uses).
 
 ## Timezone handling
 
@@ -77,9 +83,10 @@ is handled from the start here rather than retrofitted.
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7), these are out of scope for this pass, not oversights:
-multi-group management, members/delegates, in-app video (Jitsi), reschedule/cancellation flows
-beyond an owner-side cancel, calendar sync, WhatsApp/email notifications, the PA layer, and
-anything past Phase 1.
+multi-group management, members/delegates, in-app video (Jitsi), calendar sync,
+WhatsApp/email notifications, the PA layer, and anything past Phase 1. (Tiered PA-routed
+reschedule/cancellation for Tier 3/4 bookings — as opposed to the Tier 1 self-serve flow
+implemented here — waits on PA Home in Phase 2A, per the blueprint's own tier model.)
 
 ## Moving to Supabase
 
