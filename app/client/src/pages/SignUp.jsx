@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { detectTimezone } from '../lib/timezones.js';
+import { stashPostOnboardingRedirect } from '../lib/postAuthRedirect.js';
 
 export default function SignUp() {
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,6 +21,7 @@ export default function SignUp() {
     setSubmitting(true);
     try {
       await signup({ name, email, password, timezone: detectTimezone() });
+      stashPostOnboardingRedirect(next);
       navigate('/onboarding/profile');
     } catch (err) {
       setError(err.message);

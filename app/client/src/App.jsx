@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useAuth } from './lib/AuthContext.jsx';
 import SignUp from './pages/SignUp.jsx';
 import Login from './pages/Login.jsx';
@@ -8,6 +8,8 @@ import MeetingTypeStep from './pages/onboarding/MeetingTypeStep.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
 import ManageBooking from './pages/ManageBooking.jsx';
+import AcceptInvite from './pages/AcceptInvite.jsx';
+import PaHome from './pages/pa/PaHome.jsx';
 
 const ONBOARDING_ROUTE = {
   profile: '/onboarding/profile',
@@ -43,8 +45,13 @@ function RequireOnboardingStep({ step, children }) {
 
 function RedirectIfSignedIn({ children }) {
   const { user, loading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
   if (loading) return <FullPageSpinner />;
-  if (user) return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/dashboard'} replace />;
+  if (user) {
+    if (next && user.onboardingStep === 'done') return <Navigate to={next} replace />;
+    return <Navigate to={ONBOARDING_ROUTE[user.onboardingStep] || '/dashboard'} replace />;
+  }
   return children;
 }
 
@@ -61,12 +68,15 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/signup" element={<RedirectIfSignedIn><SignUp /></RedirectIfSignedIn>} />
       <Route path="/login" element={<RedirectIfSignedIn><Login /></RedirectIfSignedIn>} />
+      <Route path="/accept-invite/:token" element={<AcceptInvite />} />
 
       <Route path="/onboarding/profile" element={<RequireOnboardingStep step="profile"><ProfileStep /></RequireOnboardingStep>} />
       <Route path="/onboarding/availability" element={<RequireOnboardingStep step="availability"><AvailabilityStep /></RequireOnboardingStep>} />
       <Route path="/onboarding/meeting-type" element={<RequireOnboardingStep step="meeting_type"><MeetingTypeStep /></RequireOnboardingStep>} />
 
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+      <Route path="/pa" element={<RequireAuth><PaHome /></RequireAuth>} />
+      <Route path="/pa/:ownerId" element={<RequireAuth><PaHome /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />

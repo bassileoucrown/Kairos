@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
+import VideoJoinLink from '../../components/VideoJoinLink.jsx';
 
 export default function BookingsTab() {
   const { user } = useAuth();
@@ -70,9 +71,12 @@ export default function BookingsTab() {
                   <div className="meta">{b.meetingTypeName} with {b.bookerName} ({b.bookerEmail})</div>
                 </div>
                 {scope === 'upcoming' && (
-                  <button className="btn btn-danger btn-sm" onClick={() => handleCancel(b.id)} type="button">
-                    Cancel
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {b.videoRoom && <VideoJoinLink room={b.videoRoom} />}
+                    <button className="btn btn-danger btn-sm" onClick={() => handleCancel(b.id)} type="button">
+                      Cancel
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

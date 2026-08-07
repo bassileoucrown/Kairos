@@ -4,6 +4,7 @@ import { api, ApiError } from '../lib/api.js';
 import { detectTimezone, listTimezones, dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 import { useOpenSlots } from '../lib/useOpenSlots.js';
 import SlotGrid from '../components/SlotGrid.jsx';
+import VideoJoinLink from '../components/VideoJoinLink.jsx';
 
 const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
 const timezones = listTimezones();
@@ -73,8 +74,8 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
       <div className="public-shell">
         <div className="public-card">
           <div className="public-body confirmation">
-            <div className="check">✓</div>
-            <h1>You're booked</h1>
+            <div className="check">{confirmation.status === 'pending' ? '…' : '✓'}</div>
+            <h1>{confirmation.status === 'pending' ? 'Request sent' : "You're booked"}</h1>
             <p>
               {confirmation.meetingTypeName} with {confirmation.ownerName}
               <br />
@@ -82,6 +83,12 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
               <br />
               <span className="tz-note">({confirmation.bookerTimezone})</span>
             </p>
+            {confirmation.status === 'pending' && (
+              <p className="tz-note">This meeting type requires approval — you'll get an email once it's confirmed.</p>
+            )}
+            {confirmation.status !== 'pending' && confirmation.videoRoom && (
+              <div style={{ marginTop: 12 }}><VideoJoinLink room={confirmation.videoRoom} /></div>
+            )}
             <p className="tz-note" style={{ marginTop: 16 }}>
               <Link to={`/book/manage/${confirmation.id}`}>Need to change or cancel this? Manage your booking</Link>
             </p>

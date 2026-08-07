@@ -1,10 +1,9 @@
-# Kairos App — Core Scheduling Loop
+# Kairos App
 
-A real, working slice of the Kairos product: sign up, set your weekly availability, create a
-meeting type, and let someone actually book a slot with you — with correct timezone handling
-throughout. This is the first build against the "Phase 1" scope in the master blueprint: auth,
-onboarding, availability, and public booking. It does not yet include multi-group management,
-members/delegates, in-app video, or the PA layer — those come later.
+A real, working build of Phase 1 from the master blueprint (Section 7.2), plus the start of
+Phase 2A. Sign up, set your weekly availability, create meeting types with real access tiers, let
+people book you with correct timezone handling, and — once you invite a PA — route the sensitive
+bookings through an approval queue instead of straight onto your calendar.
 
 ## Stack
 
@@ -44,7 +43,7 @@ cd app/client && npm run build
 cd ../server && npm start     # serves the built client + API on one port (4000)
 ```
 
-## What's actually implemented
+## Phase 1 — the core loop (complete)
 
 - **Auth** — email/password signup and login, scrypt password hashing, httpOnly session cookies.
   No email delivery is configured, so accounts are marked verified immediately on signup — replace
@@ -52,22 +51,46 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
 - **Onboarding** — profile (name, booking-link slug, timezone) → weekly availability → first
   meeting type → dashboard.
 - **Availability** — a weekly recurring schedule (day of week + start/end time, stored in the
-  owner's own timezone).
-- **Meeting types** — name, duration, format (video/phone/in-person), buffers, active/inactive
-  toggle.
-- **Public booking** — `/book/:slug` lists a person's active meeting types; `/book/:slug/:meetingSlug`
-  computes real open slots for the next 14 days from the availability rules minus existing
-  bookings, lets the visitor pick their own timezone, and displays every slot converted to it.
-  Booking is re-validated against the live schedule at submit time to close the race between
-  viewing slots and confirming one (no double-booking).
-- **Booker-side reschedule/cancel** — every confirmed booking gets a private manage link
-  (`/book/manage/:id`, the booking's own UUID doubling as its access token) where the booker can
-  move it to a different open slot or cancel it outright, no owner involvement required. This
-  closes the Phase 1 blocker in Section 3.6 (Gap 1) — an ungoverned reschedule path was a hole in
-  the product's own thesis. Reschedule re-validates the target slot live and excludes the
-  booking's own current slot from the conflict check so moving it doesn't collide with itself.
-- **Dashboard** — upcoming/past bookings with owner-side cancel, plus in-place editors for
-  availability and meeting types (same underlying API the onboarding flow uses).
+  owner's own timezone), editable after onboarding too.
+- **Meeting types** — name, duration, format (video/phone/in-person), buffers, color, and a real
+  **4-tier access control** (Public/Standard auto-confirm; Priority/Inner Circle hold as `pending`
+  until approved) — the gap-closing feature named in the blueprint's own positioning (Section 1.1).
+- **Public booking** — computes real open slots for the next 14 days from availability rules minus
+  existing bookings (pending bookings hold their slot too), lets the visitor pick their own
+  timezone, and re-validates the target slot live at submit time (no double-booking).
+- **Booker-side reschedule/cancel** — every booking gets a private manage link (`/book/manage/:id`)
+  where the booker can move it to a different open slot or cancel outright. Closes the Phase 1
+  blocker in Section 3.6 (Gap 1).
+- **Calendar view** — a real month grid on the dashboard, appointments color-coded by meeting type.
+- **In-app video** — video-format bookings get an auto-generated Jitsi room (`meet.jit.si`, no API
+  key needed for basic rooms), surfaced on the confirmation, manage, and dashboard views.
+- **Email** — a swappable email service (`server/lib/email.js`) sends booking confirmations,
+  pending-approval notices, reschedule/cancel notices, and invites. Every email is also logged to
+  an `emails` table and viewable in the dashboard's Outbox tab — useful since no real provider is
+  configured by default. Set `RESEND_API_KEY` (and optionally `EMAIL_FROM`) to also deliver for
+  real.
+- **Members & Delegates** — invite a PA or delegate by email; they accept via a link (going through
+  their own signup/onboarding first if needed) and get access to your account.
+- **Calendar sync / WhatsApp — stubbed, not faked.** Real architecture (`server/lib/calendarSync.js`,
+  `server/lib/whatsapp.js`, the `calendar_connections`/`whatsapp_connections` tables, a Settings tab)
+  exists, but every entry point honestly reports "not configured" until real OAuth/API credentials
+  are set as env vars (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`,
+  `WHATSAPP_BUSINESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`). Nothing pretends to sync or send.
+
+## Phase 2A — the PA layer (in progress)
+
+The category-defining piece per the blueprint (Section 7.3: "what makes Kairos not-Calendly").
+An invited PA gets a PA Home (`/pa`) scoped to whichever principal(s) they support:
+
+- **Approval Queue** — Tier 3/4 bookings land here instead of the calendar; the PA approves
+  (confirms + emails the booker) or declines (frees the slot + emails the booker).
+- **Contact Intelligence** — every booker becomes a contact automatically; the PA can add notes and
+  set a relationship tier (Inner Circle / Close / Professional).
+- **Brief Builder** — a structured, multi-section brief per booking.
+- **Instructions Vault** — free-text instructions with priority and open/done status. Voice capture
+  is deferred — it needs a transcription API key (e.g. Whisper) that isn't configured.
+- **Communications Engine** — the PA composes and sends email to a contact on the principal's
+  behalf, through the same email service (and outbox) as the rest of the app.
 
 ## Timezone handling
 
@@ -82,11 +105,9 @@ is handled from the start here rather than retrofitted.
 
 ## What's deliberately not here yet
 
-Per the blueprint's own phasing (Section 7), these are out of scope for this pass, not oversights:
-multi-group management, members/delegates, in-app video (Jitsi), calendar sync,
-WhatsApp/email notifications, the PA layer, and anything past Phase 1. (Tiered PA-routed
-reschedule/cancellation for Tier 3/4 bookings — as opposed to the Tier 1 self-serve flow
-implemented here — waits on PA Home in Phase 2A, per the blueprint's own tier model.)
+Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling
+environments per group, group switcher), Relationship Intelligence's birthday/anniversary system,
+the AI Scheduling Assistant, Family Office infrastructure (Phase 3), and everything past Phase 2A.
 
 ## Moving to Supabase
 

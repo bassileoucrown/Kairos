@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 import { useOpenSlots } from '../lib/useOpenSlots.js';
 import SlotGrid from '../components/SlotGrid.jsx';
+import VideoJoinLink from '../components/VideoJoinLink.jsx';
 
 const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
 
@@ -113,6 +114,11 @@ export default function ManageBooking() {
               <p>This booking has been cancelled.</p>
               <Link to={`/book/${booking.ownerSlug}`} className="btn btn-secondary">Book a new time</Link>
             </>
+          ) : booking.status === 'declined' ? (
+            <>
+              <p>{booking.ownerName} wasn't able to accept this request.</p>
+              <Link to={`/book/${booking.ownerSlug}`} className="btn btn-secondary">Book a different time</Link>
+            </>
           ) : mode === 'view' ? (
             <>
               <p style={{ marginBottom: 20 }}>
@@ -121,7 +127,11 @@ export default function ManageBooking() {
                 {timeLabelInZone(booking.startAt, booking.bookerTimezone)} ({booking.bookerTimezone})
                 <br />
                 <span className="tz-note">Booked as {booking.bookerName} ({booking.bookerEmail})</span>
+                {booking.status === 'pending' && <><br /><span className="tz-note">Awaiting {booking.ownerName}'s approval.</span></>}
               </p>
+              {booking.status === 'confirmed' && booking.videoRoom && (
+                <div style={{ marginBottom: 16 }}><VideoJoinLink room={booking.videoRoom} /></div>
+              )}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="btn btn-secondary" type="button" onClick={() => setMode('reschedule')}>
                   Reschedule

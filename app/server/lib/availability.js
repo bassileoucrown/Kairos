@@ -22,8 +22,10 @@ function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   const now = new Date();
   // excludeBookingId lets a reschedule ignore the booking's own current slot —
   // otherwise it would appear to conflict with itself and block the move.
+  // Pending (Tier 3/4, awaiting PA approval) bookings still hold their slot —
+  // only cancelled/declined bookings free it back up.
   const existingBookings = db
-    .prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status = 'confirmed' AND end_at > ? AND id != ?")
+    .prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status IN ('confirmed', 'pending') AND end_at > ? AND id != ?")
     .all(owner.id, now.toISOString(), excludeBookingId || '');
 
   const durationMs = meetingType.duration_minutes * 60000;

@@ -8,6 +8,10 @@ const availabilityRouter = require('./routes/availability');
 const meetingTypesRouter = require('./routes/meetingTypes');
 const bookingsRouter = require('./routes/bookings');
 const publicBookingRouter = require('./routes/publicBooking');
+const emailsRouter = require('./routes/emails');
+const membersRouter = require('./routes/members');
+const invitesRouter = require('./routes/invites');
+const integrationsRouter = require('./routes/integrations');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -22,6 +26,10 @@ app.use('/api/availability', availabilityRouter);
 app.use('/api/meeting-types', meetingTypesRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/public', publicBookingRouter);
+app.use('/api/emails', emailsRouter);
+app.use('/api/members', membersRouter);
+app.use('/api/invites', invitesRouter);
+app.use('/api/integrations', integrationsRouter);
 
 // In production, serve the built client and let it handle client-side routing.
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
