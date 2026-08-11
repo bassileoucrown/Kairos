@@ -77,6 +77,7 @@ export default function PaHome() {
       <div className="topbar">
         <span className="topbar-brand">Kairos — PA Home</span>
         <div className="topbar-actions">
+          <Link to="/spaces" className="btn btn-secondary btn-sm">Spaces</Link>
           <Link to="/dashboard" className="btn btn-secondary btn-sm">My Dashboard</Link>
           <span>{user.name}</span>
           <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>

@@ -13,6 +13,8 @@ const membersRouter = require('./routes/members');
 const invitesRouter = require('./routes/invites');
 const integrationsRouter = require('./routes/integrations');
 const paRouter = require('./routes/pa');
+const spacesRouter = require('./routes/spaces');
+const threadsRouter = require('./routes/threads');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -32,6 +34,8 @@ app.use('/api/members', membersRouter);
 app.use('/api/invites', invitesRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/pa', paRouter);
+app.use('/api/spaces', spacesRouter);
+app.use('/api/threads', threadsRouter);
 
 // In production, serve the built client and let it handle client-side routing.
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

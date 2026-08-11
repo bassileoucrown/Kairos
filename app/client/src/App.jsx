@@ -11,6 +11,9 @@ import AcceptInvite from './pages/AcceptInvite.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import PaHome from './pages/pa/PaHome.jsx';
+import SpacesHome from './pages/spaces/SpacesHome.jsx';
+import SpaceDetail from './pages/spaces/SpaceDetail.jsx';
+import ThreadView from './pages/spaces/ThreadView.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -99,6 +102,10 @@ export default function App() {
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
       <Route path="/pa" element={<RequireAuth><PaHome /></RequireAuth>} />
       <Route path="/pa/:ownerId" element={<RequireAuth><PaHome /></RequireAuth>} />
+
+      <Route path="/spaces" element={<RequireAuth><SpacesHome /></RequireAuth>} />
+      <Route path="/spaces/:spaceId" element={<RequireAuth><SpaceDetail /></RequireAuth>} />
+      <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />

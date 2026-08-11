@@ -184,6 +184,98 @@ CREATE TABLE IF NOT EXISTS calendar_connections (
   UNIQUE(owner_id, provider)
 );
 
+-- ============================================================
+-- Collaboration layer (Phase 3A) — spaces, threads, two registers
+-- ============================================================
+
+-- Every project and conversation lives in exactly one space, and a space has
+-- exactly one context. This column is the isolation boundary: nothing is ever
+-- read across it without the reader holding membership on the far side.
+--
+-- private is not "a space whose members were removed" — routes/spaces.js
+-- refuses to create a member row against it at all, so the guarantee is
+-- structural rather than a permission flag that could be flipped by mistake.
+CREATE TABLE IF NOT EXISTS spaces (
+  id         TEXT PRIMARY KEY,
+  owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  context    TEXT NOT NULL DEFAULT 'work', -- work | personal | private
+  -- Which assistant roles are auto-granted access when the owner adds them,
+  -- as a comma-separated list of account_category values. Defaults per
+  -- context (work: all assistants, personal: none, private: always empty) and
+  -- the owner tunes it per space — role sets the opening position, not a
+  -- ceiling. See docs/collaboration-spec.html section 03.
+  auto_delegate_roles TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spaces_owner ON spaces(owner_id);
+
+CREATE TABLE IF NOT EXISTS space_members (
+  id         TEXT PRIMARY KEY,
+  space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- owner | member | guest. Distinct from account_category: that's who someone
+  -- is, this is what they may do here.
+  role       TEXT NOT NULL DEFAULT 'member',
+  -- Chiefs of Staff coordinate the rest of the team, so they alone can grant
+  -- and revoke other assistants' access. The one genuinely hierarchical
+  -- capability among the assistant roles.
+  can_delegate INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE(space_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_space_members_space ON space_members(space_id);
+CREATE INDEX IF NOT EXISTS idx_space_members_user ON space_members(user_id);
+
+CREATE TABLE IF NOT EXISTS threads (
+  id         TEXT PRIMARY KEY,
+  space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  kind       TEXT NOT NULL DEFAULT 'group', -- group | dm | stage (stage lands in 3B)
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_threads_space ON threads(space_id);
+
+-- One table, two registers. A note is chat; a record is a structured, citable
+-- entry in the thread's formal history. The record_* columns are NULL for
+-- notes.
+--
+-- promoted_from_id is the whole point: a record made from a note keeps a
+-- permanent link back to it, and carries the original author, so authority
+-- comes from whose words were captured rather than who filed them.
+CREATE TABLE IF NOT EXISTS messages (
+  id            TEXT PRIMARY KEY,
+  thread_id     TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  -- Whose words these are. For a promoted record this stays the note's author,
+  -- not the person who promoted it.
+  author_id     TEXT NOT NULL REFERENCES users(id),
+  body          TEXT NOT NULL,
+  register      TEXT NOT NULL DEFAULT 'note', -- note | record
+  record_type   TEXT,   -- decision | approval | request | update | sign_off | blocker
+  record_status TEXT,   -- open | accepted | declined | superseded
+  record_seq    INTEGER, -- per-thread counter, rendered as R-07
+  promoted_from_id TEXT REFERENCES messages(id),
+  promoted_by_id   TEXT REFERENCES users(id), -- who filed it, if different from author
+  supersedes_id    TEXT REFERENCES messages(id),
+  -- Set the moment a record's first acknowledgement lands. After that the body
+  -- is frozen and disagreement has to take the form of a superseding record,
+  -- so an acknowledged decision can never silently change under the people who
+  -- acknowledged it.
+  locked_at     TEXT,
+  created_at    TEXT NOT NULL,
+  edited_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
+
+CREATE TABLE IF NOT EXISTS message_acks (
+  id         TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  acked_at   TEXT NOT NULL,
+  UNIQUE(message_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_message_acks_message ON message_acks(message_id);
+
 -- WhatsApp Business API notifications. Architecture only — inert until a
 -- real WhatsApp Business token is configured.
 CREATE TABLE IF NOT EXISTS whatsapp_connections (

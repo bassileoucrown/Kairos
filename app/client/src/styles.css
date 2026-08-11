@@ -247,6 +247,154 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .day-toggle.is-on::after { transform: translateX(14px); }
 
+/* ---- Collaboration layer (Phase 3A) ---- */
+
+/* Context colours. These aren't decoration: which world a space belongs to is
+   the most consequential fact about it, so it's encoded in hue as well as
+   words, everywhere a space appears. */
+.ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ctx-work     { background: var(--accent-soft);  color: var(--accent); }
+.ctx-personal { background: #F6EBE0;             color: #8A5426; }
+.ctx-private  { background: #E8EBF1;             color: #3F4C68; }
+
+.context-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+
+.space-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.space-card:hover { border-color: var(--accent); text-decoration: none; }
+.space-card .name { font-weight: 600; font-size: 0.95rem; }
+.space-card .meta { font-size: 0.8rem; color: var(--text-muted); }
+
+/* The register toggle, used for both filtering the stream and choosing what
+   you're about to post. */
+.register-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.register-toggle button {
+  border: none;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.register-toggle button.is-on { background: var(--accent); color: #fff; }
+
+.msg-stream { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+
+/* Informal register: sans, soft, borderless. */
+.msg-note { display: flex; gap: 10px; align-items: flex-start; }
+.msg-avatar {
+  flex: 0 0 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 0.68rem; font-weight: 700;
+  background: var(--bg); color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.msg-who { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); margin-bottom: 2px; }
+.msg-who em { font-style: normal; font-weight: 400; }
+.msg-bubble {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px 12px 12px 12px;
+  padding: 8px 12px;
+  font-size: 0.92rem;
+  max-width: 60ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.msg-promote {
+  margin-top: 4px;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.msg-promote:hover { text-decoration: underline; }
+.msg-promote-picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+
+/* Formal register: serif, bordered, badged. You can tell which parts of a long
+   thread are binding without reading a word — the cheapest possible signal for
+   the most important distinction in the product. */
+.msg-record {
+  border: 1px solid var(--text-muted);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+.msg-record.is-superseded { opacity: 0.6; }
+.msg-record-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.msg-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+}
+.msg-badge.status-open       { background: #B3703A; }
+.msg-badge.status-accepted   { background: var(--accent); }
+.msg-badge.status-declined   { background: var(--danger); }
+.msg-badge.status-superseded { background: var(--text-muted); }
+.msg-seq { font-size: 0.72rem; color: var(--text-muted); }
+.msg-record-body {
+  font-family: ui-serif, Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  max-width: 62ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.msg-record-foot {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.msg-promoted { color: var(--accent); font-weight: 600; }
+.msg-record-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.msg-supersede { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+.msg-compose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+}
+.msg-compose textarea { flex: 1 1 260px; min-height: 62px; }
+
 .page {
   flex: 1;
   width: 100%;

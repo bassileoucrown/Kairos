@@ -149,6 +149,41 @@ Intelligence:
   — only for sections still empty, so it never clobbers what a PA already wrote. Talking points and
   desired outcome are left for the PA, since those need actual judgment about the meeting.
 
+## Phase 3A — Spaces and the two registers (complete)
+
+The collaboration layer from `docs/collaboration-spec.html`. Its point is one mechanic: the formal
+record is produced *by* the informal conversation instead of being written separately from it.
+
+- **Spaces and contexts** — every thread lives in a space, and every space is
+  **Work**, **Personal**, or **Private**. Nothing crosses that boundary. All access resolution goes
+  through `server/lib/spaceAccess.js`; there is deliberately no second path.
+- **Private is structurally unshareable** — not "a space whose members were removed". The route
+  refuses to create a member row against a private space, and `resolveAccess` short-circuits before
+  even consulting `space_members`, so a stray row from some future bug still can't open the door. A
+  principal shouldn't have to trust a boolean.
+- **Invisible, not forbidden** — a space you can't see returns 404, never 403. Confirming a space
+  exists is itself disclosure.
+- **Role sets the default, not the ceiling** — `account_category` now does real work. Work spaces
+  auto-delegate to PAs, EAs, and Chiefs of Staff; Personal spaces to nobody until the owner opts a
+  role in per space; Private to nobody, ever. These roles are *not* a ladder — a PA often has more
+  personal reach than a Chief of Staff — so the role picks a starting bundle the principal tunes.
+  The one genuinely hierarchical capability is onward delegation, which only a Chief of Staff has.
+- **Two registers in one timeline** — **notes** are chat (sans, soft bubble); **records** are
+  structured, citable entries (serif, bordered, badged, numbered `R-01`). You can see which parts of
+  a long thread are binding without reading a word.
+- **Promote** — any note becomes a record in one click, carrying the original wording, author, and
+  timestamp, with a permanent link back. Promotion is *clerical, not authoritative*: the record
+  shows both whose words these are and who filed them, so an assistant recording their principal's
+  decision is the intended use rather than a loophole.
+- **Records lock on acknowledgement** — the first ack freezes the body. After that, disagreement has
+  to take the form of a **superseding** record, so an acknowledged decision can never be edited out
+  from under the people who acknowledged it.
+- **Records-only view** — filters the thread to its formal spine: the audit trail you could hand to
+  a board secretary, with the texture that produced it still underneath.
+
+Isolation is covered by direct API tests rather than only clicked through in a browser, since access
+control is worth exactly as much as its proof.
+
 ## Account categories
 
 At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**
