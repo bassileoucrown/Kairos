@@ -470,7 +470,7 @@
       separately from it.
     </p>
     <div class="meta-row">
-      <span><b>Status</b> — awaiting your reaction, no code written</span>
+      <span><b>Status</b> — revised, 3 of 6 decisions settled</span>
       <span><b>Scope</b> — Phase 3</span>
       <span><b>Builds on</b> — Phases 1–2B, shipped</span>
     </div>
@@ -692,11 +692,105 @@
             and says so plainly.</li>
           <li>The unified dashboard is the one place all three meet — and every row there carries its
             context chip and can be filtered down to one world.</li>
+          <li>Existence is hidden, not just contents. An assistant cannot see that a space they lack
+            access to exists. "You have three spaces I can't open" is itself information.</li>
         </ol>
 
         <p>
           The connection you're after is real but narrow: one inbox, one priorities view, one set of
           contacts underneath. Everything else stays walled.
+        </p>
+
+        <h3>Where the assistant boundary actually sits</h3>
+        <p>
+          The first draft of this spec implied the assistant wall runs along the Work/Personal line.
+          Working through who we're actually building for, that's wrong.
+        </p>
+        <p>
+          <strong>A PA or EA absolutely does handle personal life.</strong> Booking family travel,
+          remembering a spouse's birthday, managing household staff, the school run. That isn't an
+          edge case, it's the job — and Kairos already ships a Relationship Calendar that tracks
+          birthdays and anniversaries, which is personal data an assistant maintains. A blanket
+          "assistants never see Personal" would break a feature you already have.
+        </p>
+        <p>
+          But medical, legal, financial, a conflict inside the family, a quiet job search — those need
+          somewhere no assistant can reach, and the principal has to <em>trust</em> that absolutely.
+        </p>
+        <p class="pull">
+          The wall that matters isn't Work versus Personal. It's delegated versus private — and that
+          line cuts across all three contexts.
+        </p>
+        <ul>
+          <li><strong>Work</strong> — delegated by default. That's what the assistant was hired for.</li>
+          <li><strong>Personal</strong> — delegated <em>per space</em>, opt-in. "Family logistics" yes;
+            "Health" no. The EA books the holiday without seeing the oncologist thread.</li>
+          <li><strong>Private</strong> — never delegated, by construction. Not a permission that was
+            revoked and could be restored: there is no code path to add a member to a Private space at
+            all.</li>
+        </ul>
+        <p>
+          That last point settles question 6. Private stays its own context precisely
+          <em>because</em> the no-members property is guaranteed by the type rather than by a
+          permission check that might one day be wrong. A principal shouldn't have to trust a boolean.
+        </p>
+
+        <h3>Role sets the default, not the ceiling</h3>
+        <p>
+          You're right that the role chosen at onboarding should inform access. The catch is that
+          these roles don't form a hierarchy. A PA often has <em>more</em> personal reach than a Chief
+          of Staff, who may be purely strategic. Encoding
+          <code>chief_of_staff &gt; ea &gt; pa</code> as a permission ladder would misdescribe a lot of
+          real working relationships.
+        </p>
+        <p>
+          So role picks the opening bundle, and the principal adjusts per space from there:
+        </p>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Role</th><th>Delegated by default</th><th>Can delegate onward</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-field">PA</td>
+                <td>All <span class="chip chip-work">Work</span> spaces, plus
+                  <span class="chip chip-personal">Personal</span> spaces marked household or family</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td class="col-field">EA</td>
+                <td>All <span class="chip chip-work">Work</span> spaces, including those marked
+                  confidential</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td class="col-field">Chief of Staff</td>
+                <td>All <span class="chip chip-work">Work</span> spaces, including confidential</td>
+                <td><strong>Yes</strong> — can grant and revoke other assistants' access</td>
+              </tr>
+              <tr>
+                <td class="col-field">All three</td>
+                <td><span class="chip chip-private">Private</span> — never, under any configuration</td>
+                <td>Never for Private</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Onward delegation is the one genuinely hierarchical capability, and it's the honest answer to
+          "what makes a Chief of Staff different" — they coordinate the rest of the team, so they can
+          hand out and withdraw access. Everything else is a starting position the principal tunes.
+        </p>
+
+        <h3>Whose world, not just which world</h3>
+        <p>
+          A VA with five clients needs their own life separate from every client, and each client
+          separate from each other. Spaces belong to a principal; an assistant reaches them through
+          membership and keeps their own three contexts alongside. So the context chip carries two
+          facts — whose world and which context — and the priorities view can filter on either.
         </p>
       </section>
 
@@ -921,13 +1015,17 @@
         <h2>What this deliberately isn't</h2>
 
         <div class="callout">
-          <span class="callout-label">Honest constraint</span>
+          <span class="callout-label">Honest constraint · decided</span>
           <p>
             <strong>Google Calendar and Workspace integration cannot be built here.</strong> It needs
             real OAuth client credentials, which this environment doesn't have. The architecture
             already exists in <code>calendarSync.js</code> and will keep reporting "not configured"
             rather than pretending to sync. Same for WhatsApp. When you have credentials, these become
             small jobs — but I won't ship something that looks connected and isn't.
+          </p>
+          <p style="margin-top:0.65rem">
+            <strong>Confirmed:</strong> leave it saying "not configured." No mock sync, no placeholder
+            that implies a connection. Locked.
           </p>
         </div>
 
@@ -958,6 +1056,12 @@
             <h4>Spaces, contexts, and threads</h4>
             <p>The three contexts with their isolation rules, direct and group threads, and the
               note/record timeline with promote. Ships the differentiator first.</p>
+            <p style="margin-top:0.5rem">
+              Includes the work to make <code>account_category</code> actually mean something. Today
+              PA, EA, and Chief of Staff are identical in capability — the column only steers
+              onboarding and landing page. Phase 3A turns it into the default-access bundles in
+              section 03, and adds onward delegation for Chiefs of Staff.
+            </p>
           </div>
         </div>
         <div class="phase">
@@ -989,15 +1093,32 @@
         <span class="sec-num">12</span>
         <h2>What I need you to decide</h2>
         <p class="lede">
-          Six questions where I'd rather have your answer than my guess. Reply to the numbers — no
-          need to address all of them.
+          Three of six are settled. The remaining three still change what gets built.
         </p>
 
+        <h3>Settled</h3>
+
         <div class="q">
-          <h4>1. Can a PA act inside their principal's Personal context?</h4>
-          <p>Chiefs of staff often do handle personal life — but this is the sharpest privacy edge in
-            the whole design. Per-space opt-in, blanket, or never?</p>
+          <h4>1. Can a PA act inside their principal's Personal context? <span class="chip chip-work">Decided</span></h4>
+          <p>Yes, per space, opt-in — with role setting the opening defaults. Private stays
+            structurally unreachable for every role. Detailed in section 03.</p>
         </div>
+        <div class="q">
+          <h4>4. Who can promote a note to a record? <span class="chip chip-work">Decided</span></h4>
+          <p>Anyone with write access, because <strong>promotion is clerical, not authoritative</strong>.
+            A record's weight comes from whose words it captures, not from who filed it — which is why
+            every record shows both. In the section 02 mockup, Pam files R‑07 but it carries Elena's
+            decision and Elena's name. Restricting promotion would only mean assistants couldn't do
+            the filing that is precisely their job.</p>
+        </div>
+        <div class="q">
+          <h4>6. Is Private a context, or just a space with one member? <span class="chip chip-work">Decided</span></h4>
+          <p>Its own context. The guarantee has to be structural — no code path to add a member —
+            rather than a permission that could be flipped. Reasoning in section 03.</p>
+        </div>
+
+        <h3>Still open</h3>
+
         <div class="q">
           <h4>2. Are records immutable once acknowledged?</h4>
           <p>Legal-grade means no edits after acknowledgement — only a superseding record. Stricter is
@@ -1009,19 +1130,9 @@
             doubles the messaging build. In or out for now?</p>
         </div>
         <div class="q">
-          <h4>4. Who can promote a note to a record?</h4>
-          <p>Anyone in the space, or only the stage owner and the principal? Ties directly to whether
-            records carry real authority.</p>
-        </div>
-        <div class="q">
           <h4>5. Do stages need templates?</h4>
           <p>If a Chief runs the same five-stage shape every time, a reusable project template saves
             real work. Worth building in 3B, or later?</p>
-        </div>
-        <div class="q">
-          <h4>6. Is Private a context, or just a space with one member?</h4>
-          <p>I've specced it as its own context for clarity of mental model. Collapsing it into
-            "a Personal space with no members" is simpler and slightly less clear.</p>
         </div>
       </section>
 
