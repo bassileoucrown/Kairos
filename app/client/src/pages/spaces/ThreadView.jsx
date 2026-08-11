@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
+import TaskList from './TaskList.jsx';
 
 const RECORD_TYPES = [
   { value: 'decision', label: 'Decision' },
@@ -26,18 +27,59 @@ function timeLabel(iso) {
   return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function Note({ m, canWrite, onPromote }) {
+// Turning a message into a task is the same one-click gesture as promoting it
+// to a record, and for the same reason: the thing you need to do next almost
+// always gets said in passing, and retyping it elsewhere is where it gets lost.
+function TaskMaker({ message, members, onCreate, onCancel }) {
+  const [title, setTitle] = useState(message.body.slice(0, 120));
+  const [assigneeId, setAssigneeId] = useState('');
+  const [dueAt, setDueAt] = useState('');
+
+  return (
+    <form
+      className="msg-task-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onCreate({ sourceMessageId: message.id, title, assigneeId: assigneeId || undefined, dueAt: dueAt || undefined });
+      }}
+    >
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        aria-label="Task title"
+        required
+        style={{ flex: 1, minWidth: 180 }}
+      />
+      <select aria-label="Assign to" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={{ width: 'auto' }}>
+        <option value="">Unassigned</option>
+        {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      </select>
+      <input type="date" aria-label="Task due date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} style={{ width: 'auto' }} />
+      <button className="btn btn-primary btn-sm" type="submit">Create task</button>
+      <button className="btn btn-danger btn-sm" type="button" onClick={onCancel}>Cancel</button>
+    </form>
+  );
+}
+
+function Note({ m, canWrite, members, onPromote, onMakeTask }) {
   const [picking, setPicking] = useState(false);
+  const [tasking, setTasking] = useState(false);
   return (
     <div className="msg-note">
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
         <div className="msg-bubble">{m.body}</div>
-        {canWrite && !picking && (
-          <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
-            Promote to record
-          </button>
+        {canWrite && !picking && !tasking && (
+          <div className="msg-actions-row">
+            <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
+              Promote to record
+            </button>
+            <button className="msg-promote" type="button" onClick={() => setTasking(true)}>
+              Make a task
+            </button>
+          </div>
         )}
         {picking && (
           <div className="msg-promote-picker">
@@ -54,6 +96,14 @@ function Note({ m, canWrite, onPromote }) {
             ))}
             <button type="button" className="btn btn-danger btn-sm" onClick={() => setPicking(false)}>Cancel</button>
           </div>
+        )}
+        {tasking && (
+          <TaskMaker
+            message={m}
+            members={members}
+            onCancel={() => setTasking(false)}
+            onCreate={(payload) => { setTasking(false); onMakeTask(payload); }}
+          />
         )}
       </div>
     </div>
@@ -165,12 +215,24 @@ export default function ThreadView() {
   const [recordType, setRecordType] = useState('decision');
   const [view, setView] = useState('all');
   const [sending, setSending] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  const [members, setMembers] = useState([]);
   const endRef = useRef(null);
 
   function load() {
-    api.get(`/threads/${threadId}/messages`).then(setData).catch((err) => setError(err.message));
+    return api.get(`/threads/${threadId}/messages`).then((d) => {
+      setData(d);
+      // Space membership drives the assignee list — you can only hand work to
+      // someone who can already see where it lives.
+      api.get(`/spaces/${d.thread.spaceId}`)
+        .then((s) => setMembers([{ id: s.owner.id, name: s.owner.name }, ...s.members.map((m) => ({ id: m.userId, name: m.name }))]))
+        .catch(() => {});
+      api.get(`/tasks?spaceId=${d.thread.spaceId}`)
+        .then((r) => setTasks(r.tasks.filter((t) => t.sourceThreadId === threadId)))
+        .catch(() => {});
+    }).catch((err) => setError(err.message));
   }
-  useEffect(load, [threadId]);
+  useEffect(() => { load(); }, [threadId]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }); }, [data?.messages.length]);
 
   async function send(e) {
@@ -196,6 +258,7 @@ export default function ThreadView() {
   const setStatus = (id, status) => act(() => api.post(`/threads/${threadId}/messages/${id}/status`, { status }));
   const supersede = (id, replacementBody, replacementType) => act(() =>
     api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
+  const makeTask = (payload) => act(() => api.post('/tasks', payload));
 
   async function handleLogout() { await logout(); navigate('/login'); }
 
@@ -266,10 +329,18 @@ export default function ThreadView() {
             m.register === 'record'
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
                   onAck={ack} onStatus={setStatus} onSupersede={supersede} />
-              : <Note key={m.id} m={m} canWrite={data.canWrite} onPromote={promote} />
+              : <Note key={m.id} m={m} canWrite={data.canWrite} members={members}
+                  onPromote={promote} onMakeTask={makeTask} />
           ))}
           <div ref={endRef} />
         </div>
+
+        {tasks.length > 0 && view === 'all' && (
+          <>
+            <h3 style={{ marginTop: 8 }}>Tasks from this thread</h3>
+            <TaskList tasks={tasks} onChanged={load} />
+          </>
+        )}
 
         {data.canWrite && (
           <form className="msg-compose" onSubmit={send}>

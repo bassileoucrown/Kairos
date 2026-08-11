@@ -72,6 +72,7 @@ export default function Dashboard() {
         <span className="topbar-brand">Kairos</span>
         <div className="topbar-actions">
           <Link to="/spaces" className="btn btn-secondary btn-sm">Spaces</Link>
+          <Link to="/tasks" className="btn btn-secondary btn-sm">My Tasks</Link>
           <Link to="/pa" className="btn btn-secondary btn-sm">PA Home</Link>
           <span>{user.name}</span>
           <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>

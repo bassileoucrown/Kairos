@@ -384,6 +384,46 @@ textarea { resize: vertical; min-height: 70px; }
 .msg-record-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .msg-supersede { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 
+/* ---- Tasks ---- */
+.task-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 9px 12px;
+}
+.task-row.is-overdue  { border-left-color: var(--danger); background: var(--danger-soft); }
+.task-row.is-due-soon { border-left-color: #B3703A; }
+.task-row.is-done { opacity: 0.6; }
+.task-row.is-done .task-title { text-decoration: line-through; }
+.task-check { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
+.task-main { flex: 1; min-width: 0; }
+.task-title { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; }
+.task-meta { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
+.task-due.is-overdue  { color: var(--danger); font-weight: 600; }
+.task-due.is-due-soon { color: #8A5426; font-weight: 600; }
+.task-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.task-priority {
+  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+}
+.task-priority.is-high { background: var(--danger); color: #fff; }
+.task-priority.is-low  { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+.task-band { margin: 22px 0 8px; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.task-band.is-overdue { color: var(--danger); }
+.task-band.is-soon { color: #8A5426; }
+
+.msg-actions-row { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
+.msg-task-form {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 8px; padding: 9px;
+  border: 1px dashed var(--border); border-radius: var(--radius); background: var(--bg);
+}
+
 /* ---- Project stages ---- */
 .stage-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .stage-row {

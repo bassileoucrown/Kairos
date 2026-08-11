@@ -255,6 +255,7 @@ CREATE TABLE IF NOT EXISTS project_stages (
   status        TEXT NOT NULL DEFAULT 'not_started', -- not_started | active | blocked | done
   owner_user_id TEXT REFERENCES users(id),
   due_at        TEXT,
+  reminder_stage TEXT, -- null | due_soon | overdue, so each nudge fires once
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_project_stages_project ON project_stages(project_id, position);
@@ -301,6 +302,34 @@ CREATE TABLE IF NOT EXISTS messages (
   edited_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
+
+-- A task can hang off a stage, a project, or nothing but the space itself (a
+-- loose to-do). What matters most is source_message_id: a task made from a
+-- message keeps a link back to the conversation that produced it, so opening
+-- the task later shows you why it exists — the same instinct as promoting a
+-- note to a record, applied to work rather than to the record.
+--
+-- reminder_stage records how far along the nudging has got (null -> due_soon
+-- -> overdue) so each reminder fires exactly once instead of every sweep.
+CREATE TABLE IF NOT EXISTS tasks (
+  id                TEXT PRIMARY KEY,
+  space_id          TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  project_id        TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  stage_id          TEXT REFERENCES project_stages(id) ON DELETE CASCADE,
+  source_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  title             TEXT NOT NULL,
+  assignee_id       TEXT REFERENCES users(id),
+  created_by        TEXT NOT NULL REFERENCES users(id),
+  due_at            TEXT,
+  priority          TEXT NOT NULL DEFAULT 'normal', -- low | normal | high
+  status            TEXT NOT NULL DEFAULT 'open',   -- open | doing | blocked | done
+  reminder_stage    TEXT,
+  completed_at      TEXT,
+  created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id, status);
+CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
 
 CREATE TABLE IF NOT EXISTS message_acks (
   id         TEXT PRIMARY KEY,

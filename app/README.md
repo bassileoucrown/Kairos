@@ -207,6 +207,26 @@ matters for Blockers: replacing one with another Blocker *restates* the obstacle
 blocked, while replacing it with an Update lifts it. Blockers also carry a `resolved` status, since
 "accepted" and "declined" are both the wrong word for what happens to an obstacle.
 
+## Phase 3C — Tasks and reminders (complete)
+
+Tasks attach to a stage, a project, or just a space (a loose to-do). The one that matters:
+**any message becomes a task in one click**, the same gesture as promoting it to a record, and for
+the same reason — the thing you need to do next almost always gets said in passing, and retyping it
+somewhere else is where it gets lost. The task keeps a `source_message_id`, so opening it later
+shows you the conversation that explains why it exists.
+
+- **Access is inherited, never asserted** — a task made from a message takes its space, project, and
+  stage from that message, so a caller can't smuggle work into a space they can't reach. You can
+  only assign work to someone who can already see where it lives.
+- **My Tasks** spans every context in one list, each row labelled Work / Personal / Private and
+  filterable down to one, banded by Overdue → Due within a day → everything else.
+- **Reminders** (`server/lib/reminders.js`) sweep on an interval and email the assignee once when a
+  task is a day out and once again when it goes overdue. A `reminder_stage` column tracks how far
+  the nudging has got, so each threshold fires exactly once; changing the due date, reassigning, or
+  reopening deliberately re-arms it. Stage deadlines nudge their owner the same way. Delivery rides
+  the existing email service, so with no provider configured these are still visible in the Outbox
+  tab and the server log. Set `REMINDER_SWEEP_MS` to change the interval (default 15 minutes).
+
 ## Account categories
 
 At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**

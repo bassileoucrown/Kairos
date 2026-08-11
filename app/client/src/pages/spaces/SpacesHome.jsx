@@ -53,6 +53,7 @@ export default function SpacesHome() {
       <div className="topbar">
         <span className="topbar-brand">Kairos — Spaces</span>
         <div className="topbar-actions">
+          <Link to="/tasks" className="btn btn-secondary btn-sm">My Tasks</Link>
           <Link to="/dashboard" className="btn btn-secondary btn-sm">My Dashboard</Link>
           <Link to="/pa" className="btn btn-secondary btn-sm">PA Home</Link>
           <span>{user.name}</span>

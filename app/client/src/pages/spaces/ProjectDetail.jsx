@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
+import TaskList from './TaskList.jsx';
 
 export const STAGE_STATUS_LABELS = {
   not_started: 'Not started', active: 'Active', blocked: 'Blocked', done: 'Done',
@@ -17,11 +18,26 @@ export default function ProjectDetail() {
   const [error, setError] = useState('');
   const [stageName, setStageName] = useState('');
   const [stageDue, setStageDue] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [taskTitle, setTaskTitle] = useState('');
 
   function load() {
-    api.get(`/projects/${projectId}`).then(setData).catch((err) => setError(err.message));
+    return Promise.all([
+      api.get(`/projects/${projectId}`).then(setData).catch((err) => setError(err.message)),
+      api.get(`/tasks?projectId=${projectId}`).then((r) => setTasks(r.tasks)).catch(() => {}),
+    ]);
   }
-  useEffect(load, [projectId]);
+  useEffect(() => { load(); }, [projectId]);
+
+  async function addTask(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      await api.post('/tasks', { spaceId: data.space.id, projectId, title: taskTitle });
+      setTaskTitle('');
+      load();
+    } catch (err) { setError(err.message); }
+  }
 
   async function act(fn) {
     setError('');
@@ -140,8 +156,26 @@ export default function ProjectDetail() {
           ))}
         </ol>
 
+        <h3 style={{ marginTop: 30 }}>Tasks</h3>
+        <TaskList tasks={tasks} onChanged={load} emptyText="No tasks on this project yet." />
         {canWrite && (
-          <form onSubmit={addStage} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+          <form onSubmit={addTask} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+            <input
+              type="text"
+              placeholder="New task"
+              aria-label="New project task"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              required
+              style={{ flex: 1, minWidth: 200 }}
+            />
+            <button className="btn btn-primary btn-sm" type="submit">Add task</button>
+          </form>
+        )}
+
+        <h3 style={{ marginTop: 30 }}>Add a stage</h3>
+        {canWrite && (
+          <form onSubmit={addStage} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <input
               type="text"
               placeholder="New stage name"

@@ -30,5 +30,6 @@ ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
 // threads predates projects/stages by one phase, so retrofit the links.
 ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
 ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
+ensureColumn('project_stages', 'reminder_stage', 'TEXT');
 
 module.exports = db;
