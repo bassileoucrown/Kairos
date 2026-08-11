@@ -1,0 +1,1030 @@
+<title>Kairos — Collaboration & Projects Spec</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+  :root {
+    /* Inherited from the Kairos app's own token set (client/src/styles.css) */
+    --paper:        #FAF9F6;
+    --surface:      #FFFFFF;
+    --surface-sunk: #F2F1EC;
+    --rule:         #E3E0D6;
+    --rule-strong:  #CFCBBD;
+    --ink:          #1C2127;
+    --ink-muted:    #6B6659;
+    --accent:       #3E6357;
+    --accent-soft:  #E9EFEC;
+    --danger:       #B3453A;
+    --danger-soft:  #F7E9E7;
+
+    /* Context hues — these encode which world a thing lives in */
+    --ctx-work:      #3E6357;
+    --ctx-work-soft: #E9EFEC;
+    --ctx-personal:      #B3703A;
+    --ctx-personal-soft: #F6EBE0;
+    --ctx-private:       #4C5B7A;
+    --ctx-private-soft:  #E8EBF1;
+
+    --serif: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --radius: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:        #14171A;
+      --surface:      #1B1F23;
+      --surface-sunk: #23282D;
+      --rule:         #2E343A;
+      --rule-strong:  #414951;
+      --ink:          #E8E6E0;
+      --ink-muted:    #9A968C;
+      --accent:       #7FB3A1;
+      --accent-soft:  #1E2E28;
+      --danger:       #D98276;
+      --danger-soft:  #33211F;
+
+      --ctx-work:      #7FB3A1;
+      --ctx-work-soft: #1E2E28;
+      --ctx-personal:      #D69B6A;
+      --ctx-personal-soft: #33261A;
+      --ctx-private:       #93A3C4;
+      --ctx-private-soft:  #1F242F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:        #14171A;
+    --surface:      #1B1F23;
+    --surface-sunk: #23282D;
+    --rule:         #2E343A;
+    --rule-strong:  #414951;
+    --ink:          #E8E6E0;
+    --ink-muted:    #9A968C;
+    --accent:       #7FB3A1;
+    --accent-soft:  #1E2E28;
+    --danger:       #D98276;
+    --danger-soft:  #33211F;
+
+    --ctx-work:      #7FB3A1;
+    --ctx-work-soft: #1E2E28;
+    --ctx-personal:      #D69B6A;
+    --ctx-personal-soft: #33261A;
+    --ctx-private:       #93A3C4;
+    --ctx-private-soft:  #1F242F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 82rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---- Masthead ---- */
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 4.5rem 0 2.25rem;
+    margin-bottom: 3.5rem;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin: 0 0 1.25rem;
+  }
+  .masthead h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 1.25rem;
+    max-width: 22ch;
+  }
+  .standfirst {
+    font-size: 1.1rem;
+    color: var(--ink-muted);
+    max-width: var(--measure);
+    margin: 0 0 2rem;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--ink-muted);
+  }
+  .meta-row b { color: var(--ink); font-weight: 500; }
+
+  /* ---- Layout ---- */
+  .cols { display: block; }
+  @media (min-width: 1080px) {
+    .cols { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 4rem; align-items: start; }
+    .toc { position: sticky; top: 2.5rem; }
+  }
+
+  .toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  .toc li { counter-increment: toc; margin-bottom: 0.45rem; }
+  .toc a {
+    display: grid;
+    grid-template-columns: 1.9rem 1fr;
+    gap: 0.35rem;
+    font-size: 0.83rem;
+    color: var(--ink-muted);
+    text-decoration: none;
+    line-height: 1.35;
+  }
+  .toc a::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--rule-strong);
+  }
+  .toc a:hover { color: var(--accent); }
+  .toc a:hover::before { color: var(--accent); }
+  .toc-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ---- Sections ---- */
+  section { margin-bottom: 4.5rem; scroll-margin-top: 2rem; }
+  .sec-num {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.6rem;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3vw, 1.95rem);
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0 0 1.1rem;
+    max-width: 26ch;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-weight: 650;
+    font-size: 1rem;
+    letter-spacing: -0.005em;
+    margin: 2.25rem 0 0.65rem;
+  }
+  p, ul, ol { max-width: var(--measure); }
+  p { margin: 0 0 1.05rem; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.1rem; }
+  li { margin-bottom: 0.5rem; }
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--surface-sunk);
+    padding: 0.1em 0.36em;
+    border-radius: 4px;
+  }
+  a { color: var(--accent); }
+
+  .lede {
+    font-size: 1.06rem;
+    color: var(--ink-muted);
+    max-width: var(--measure);
+  }
+
+  /* ---- Pull statement ---- */
+  .pull {
+    font-family: var(--serif);
+    font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding: 0.15rem 0 0.15rem 1.5rem;
+    margin: 2rem 0;
+    max-width: 54ch;
+  }
+
+  /* ---- Context chips ---- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .chip-work     { background: var(--ctx-work-soft);     color: var(--ctx-work); }
+  .chip-personal { background: var(--ctx-personal-soft); color: var(--ctx-personal); }
+  .chip-private  { background: var(--ctx-private-soft);  color: var(--ctx-private); }
+
+  .ctx-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+    margin: 1.75rem 0;
+    max-width: none;
+  }
+  .ctx-card {
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--ctx);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 1.15rem 1.15rem 1.25rem;
+  }
+  .ctx-card.work     { --ctx: var(--ctx-work); }
+  .ctx-card.personal { --ctx: var(--ctx-personal); }
+  .ctx-card.private  { --ctx: var(--ctx-private); }
+  .ctx-card h4 {
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin: 0.7rem 0 0.4rem;
+  }
+  .ctx-card p { font-size: 0.88rem; margin: 0; color: var(--ink-muted); max-width: none; }
+
+  /* ---- THE THREAD MOCKUP (centerpiece) ---- */
+  .mockup {
+    margin: 2.5rem 0 1rem;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+    max-width: none;
+  }
+  .mockup-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    background: var(--surface-sunk);
+    border-bottom: 1px solid var(--rule);
+  }
+  .mockup-title { font-size: 0.9rem; font-weight: 650; }
+  .mockup-title span { color: var(--ink-muted); font-weight: 400; }
+  .toggle {
+    display: inline-flex;
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+  }
+  .toggle i { font-style: normal; padding: 0.28rem 0.6rem; color: var(--ink-muted); }
+  .toggle i.on { background: var(--accent); color: var(--surface); }
+
+  .stream { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.85rem; }
+
+  /* informal = sans, soft, no border */
+  .note { display: flex; gap: 0.7rem; align-items: flex-start; }
+  .avatar {
+    flex: 0 0 1.75rem; height: 1.75rem; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--mono); font-size: 0.66rem; font-weight: 600;
+    background: var(--surface-sunk); color: var(--ink-muted);
+    border: 1px solid var(--rule);
+  }
+  .note-body {
+    background: var(--surface-sunk);
+    border-radius: 2px 10px 10px 10px;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.9rem;
+    max-width: 46ch;
+  }
+  .note-who {
+    font-size: 0.72rem; color: var(--ink-muted); margin-bottom: 0.12rem;
+    font-weight: 600;
+  }
+  .note-who em { font-style: normal; font-weight: 400; font-family: var(--mono); font-size: 0.66rem; }
+
+  /* formal = serif, bordered, badged, sequence-numbered */
+  .record {
+    border: 1px solid var(--rule-strong);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 0.9rem 1rem;
+    margin: 0.35rem 0;
+  }
+  .record-head {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+    margin-bottom: 0.55rem;
+  }
+  .badge {
+    font-family: var(--mono); font-size: 0.63rem; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+    padding: 0.18rem 0.45rem; border-radius: 4px;
+    background: var(--accent); color: var(--surface);
+  }
+  .badge-open { background: var(--ctx-personal); }
+  .seq { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-muted); }
+  .record-body {
+    font-family: var(--serif); font-size: 1rem; line-height: 1.5;
+    max-width: 52ch;
+  }
+  .record-foot {
+    margin-top: 0.6rem; padding-top: 0.55rem;
+    border-top: 1px dashed var(--rule);
+    font-family: var(--mono); font-size: 0.66rem; color: var(--ink-muted);
+  }
+  .promoted {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    color: var(--accent);
+  }
+  .promote-hint {
+    align-self: flex-start;
+    margin-left: 2.45rem;
+    font-family: var(--mono); font-size: 0.66rem;
+    color: var(--ink-muted);
+    border: 1px dashed var(--rule-strong);
+    border-radius: 5px;
+    padding: 0.2rem 0.5rem;
+  }
+  .caption {
+    font-size: 0.82rem; color: var(--ink-muted);
+    max-width: var(--measure); margin: 0.75rem 0 0;
+  }
+
+  /* ---- Tables ---- */
+  .scroll { overflow-x: auto; margin: 1.5rem 0; border: 1px solid var(--rule); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; min-width: 34rem; }
+  th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--ink-muted); font-weight: 500;
+    background: var(--surface-sunk);
+  }
+  tr:last-child td { border-bottom: none; }
+  td code { background: none; padding: 0; color: var(--accent); }
+  .col-field { font-family: var(--mono); white-space: nowrap; }
+
+  /* ---- Hierarchy diagram ---- */
+  .tree { margin: 1.75rem 0; font-family: var(--mono); font-size: 0.78rem; max-width: none; }
+  .tree-row { display: flex; align-items: stretch; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+  .node {
+    border: 1px solid var(--rule-strong); border-radius: 6px;
+    padding: 0.4rem 0.7rem; background: var(--surface);
+  }
+  .node-accent { border-color: var(--accent); color: var(--accent); }
+  .node-sunk { background: var(--surface-sunk); border-style: dashed; color: var(--ink-muted); }
+  .tree-indent { padding-left: 1.5rem; border-left: 1px solid var(--rule); margin-left: 0.85rem; }
+
+  /* ---- Rules / limits list ---- */
+  .rules { counter-reset: rule; list-style: none; padding: 0; max-width: var(--measure); }
+  .rules li {
+    counter-increment: rule;
+    display: grid; grid-template-columns: 2rem 1fr; gap: 0.75rem;
+    padding: 0.85rem 0; border-bottom: 1px solid var(--rule);
+    margin: 0;
+  }
+  .rules li::before {
+    content: counter(rule, decimal-leading-zero);
+    font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
+    padding-top: 0.2rem;
+  }
+  .rules li:last-child { border-bottom: none; }
+
+  /* ---- Phases ---- */
+  .phase {
+    display: grid; grid-template-columns: 5.5rem 1fr; gap: 1.25rem;
+    padding: 1rem 0; border-bottom: 1px solid var(--rule);
+    max-width: var(--measure);
+  }
+  .phase:last-of-type { border-bottom: none; }
+  .phase-tag {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
+    padding-top: 0.15rem;
+  }
+  .phase h4 { margin: 0 0 0.3rem; font-size: 0.95rem; font-weight: 650; }
+  .phase p { margin: 0; font-size: 0.9rem; color: var(--ink-muted); }
+
+  /* ---- Callout ---- */
+  .callout {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--danger);
+    background: var(--danger-soft);
+    border-radius: var(--radius);
+    padding: 1rem 1.15rem;
+    margin: 1.75rem 0;
+    max-width: var(--measure);
+  }
+  .callout p { margin: 0; font-size: 0.92rem; }
+  .callout-label {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--danger);
+    display: block; margin-bottom: 0.4rem; font-weight: 600;
+  }
+
+  /* ---- Questions ---- */
+  .q { padding: 1.1rem 0; border-bottom: 1px solid var(--rule); max-width: var(--measure); }
+  .q:last-child { border-bottom: none; }
+  .q h4 { margin: 0 0 0.35rem; font-size: 0.98rem; font-weight: 650; }
+  .q p { margin: 0; font-size: 0.9rem; color: var(--ink-muted); }
+
+  hr.div { border: none; border-top: 1px solid var(--rule); margin: 0 0 3.5rem; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Kairos · Design Spec · Draft for review</p>
+    <h1>Collaboration, projects, and the two registers</h1>
+    <p class="standfirst">
+      A proposal for how Kairos absorbs messaging, projects, and task tracking — built around one
+      mechanic: the formal record is produced <em>by</em> the informal conversation, not written
+      separately from it.
+    </p>
+    <div class="meta-row">
+      <span><b>Status</b> — awaiting your reaction, no code written</span>
+      <span><b>Scope</b> — Phase 3</span>
+      <span><b>Builds on</b> — Phases 1–2B, shipped</span>
+    </div>
+  </header>
+
+  <div class="cols">
+
+    <nav class="toc" aria-label="Contents">
+      <p class="toc-label">Contents</p>
+      <ol>
+        <li><a href="#problem">The problem worth solving</a></li>
+        <li><a href="#registers">One timeline, two registers</a></li>
+        <li><a href="#contexts">Three contexts, strict walls</a></li>
+        <li><a href="#projects">Projects and stages</a></li>
+        <li><a href="#tasks">Tasks</a></li>
+        <li><a href="#dashboard">The priorities view</a></li>
+        <li><a href="#notifications">Reminders and notifications</a></li>
+        <li><a href="#data">Data model</a></li>
+        <li><a href="#screens">Screens</a></li>
+        <li><a href="#limits">What this deliberately isn't</a></li>
+        <li><a href="#sequence">Build sequence</a></li>
+        <li><a href="#questions">What I need you to decide</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <section id="problem">
+        <span class="sec-num">01</span>
+        <h2>The problem worth solving</h2>
+        <p class="lede">
+          Every other item on your feature list — tasks, reminders, a priorities dashboard, calendar
+          sync — already exists in a dozen products. This one doesn't.
+        </p>
+        <p>
+          The formal record and the actual conversation live in different tools. Email is citable,
+          structured, and slow; it carries authority. Chat is fast and expressive; it carries
+          nothing. So the record gets written twice — once as the conversation that really decided
+          things, once as the email that documents it — or, more often, the second write never
+          happens.
+        </p>
+        <p>
+          That's the failure you described: strip out the bureaucracy and things stop being
+          properly addressed. Not because the formality was load-bearing, but because the formality
+          was the <em>only</em> thing producing a record. Remove it and you remove the paper trail
+          with it.
+        </p>
+        <p class="pull">
+          If promoting a chat message to an official decision takes one click, the record stops
+          being extra work. It becomes a byproduct of talking.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="registers">
+        <span class="sec-num">02</span>
+        <h2>One timeline, two registers</h2>
+        <p>
+          A stage of work has a single thread. Inside it, messages come in two registers, and the
+          difference is visible at a glance — in weight, in border, and in typeface.
+        </p>
+
+        <h3>Notes — the informal register</h3>
+        <p>
+          Ordinary chat. Fast, casual, disposable-feeling. Set in the interface sans, in a soft
+          bubble with no border. Reactions, attachments, replies. This is the Telegram half.
+        </p>
+
+        <h3>Records — the formal register</h3>
+        <p>
+          A structured post that becomes part of the project's official history. Set in serif,
+          bordered, badged with a type and a sequence number so it can be cited in conversation
+          ("per R‑07"). Every record has:
+        </p>
+        <ul>
+          <li><strong>A type</strong> — Decision, Approval, Request, Update, Sign‑off, or Blocker.</li>
+          <li><strong>A status</strong> — open, accepted, declined, or superseded.</li>
+          <li><strong>An author of record</strong>, and optionally a list of people who must acknowledge it.</li>
+        </ul>
+
+        <h3>Promote — the mechanic that matters</h3>
+        <p>
+          Any note becomes a record in one click. It carries the original wording, the original
+          author, and the original timestamp, and it keeps a permanent link back to the note it came
+          from. Nobody retypes anything into an email. The thing that was actually agreed, in the
+          words it was actually agreed in, becomes the official record.
+        </p>
+
+        <div class="mockup">
+          <div class="mockup-bar">
+            <span class="mockup-title">Q3 Board Pack <span>› Approval stage</span></span>
+            <span class="toggle" role="group" aria-label="Register filter">
+              <i class="on">Everything</i><i>Records only</i>
+            </span>
+          </div>
+          <div class="stream">
+
+            <div class="note">
+              <span class="avatar" aria-hidden="true">PA</span>
+              <div>
+                <div class="note-who">Pam Adeyemi <em>· 09:14</em></div>
+                <div class="note-body">Deck's ready bar the treasury slide. Wale still owes me the FX numbers 🙃</div>
+              </div>
+            </div>
+
+            <div class="note">
+              <span class="avatar" aria-hidden="true">EO</span>
+              <div>
+                <div class="note-who">Elena Okonjo <em>· 09:31</em></div>
+                <div class="note-body">Don't hold the pack for it. Send what we have to the chair today, treasury follows tomorrow.</div>
+              </div>
+            </div>
+
+            <span class="promote-hint">↑ Pam selects Elena's message → Promote to record → Decision</span>
+
+            <div class="record">
+              <div class="record-head">
+                <span class="badge">Decision</span>
+                <span class="badge badge-open">Accepted</span>
+                <span class="seq">R‑07</span>
+              </div>
+              <div class="record-body">
+                Don't hold the pack for it. Send what we have to the chair today, treasury follows
+                tomorrow.
+              </div>
+              <div class="record-foot">
+                <span class="promoted">⤴ promoted from a note by Elena Okonjo · 09:31</span>
+                &nbsp;·&nbsp; recorded by Pam Adeyemi · 09:33 &nbsp;·&nbsp; acknowledged by Elena
+              </div>
+            </div>
+
+            <div class="note">
+              <span class="avatar" aria-hidden="true">PA</span>
+              <div>
+                <div class="note-who">Pam Adeyemi <em>· 09:35</em></div>
+                <div class="note-body">Logged. Sending to the chair now — I'll flag treasury as pending in the cover note.</div>
+              </div>
+            </div>
+
+            <div class="record">
+              <div class="record-head">
+                <span class="badge">Sign-off</span>
+                <span class="badge badge-open">Awaiting</span>
+                <span class="seq">R‑08</span>
+              </div>
+              <div class="record-body">
+                Chair's sign-off on the Q3 pack, treasury slide excepted.
+              </div>
+              <div class="record-foot">
+                requested by Pam Adeyemi · 09:36 &nbsp;·&nbsp; awaiting 1 of 1 · due Thu 17:00
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <p class="caption">
+          The same thread, one chronology. Flip to <em>Records only</em> and R‑07 and R‑08 remain —
+          a clean, citable audit trail you could hand to a board secretary — while the texture that
+          produced them stays underneath for anyone who needs the context.
+        </p>
+
+        <h3>Why the typeface split does real work</h3>
+        <p>
+          Serif for records, sans for notes, in the same stream. You can tell at a glance which parts
+          of a long thread are binding without reading a word of it. It's the cheapest possible
+          signal for the most important distinction in the product.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="contexts">
+        <span class="sec-num">03</span>
+        <h2>Three contexts, strict walls</h2>
+        <p>
+          Everything — every project, every conversation — lives in a <strong>space</strong>, and
+          every space has exactly one context. This is what lets work life and personal life share a
+          product without contaminating each other.
+        </p>
+
+        <div class="ctx-grid">
+          <div class="ctx-card work">
+            <span class="chip chip-work">Work</span>
+            <h4>Clients, employers, boards</h4>
+            <p>Both registers on. External members allowed. The audit view matters, and records
+              drive stage status.</p>
+          </div>
+          <div class="ctx-card personal">
+            <span class="chip chip-personal">Personal</span>
+            <h4>Family, friends, your own life</h4>
+            <p>Informal by default; the formal register is available but hidden until asked for.
+              A house move deserves stages too.</p>
+          </div>
+          <div class="ctx-card private">
+            <span class="chip chip-private">Private</span>
+            <h4>Only you</h4>
+            <p>Notes to self, drafts, solo projects. No members, ever. Never appears in anyone
+              else's view.</p>
+          </div>
+        </div>
+
+        <p>
+          "Connected but not affecting each other" is the hard requirement, so the isolation rules
+          are explicit and testable rather than left to good intentions:
+        </p>
+
+        <ol class="rules">
+          <li>A message never moves or copies between spaces. Forwarding creates a <em>new</em> message,
+            with visible attribution, and only on deliberate action.</li>
+          <li>Membership is per-space. Sharing a Work space with someone grants exactly zero
+            visibility into any Personal space — including the existence of one.</li>
+          <li>A person is one contact record but many conversations. Your manager in Work and your
+            manager in Personal are two threads that never merge, and deleting the Work space leaves
+            the Personal one untouched.</li>
+          <li>Notification rules are set per context. Silence all Work after 19:00 without silencing
+            your family.</li>
+          <li>Search is scoped to the current context by default. Searching across contexts is opt-in
+            and says so plainly.</li>
+          <li>The unified dashboard is the one place all three meet — and every row there carries its
+            context chip and can be filtered down to one world.</li>
+        </ol>
+
+        <p>
+          The connection you're after is real but narrow: one inbox, one priorities view, one set of
+          contacts underneath. Everything else stays walled.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="projects">
+        <span class="sec-num">04</span>
+        <h2>Projects and stages</h2>
+        <p>
+          A project belongs to a space and holds an ordered list of stages — the formal spine that
+          the conversation hangs off.
+        </p>
+
+        <div class="tree">
+          <div class="tree-row"><span class="node node-accent">Space</span><span class="node node-sunk">context: work · personal · private</span></div>
+          <div class="tree-indent">
+            <div class="tree-row"><span class="node node-accent">Project</span><span class="node node-sunk">"Q3 Board Pack"</span></div>
+            <div class="tree-indent">
+              <div class="tree-row"><span class="node">Stage — Draft</span><span class="node node-sunk">done</span></div>
+              <div class="tree-row"><span class="node node-accent">Stage — Approval</span><span class="node node-sunk">active · owner: Pam · due Thu</span></div>
+              <div class="tree-indent">
+                <div class="tree-row"><span class="node node-accent">Thread</span><span class="node node-sunk">notes + records, one chronology</span></div>
+                <div class="tree-row"><span class="node">Tasks</span><span class="node node-sunk">3 open · 1 overdue</span></div>
+              </div>
+              <div class="tree-row"><span class="node">Stage — Circulate</span><span class="node node-sunk">not started</span></div>
+            </div>
+          </div>
+        </div>
+
+        <p>
+          Each stage has an owner, a due date, and a status: <code>not_started</code>,
+          <code>active</code>, <code>blocked</code>, <code>done</code>. Each stage owns a thread.
+        </p>
+        <p>
+          The connection back to section 02: <strong>records can drive stage status.</strong> An
+          accepted Sign‑off record closes its stage. An open Blocker record flips it to blocked and
+          surfaces it on every member's dashboard. So the formal register isn't ceremony — it's the
+          thing that actually moves the project, which is precisely what makes promoting a note worth
+          doing.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="tasks">
+        <span class="sec-num">05</span>
+        <h2>Tasks</h2>
+        <p>
+          Tasks attach to a stage, a project, or nothing at all (a loose to-do in a space). Fields:
+          title, assignee, due date, priority, and status — <code>open</code>, <code>doing</code>,
+          <code>blocked</code>, <code>done</code>.
+        </p>
+        <p>
+          The important detail is where they come from. <strong>Any message becomes a task in one
+          click</strong>, the same gesture as promoting to a record, keeping a link back to the
+          message that spawned it. "Wale still owes me the FX numbers" becomes an assigned, dated
+          task without leaving the thread — and when you open the task later, the conversation that
+          explains it is one click away.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="dashboard">
+        <span class="sec-num">06</span>
+        <h2>The priorities view</h2>
+        <p>
+          The one screen that spans all three contexts, and the answer to "everything in one place."
+          It reuses what Kairos already computes rather than inventing a parallel world — today's
+          bookings and the PA approval queue are already built and land here alongside the new
+          material.
+        </p>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Band</th><th>What lands there</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="col-field">Needs you</td><td>Records awaiting your acknowledgement or sign-off, Tier 3/4 booking approvals, direct @mentions, blocked stages you own</td></tr>
+              <tr><td class="col-field">Overdue</td><td>Tasks and stages past their due date, oldest first</td></tr>
+              <tr><td class="col-field">Today</td><td>Confirmed meetings, tasks due today, stages due today</td></tr>
+              <tr><td class="col-field">Next 7 days</td><td>Upcoming meetings, tasks, stage deadlines, and relationship dates (birthdays, anniversaries — already built)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Every row carries its context chip. One filter collapses the view to
+          <span class="chip chip-work">Work</span> alone for the working day, or
+          <span class="chip chip-personal">Personal</span> alone on a Sunday. Same data, different
+          lens — never a different app.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="notifications">
+        <span class="sec-num">07</span>
+        <h2>Reminders and notifications</h2>
+        <ul>
+          <li><strong>Per-context rules.</strong> Each context gets its own delivery mode — realtime,
+            digest, or off — plus quiet hours. This is what makes one app for both lives survivable.</li>
+          <li><strong>Registers notify differently.</strong> A note is ambient. A record addressed to
+            you is not — it can chase, escalate, and appear under "Needs you" until acknowledged.</li>
+          <li><strong>Reminders</strong> fire on task due dates, stage deadlines, and unacknowledged
+            records, at intervals you set.</li>
+          <li><strong>Delivery</strong> rides the existing email service, so everything is already
+            visible in the Outbox tab during development. In-app is realtime; WhatsApp remains
+            credential-gated and inert (see section 10).</li>
+        </ul>
+      </section>
+
+      <hr class="div" />
+
+      <section id="data">
+        <span class="sec-num">08</span>
+        <h2>Data model</h2>
+        <p>
+          New tables, in the same style as the existing schema — text UUIDs, ISO‑8601 timestamps,
+          explicit foreign keys, nothing SQLite-specific, so the Postgres port stays a port.
+        </p>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-field">spaces</td>
+                <td class="col-field">id, owner_id, name, context, created_at</td>
+                <td><code>context</code> ∈ work | personal | private. The isolation boundary.</td>
+              </tr>
+              <tr>
+                <td class="col-field">space_members</td>
+                <td class="col-field">id, space_id, user_id, role, status, invited_email</td>
+                <td>Mirrors the existing <code>memberships</code> invite flow. <code>role</code> ∈ owner | member | guest.</td>
+              </tr>
+              <tr>
+                <td class="col-field">projects</td>
+                <td class="col-field">id, space_id, name, description, status, created_at</td>
+                <td>Always inside exactly one space.</td>
+              </tr>
+              <tr>
+                <td class="col-field">project_stages</td>
+                <td class="col-field">id, project_id, name, position, status, owner_user_id, due_at</td>
+                <td>Ordered by <code>position</code>. Status may be driven by records.</td>
+              </tr>
+              <tr>
+                <td class="col-field">threads</td>
+                <td class="col-field">id, space_id, project_id, stage_id, kind, created_at</td>
+                <td><code>kind</code> ∈ stage | project | space | dm. Nullable parents let one table serve group chat and stage threads alike.</td>
+              </tr>
+              <tr>
+                <td class="col-field">messages</td>
+                <td class="col-field">id, thread_id, author_id, body, register, record_type, record_status, record_seq, promoted_from_id, reply_to_id, created_at, edited_at</td>
+                <td>The core table. <code>register</code> ∈ note | record. Record columns are null for notes. <code>promoted_from_id</code> is the audit link.</td>
+              </tr>
+              <tr>
+                <td class="col-field">message_acks</td>
+                <td class="col-field">message_id, user_id, acked_at</td>
+                <td>Who must acknowledge a record, and who has.</td>
+              </tr>
+              <tr>
+                <td class="col-field">reactions</td>
+                <td class="col-field">message_id, user_id, emoji</td>
+                <td>Informal register only — a decision isn't reacted to, it's acknowledged.</td>
+              </tr>
+              <tr>
+                <td class="col-field">tasks</td>
+                <td class="col-field">id, space_id, project_id, stage_id, source_message_id, title, assignee_id, due_at, priority, status</td>
+                <td><code>source_message_id</code> preserves the link to the conversation that created it.</td>
+              </tr>
+              <tr>
+                <td class="col-field">notification_prefs</td>
+                <td class="col-field">user_id, context, space_id, mode, quiet_from, quiet_to</td>
+                <td>Set per context, overridable per space.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Reused unchanged: <code>users</code>, <code>contacts</code>, <code>bookings</code>,
+          <code>briefs</code>, <code>memberships</code>, <code>emails</code>. A brief already attaches
+          to a booking; under this model it can also attach to a stage, which is a small change with
+          a lot of leverage.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="screens">
+        <span class="sec-num">09</span>
+        <h2>Screens</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Screen</th><th>Job</th></tr></thead>
+            <tbody>
+              <tr><td class="col-field">Priorities</td><td>Landing screen. The four bands from section 06, filterable by context.</td></tr>
+              <tr><td class="col-field">Spaces</td><td>All spaces grouped under Work / Personal / Private, with unread counts.</td></tr>
+              <tr><td class="col-field">Space</td><td>Its projects, its loose threads, its members.</td></tr>
+              <tr><td class="col-field">Project</td><td>Stages as an ordered list with status, owner, due date, and open task counts.</td></tr>
+              <tr><td class="col-field">Thread</td><td>The core screen — section 02's timeline, with the register toggle and the compose box that can post either register.</td></tr>
+              <tr><td class="col-field">My tasks</td><td>Everything assigned to you across all contexts, grouped by due date.</td></tr>
+              <tr><td class="col-field">Notifications</td><td>Per-context delivery modes and quiet hours.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The existing Dashboard and PA Home don't get replaced. Priorities becomes the new landing
+          screen; the calendar, meeting types, approvals, briefs, and contacts stay exactly where
+          they are.
+        </p>
+      </section>
+
+      <hr class="div" />
+
+      <section id="limits">
+        <span class="sec-num">10</span>
+        <h2>What this deliberately isn't</h2>
+
+        <div class="callout">
+          <span class="callout-label">Honest constraint</span>
+          <p>
+            <strong>Google Calendar and Workspace integration cannot be built here.</strong> It needs
+            real OAuth client credentials, which this environment doesn't have. The architecture
+            already exists in <code>calendarSync.js</code> and will keep reporting "not configured"
+            rather than pretending to sync. Same for WhatsApp. When you have credentials, these become
+            small jobs — but I won't ship something that looks connected and isn't.
+          </p>
+        </div>
+
+        <ul>
+          <li><strong>Not end-to-end encrypted.</strong> You said "privately," so this needs saying
+            plainly: private here means access-controlled — the server can read message contents. Real
+            E2E encryption is a different and much larger product decision.</li>
+          <li><strong>Not realtime in the first build.</strong> Live delivery needs WebSockets. The
+            first version polls, which feels fine for threads and bad for fast chat. Worth doing
+            properly in a follow-up rather than badly now.</li>
+          <li><strong>No mobile app.</strong> Responsive web only.</li>
+          <li><strong>No AI in the thread yet.</strong> The existing assistant drafts messages and
+            briefs; pointing it at thread history — summarizing a stage, drafting the record from a
+            long argument — is an obvious follow-up, not part of this.</li>
+        </ul>
+      </section>
+
+      <hr class="div" />
+
+      <section id="sequence">
+        <span class="sec-num">11</span>
+        <h2>Build sequence</h2>
+        <p>Each phase is independently useful, so you can stop or redirect after any of them.</p>
+
+        <div class="phase">
+          <span class="phase-tag">3A</span>
+          <div>
+            <h4>Spaces, contexts, and threads</h4>
+            <p>The three contexts with their isolation rules, direct and group threads, and the
+              note/record timeline with promote. Ships the differentiator first.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <span class="phase-tag">3B</span>
+          <div>
+            <h4>Projects and stages</h4>
+            <p>Ordered stages, per-stage threads, and records driving stage status.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <span class="phase-tag">3C</span>
+          <div>
+            <h4>Tasks and reminders</h4>
+            <p>Tasks from messages, assignment, due dates, and the reminder engine.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <span class="phase-tag">3D</span>
+          <div>
+            <h4>Priorities and notification rules</h4>
+            <p>The unified view across contexts, per-context delivery modes and quiet hours.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div" />
+
+      <section id="questions">
+        <span class="sec-num">12</span>
+        <h2>What I need you to decide</h2>
+        <p class="lede">
+          Six questions where I'd rather have your answer than my guess. Reply to the numbers — no
+          need to address all of them.
+        </p>
+
+        <div class="q">
+          <h4>1. Can a PA act inside their principal's Personal context?</h4>
+          <p>Chiefs of staff often do handle personal life — but this is the sharpest privacy edge in
+            the whole design. Per-space opt-in, blanket, or never?</p>
+        </div>
+        <div class="q">
+          <h4>2. Are records immutable once acknowledged?</h4>
+          <p>Legal-grade means no edits after acknowledgement — only a superseding record. Stricter is
+            more trustworthy and more annoying. Which side?</p>
+        </div>
+        <div class="q">
+          <h4>3. Can external clients participate without a Kairos account?</h4>
+          <p>An email-bridge — they reply by email, it lands as a note — is powerful and roughly
+            doubles the messaging build. In or out for now?</p>
+        </div>
+        <div class="q">
+          <h4>4. Who can promote a note to a record?</h4>
+          <p>Anyone in the space, or only the stage owner and the principal? Ties directly to whether
+            records carry real authority.</p>
+        </div>
+        <div class="q">
+          <h4>5. Do stages need templates?</h4>
+          <p>If a Chief runs the same five-stage shape every time, a reusable project template saves
+            real work. Worth building in 3B, or later?</p>
+        </div>
+        <div class="q">
+          <h4>6. Is Private a context, or just a space with one member?</h4>
+          <p>I've specced it as its own context for clarity of mental model. Collapsing it into
+            "a Personal space with no members" is simpler and slightly less clear.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
