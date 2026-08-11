@@ -20,11 +20,24 @@ export default function SpaceDetail() {
   const [threadName, setThreadName] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
   const [notice, setNotice] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [projectName, setProjectName] = useState('');
 
   function load() {
     api.get(`/spaces/${spaceId}`).then(setData).catch((err) => setError(err.message));
+    api.get(`/spaces/${spaceId}/projects`).then((d) => setProjects(d.projects)).catch(() => {});
   }
   useEffect(load, [spaceId]);
+
+  async function addProject(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      const res = await api.post(`/spaces/${spaceId}/projects`, { name: projectName });
+      setProjectName('');
+      navigate(`/projects/${res.project.id}`);
+    } catch (err) { setError(err.message); }
+  }
 
   async function addThread(e) {
     e.preventDefault();
@@ -99,7 +112,39 @@ export default function SpaceDetail() {
           </p>
         )}
 
-        <h3 style={{ marginTop: 8 }}>Threads</h3>
+        <h3 style={{ marginTop: 8 }}>Projects</h3>
+        {projects.length === 0 && <div className="empty-state">No projects yet.</div>}
+        {projects.map((p) => (
+          <Link className="card space-card" key={p.id} to={`/projects/${p.id}`}>
+            <div>
+              <div className="name">{p.name}</div>
+              <div className="meta">
+                {p.doneCount} of {p.stageCount} stage{p.stageCount === 1 ? '' : 's'} done
+                {p.blockedCount > 0 && ` · ${p.blockedCount} blocked`}
+              </div>
+            </div>
+            {p.blockedCount > 0
+              ? <span className="stage-badge is-blocked">Blocked</span>
+              : <span className="pill">{p.status}</span>}
+          </Link>
+        ))}
+
+        {data.canWrite && (
+          <form onSubmit={addProject} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="New project name"
+              aria-label="New project name"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              required
+              style={{ flex: 1, minWidth: 200 }}
+            />
+            <button className="btn btn-primary btn-sm" type="submit">Add project</button>
+          </form>
+        )}
+
+        <h3 style={{ marginTop: 30 }}>Threads</h3>
         {threads.length === 0 && <div className="empty-state">No threads yet.</div>}
         {threads.map((t) => (
           <Link className="card space-card" key={t.id} to={`/threads/${t.id}`}>

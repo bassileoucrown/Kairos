@@ -227,14 +227,49 @@ CREATE TABLE IF NOT EXISTS space_members (
 CREATE INDEX IF NOT EXISTS idx_space_members_space ON space_members(space_id);
 CREATE INDEX IF NOT EXISTS idx_space_members_user ON space_members(user_id);
 
+-- A project always sits inside exactly one space, so it inherits that space's
+-- context and isolation rules rather than carrying its own.
+CREATE TABLE IF NOT EXISTS projects (
+  id          TEXT PRIMARY KEY,
+  space_id    TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'active', -- active | done | archived
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_projects_space ON projects(space_id);
+
+-- The formal spine a project's conversation hangs off. Ordered by position;
+-- each stage owns exactly one thread, created with it.
+--
+-- status is stored rather than derived, so an owner can set it by hand — but
+-- records move it too (see lib/stageStatus.js): an open Blocker forces
+-- 'blocked', an accepted Sign-off forces 'done'. That's what stops the formal
+-- register being ceremony: filing a record is the thing that actually moves
+-- the project.
+CREATE TABLE IF NOT EXISTS project_stages (
+  id            TEXT PRIMARY KEY,
+  project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  position      INTEGER NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL DEFAULT 'not_started', -- not_started | active | blocked | done
+  owner_user_id TEXT REFERENCES users(id),
+  due_at        TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_stages_project ON project_stages(project_id, position);
+
 CREATE TABLE IF NOT EXISTS threads (
   id         TEXT PRIMARY KEY,
   space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  stage_id   TEXT REFERENCES project_stages(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  kind       TEXT NOT NULL DEFAULT 'group', -- group | dm | stage (stage lands in 3B)
+  kind       TEXT NOT NULL DEFAULT 'group', -- group | dm | stage
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_threads_space ON threads(space_id);
+CREATE INDEX IF NOT EXISTS idx_threads_stage ON threads(stage_id);
 
 -- One table, two registers. A note is chat; a record is a structured, citable
 -- entry in the thread's formal history. The record_* columns are NULL for

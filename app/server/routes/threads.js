@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { resolveAccess } = require('../lib/spaceAccess');
+const { syncStageFromRecords } = require('../lib/stageStatus');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -66,8 +67,23 @@ router.get('/:threadId/messages', loadThread, (req, res) => {
     WHERE a.message_id IN (SELECT id FROM messages WHERE thread_id = ?)
   `).all(req.thread.id);
 
+  // When a thread belongs to a stage, hand back enough context to show the
+  // breadcrumb and the live status the records here are driving.
+  let stage = null;
+  if (req.thread.stage_id) {
+    stage = db.prepare(`
+      SELECT s.id, s.name, s.status, s.due_at, p.id AS project_id, p.name AS project_name
+      FROM project_stages s JOIN projects p ON p.id = s.project_id
+      WHERE s.id = ?
+    `).get(req.thread.stage_id);
+  }
+
   res.json({
     thread: { id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id },
+    stage: stage && {
+      id: stage.id, name: stage.name, status: stage.status, dueAt: stage.due_at,
+      projectId: stage.project_id, projectName: stage.project_name,
+    },
     canWrite: req.access.canWrite,
     viewerId: req.user.id,
     messages: rows.map((m) => serializeMessage(m, acks)),
@@ -104,7 +120,8 @@ router.post('/:threadId/messages', loadThread, (req, res) => {
     new Date().toISOString(),
   );
 
-  res.status(201).json({ id });
+  const stage = isRecord ? syncStageFromRecords(req.thread.stage_id) : null;
+  res.status(201).json({ id, stage });
 });
 
 // Promotion is clerical, not authoritative: anyone who can write may file a
@@ -140,7 +157,7 @@ router.post('/:threadId/messages/:messageId/promote', loadThread, (req, res) => 
     note.id, req.user.id, new Date().toISOString(),
   );
 
-  res.status(201).json({ id });
+  res.status(201).json({ id, stage: syncStageFromRecords(req.thread.stage_id) });
 });
 
 // First acknowledgement freezes the body. After that a decision can only be
@@ -196,33 +213,45 @@ router.post('/:threadId/messages/:messageId/supersede', loadThread, (req, res) =
     .get(req.params.messageId, req.thread.id);
   if (!old) return res.status(404).json({ error: 'Record not found.' });
 
-  const { body } = req.body || {};
+  const { body, recordType } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write the replacement first.' });
+  if (recordType !== undefined && !RECORD_TYPES.has(recordType)) {
+    return res.status(400).json({ error: 'Choose what kind of record the replacement is.' });
+  }
+
+  // The replacement keeps the original's type unless told otherwise. That
+  // matters most for Blockers: superseding one with another Blocker restates
+  // the obstacle and the stage stays blocked, while superseding it with an
+  // Update clears it. Forcing the type to carry over would make a blocker
+  // impossible to lift this way.
+  const newType = recordType || old.record_type;
 
   const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO messages
       (id, thread_id, author_id, body, register, record_type, record_status, record_seq, supersedes_id, created_at)
     VALUES (?, ?, ?, ?, 'record', ?, ?, ?, ?, ?)
-  `).run(id, req.thread.id, req.user.id, String(body).trim(), old.record_type,
-    OPEN_STATUS_BY_TYPE[old.record_type], nextRecordSeq(req.thread.id), old.id, new Date().toISOString());
+  `).run(id, req.thread.id, req.user.id, String(body).trim(), newType,
+    OPEN_STATUS_BY_TYPE[newType], nextRecordSeq(req.thread.id), old.id, new Date().toISOString());
 
   db.prepare("UPDATE messages SET record_status = 'superseded' WHERE id = ?").run(old.id);
-  res.status(201).json({ id });
+  res.status(201).json({ id, stage: syncStageFromRecords(req.thread.stage_id) });
 });
 
 router.post('/:threadId/messages/:messageId/status', loadThread, (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { status } = req.body || {};
-  if (!['accepted', 'declined'].includes(status)) {
-    return res.status(400).json({ error: 'Status must be accepted or declined.' });
+  // 'resolved' exists for Blockers, where "accepted" and "declined" are both
+  // the wrong word for the thing that actually happens to them.
+  if (!['accepted', 'declined', 'resolved'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be accepted, declined, or resolved.' });
   }
   const message = db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Record not found.' });
 
   db.prepare('UPDATE messages SET record_status = ? WHERE id = ?').run(status, message.id);
-  res.json({ ok: true });
+  res.json({ ok: true, stage: syncStageFromRecords(req.thread.stage_id) });
 });
 
 module.exports = router;

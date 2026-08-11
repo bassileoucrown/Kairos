@@ -15,6 +15,7 @@ const integrationsRouter = require('./routes/integrations');
 const paRouter = require('./routes/pa');
 const spacesRouter = require('./routes/spaces');
 const threadsRouter = require('./routes/threads');
+const projectsRouter = require('./routes/projects');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -36,6 +37,7 @@ app.use('/api/integrations', integrationsRouter);
 app.use('/api/pa', paRouter);
 app.use('/api/spaces', spacesRouter);
 app.use('/api/threads', threadsRouter);
+app.use('/api/projects', projectsRouter);
 
 // In production, serve the built client and let it handle client-side routing.
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

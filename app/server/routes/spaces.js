@@ -162,6 +162,42 @@ router.delete('/:spaceId/members/:memberId', requireSpaceAccess, (req, res) => {
   res.status(204).end();
 });
 
+router.get('/:spaceId/projects', requireSpaceAccess, (req, res) => {
+  const rows = db.prepare(`
+    SELECT p.*,
+      (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id) AS stage_count,
+      (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id AND s.status = 'done') AS done_count,
+      (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id AND s.status = 'blocked') AS blocked_count
+    FROM projects p WHERE p.space_id = ? ORDER BY p.created_at DESC
+  `).all(req.space.id);
+
+  res.json({
+    projects: rows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      status: p.status,
+      stageCount: p.stage_count,
+      doneCount: p.done_count,
+      blockedCount: p.blocked_count,
+    })),
+  });
+});
+
+router.post('/:spaceId/projects', requireSpaceAccess, (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  const { name, description } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Give the project a name.' });
+
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO projects (id, space_id, name, description, status, created_at)
+    VALUES (?, ?, ?, ?, 'active', ?)
+  `).run(id, req.space.id, String(name).trim(), String(description || ''), new Date().toISOString());
+
+  res.status(201).json({ project: { id, name: String(name).trim() } });
+});
+
 router.post('/:spaceId/threads', requireSpaceAccess, (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { name } = req.body || {};

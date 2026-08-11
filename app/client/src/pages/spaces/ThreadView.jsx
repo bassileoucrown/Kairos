@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 
 const RECORD_TYPES = [
   { value: 'decision', label: 'Decision' },
@@ -13,7 +14,8 @@ const RECORD_TYPES = [
 ];
 const TYPE_LABEL = Object.fromEntries(RECORD_TYPES.map((t) => [t.value, t.label]));
 const STATUS_LABEL = {
-  open: 'Awaiting', accepted: 'Accepted', declined: 'Declined', superseded: 'Superseded',
+  open: 'Awaiting', accepted: 'Accepted', declined: 'Declined',
+  resolved: 'Resolved', superseded: 'Superseded',
 };
 
 function initials(name) {
@@ -61,8 +63,10 @@ function Note({ m, canWrite, onPromote }) {
 function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
   const [superseding, setSuperseding] = useState(false);
   const [replacement, setReplacement] = useState('');
+  const [replacementType, setReplacementType] = useState(m.recordType);
   const hasAcked = m.acks.some((a) => a.userId === viewerId);
   const isSuperseded = m.recordStatus === 'superseded';
+  const isBlocker = m.recordType === 'blocker';
 
   return (
     <div className={'msg-record' + (isSuperseded ? ' is-superseded' : '')}>
@@ -92,12 +96,16 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
               Acknowledge
             </button>
           )}
-          {m.recordStatus === 'open' && (
+          {m.recordStatus === 'open' && (isBlocker ? (
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => onStatus(m.id, 'resolved')}>
+              Resolve blocker
+            </button>
+          ) : (
             <>
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => onStatus(m.id, 'accepted')}>Accept</button>
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => onStatus(m.id, 'declined')}>Decline</button>
             </>
-          )}
+          ))}
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => setSuperseding((s) => !s)}>
             Supersede
           </button>
@@ -109,7 +117,7 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
           className="msg-supersede"
           onSubmit={(e) => {
             e.preventDefault();
-            onSupersede(m.id, replacement);
+            onSupersede(m.id, replacement, replacementType);
             setReplacement('');
             setSuperseding(false);
           }}
@@ -121,7 +129,25 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
             aria-label="Replacement record"
             required
           />
-          <button className="btn btn-primary btn-sm" type="submit">File replacement</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="hint" htmlFor={`sup-type-${m.id}`}>Replacement is a</label>
+            <select
+              id={`sup-type-${m.id}`}
+              aria-label="Replacement record type"
+              value={replacementType}
+              onChange={(e) => setReplacementType(e.target.value)}
+              style={{ width: 'auto' }}
+            >
+              {RECORD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <button className="btn btn-primary btn-sm" type="submit">File replacement</button>
+          </div>
+          {isBlocker && replacementType === 'blocker' && (
+            <p className="hint" style={{ margin: 0 }}>
+              Replacing a Blocker with another Blocker restates it — the stage stays blocked. Choose
+              Update to lift it.
+            </p>
+          )}
         </form>
       )}
     </div>
@@ -168,7 +194,8 @@ export default function ThreadView() {
   const promote = (id, type) => act(() => api.post(`/threads/${threadId}/messages/${id}/promote`, { recordType: type }));
   const ack = (id) => act(() => api.post(`/threads/${threadId}/messages/${id}/ack`));
   const setStatus = (id, status) => act(() => api.post(`/threads/${threadId}/messages/${id}/status`, { status }));
-  const supersede = (id, replacementBody) => act(() => api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody }));
+  const supersede = (id, replacementBody, replacementType) => act(() =>
+    api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
 
   async function handleLogout() { await logout(); navigate('/login'); }
 
@@ -191,6 +218,16 @@ export default function ThreadView() {
       </div>
 
       <div className="page">
+        {data.stage && (
+          <p className="tz-note" style={{ marginBottom: 4 }}>
+            <Link to={`/projects/${data.stage.projectId}`}>{data.stage.projectName}</Link>
+            {' › '}{data.stage.name}
+            {' '}
+            <span className={`stage-badge is-${data.stage.status}`}>
+              {STAGE_STATUS_LABELS[data.stage.status]}
+            </span>
+          </p>
+        )}
         <div className="page-header">
           <h1>{data.thread.name}</h1>
           <div className="register-toggle" role="group" aria-label="Which messages to show">

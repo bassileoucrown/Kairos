@@ -362,6 +362,7 @@ textarea { resize: vertical; min-height: 70px; }
 .msg-badge.status-open       { background: #B3703A; }
 .msg-badge.status-accepted   { background: var(--accent); }
 .msg-badge.status-declined   { background: var(--danger); }
+.msg-badge.status-resolved   { background: var(--accent); }
 .msg-badge.status-superseded { background: var(--text-muted); }
 .msg-seq { font-size: 0.72rem; color: var(--text-muted); }
 .msg-record-body {
@@ -382,6 +383,43 @@ textarea { resize: vertical; min-height: 70px; }
 .msg-promoted { color: var(--accent); font-weight: 600; }
 .msg-record-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .msg-supersede { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+/* ---- Project stages ---- */
+.stage-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 11px 13px;
+}
+.stage-row.stage-active  { border-left-color: var(--accent); }
+.stage-row.stage-blocked { border-left-color: var(--danger); background: var(--danger-soft); }
+.stage-row.stage-done    { border-left-color: var(--text-muted); opacity: 0.72; }
+.stage-main { min-width: 0; flex: 1; }
+.stage-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stage-pos {
+  flex: 0 0 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 0.68rem; font-weight: 700;
+  background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
+}
+.stage-name { font-weight: 600; font-size: 0.95rem; }
+.stage-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 3px; }
+.stage-badge {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px;
+  background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
+}
+.stage-badge.is-active  { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.stage-badge.is-blocked { background: var(--danger); color: #fff; border-color: transparent; }
+.stage-badge.is-done    { background: var(--accent); color: #fff; border-color: transparent; }
+.stage-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .msg-compose {
   display: flex;

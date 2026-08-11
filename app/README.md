@@ -184,6 +184,29 @@ record is produced *by* the informal conversation instead of being written separ
 Isolation is covered by direct API tests rather than only clicked through in a browser, since access
 control is worth exactly as much as its proof.
 
+## Phase 3B — Projects and stages (complete)
+
+A project lives in exactly one space, so it inherits that space's context and isolation rather than
+carrying its own. Each project holds ordered stages, and **every stage gets its own thread on
+creation** — a stage with nowhere to talk about it is the exact split this is meant to close.
+
+**Records drive stage status**, which is what stops the formal register being ceremony:
+
+| In the thread | On the board |
+|---|---|
+| Blocker filed (or a note promoted to one) | stage → **blocked** |
+| Blocker resolved or superseded by an Update | stage → **active** |
+| Sign-off accepted | stage → **done** |
+
+Status is stored rather than derived, so an owner can set it by hand — but an open Blocker outranks
+a manual change and the API refuses it with a reason. A board claiming "active" while a Blocker
+everyone can read sits in the thread is precisely the disconnect this exists to remove.
+
+Superseding keeps the original's record type unless the replacement names its own. That distinction
+matters for Blockers: replacing one with another Blocker *restates* the obstacle and the stage stays
+blocked, while replacing it with an Update lifts it. Blockers also carry a `resolved` status, since
+"accepted" and "declined" are both the wrong word for what happens to an obstacle.
+
 ## Account categories
 
 At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**

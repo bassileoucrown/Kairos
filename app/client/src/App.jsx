@@ -14,6 +14,7 @@ import PaHome from './pages/pa/PaHome.jsx';
 import SpacesHome from './pages/spaces/SpacesHome.jsx';
 import SpaceDetail from './pages/spaces/SpaceDetail.jsx';
 import ThreadView from './pages/spaces/ThreadView.jsx';
+import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -105,6 +106,7 @@ export default function App() {
 
       <Route path="/spaces" element={<RequireAuth><SpacesHome /></RequireAuth>} />
       <Route path="/spaces/:spaceId" element={<RequireAuth><SpaceDetail /></RequireAuth>} />
+      <Route path="/projects/:projectId" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />
