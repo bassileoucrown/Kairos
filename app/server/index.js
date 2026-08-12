@@ -75,6 +75,12 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(500).json({ error: 'Something went wrong.' });
 });
 
+// Say what we are about to do before doing it. Connecting can take a moment,
+// and a log that stays completely silent through it is indistinguishable from
+// a process that has died — which is exactly how an unreachable database read
+// on a deploy log until now.
+console.log(`Kairos starting: ${db.dialect}${db.dialect === 'postgres' ? ` -> ${describeTarget()}` : ''}`);
+
 // The schema has to exist before the first request touches it, and creating
 // it is now asynchronous, so listen only once it's ready.
 db.ready()
