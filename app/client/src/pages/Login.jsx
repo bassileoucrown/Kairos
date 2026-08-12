@@ -10,7 +10,23 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [storageWarning, setStorageWarning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Only asked after a failure, and only to explain one specific case: a
+  // deployment storing accounts on a disk that gets wiped on restart. Saying
+  // "incorrect email or password" is right for a wrong password and wrong for
+  // an account the server threw away.
+  async function checkStorage() {
+    try {
+      const res = await fetch('/api/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      setStorageWarning(!data.storageDurable);
+    } catch {
+      // The status endpoint is a courtesy; failing to reach it changes nothing.
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -21,6 +37,7 @@ export default function Login() {
       navigate(next || '/');
     } catch (err) {
       setError(err.message);
+      checkStorage();
     } finally {
       setSubmitting(false);
     }
@@ -33,6 +50,14 @@ export default function Login() {
         <p className="subtitle">Welcome back.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
+        {error && storageWarning && (
+          <div className="alert alert-warning">
+            This deployment is storing accounts on temporary disk, so they are erased
+            whenever the server restarts or is redeployed. If your account worked before
+            and doesn't now, it was almost certainly wiped rather than mistyped — sign up
+            again. Connecting a database makes accounts permanent.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="field">

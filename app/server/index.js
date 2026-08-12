@@ -29,6 +29,18 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
 app.use(attachUser);
 
+// Unauthenticated, and deliberately so: it reports properties of the
+// deployment, never of any account. A production server running on SQLite has
+// an ephemeral disk, so every account it holds disappears on the next restart
+// or deploy — which arrives at the login screen disguised as "incorrect email
+// or password". The login page reads this to say what actually happened.
+app.get('/api/status', (req, res) => {
+  res.json({
+    storageDurable: db.dialect !== 'sqlite' || process.env.NODE_ENV !== 'production',
+    emailDeliveryConfigured: !!process.env.RESEND_API_KEY,
+  });
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/availability', availabilityRouter);

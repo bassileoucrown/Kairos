@@ -5,6 +5,13 @@
 # client-side routing (see app/server/index.js).
 #
 # To deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply.
+# It has to be New -> Blueprint, not a redeploy of an existing web service: a
+# redeploy re-runs the old service definition and never creates the database
+# below, leaving the app on the ephemeral SQLite this file exists to replace.
+#
+# The database starts empty. Accounts made against an earlier SQLite deployment
+# do not carry over and cannot be recovered — sign up once more after the first
+# Blueprint deploy. From then on the account survives restarts and deploys.
 #
 # The database is the point of this file. Render web instances have an
 # ephemeral filesystem: a SQLite file there is wiped on every restart and
