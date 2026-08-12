@@ -16,11 +16,76 @@ const path = require('path');
 
 const USE_PG = !!process.env.DATABASE_URL;
 const PG_SCHEMA = (process.env.DATABASE_SCHEMA || '').trim();
+
+/**
+ * Refuse a DATABASE_URL that plainly isn't one, before anything tries to
+ * connect with it.
+ *
+ * Pasting a web address here is an easy mistake and, until now, an expensive
+ * one: the value looks plausible, so the pool dutifully opens a socket to
+ * port 5432 of a host that has no database behind it, the packets go nowhere,
+ * and the only symptom is a connection timeout — indistinguishable from a
+ * region mismatch or an expired instance. The shape of the string is
+ * checkable up front, so check it.
+ */
+function validateDatabaseUrl(raw) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return 'It is not a URL at all. A Postgres connection string looks like'
+      + ' postgres://user:password@host:5432/databasename';
+  }
+  if (!/^postgres(ql)?:$/.test(url.protocol)) {
+    const looksLikeSite = /^https?:$/.test(url.protocol);
+    return `The scheme is "${url.protocol.replace(':', '')}", not postgres.`
+      + (looksLikeSite
+        ? ' That looks like a website address rather than a database —'
+        + " a web service's own URL is a common mix-up. Copy the connection"
+        + ' string from the database itself; it begins with postgres://'
+        : ' It must begin with postgres:// or postgresql://');
+  }
+  if (!url.username) {
+    return 'There is no username in it. A connection string carries credentials:'
+      + ' postgres://user:password@host:5432/databasename';
+  }
+  if (!url.pathname || url.pathname === '/') {
+    return 'It names no database. The part after the host is the database name:'
+      + ' postgres://user:password@host:5432/databasename';
+  }
+  return null;
+}
+
+// Deliberately not thrown at require time. Throwing here would kill the
+// process before it binds a port, putting us right back to a deploy that dies
+// with nothing to read. Instead it is surfaced as a database failure like any
+// other: the site comes up, /api/status names the problem, and the log spells
+// it out.
+const CONFIG_ERROR = USE_PG
+  ? (() => {
+      const problem = validateDatabaseUrl(process.env.DATABASE_URL);
+      return problem ? `DATABASE_URL is not a Postgres connection string. ${problem}` : null;
+    })()
+  : null;
 const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
 
 let impl;
 
-if (USE_PG) {
+if (USE_PG && CONFIG_ERROR) {
+  // A pool built on a malformed string would only fail later, and less
+  // clearly. Fail every call with the real reason instead — and stay on the
+  // postgres dialect, so a bad value never silently demotes the app to
+  // ephemeral storage.
+  const fail = async () => { throw new Error(CONFIG_ERROR); };
+  impl = {
+    prepare() { return { get: fail, all: fail, run: fail }; },
+    exec: fail,
+    tx: fail,
+    columnExists: fail,
+    async close() {},
+    dialect: 'postgres',
+  };
+} else if (USE_PG) {
   const { Pool, types } = require('pg');
 
   // node-postgres hands back int8 and numeric as strings, because they can

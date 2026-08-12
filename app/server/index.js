@@ -170,6 +170,12 @@ function reportFailure(err) {
   // Has to be enough to act on: it is what someone reads when the site is
   // up but refusing to serve.
   console.error(`\nCould not prepare the database: ${err.message}\n`);
+  // When the value itself is malformed we already know exactly what is wrong,
+  // and a list of other things it might have been only buries the answer.
+  if (/not a Postgres connection string/.test(err.message)) {
+    console.error('Fix DATABASE_URL on this service and it will connect on the next check.');
+    return;
+  }
   if (db.dialect === 'postgres') {
     console.error([
       'DATABASE_URL is set, so the server tried Postgres and could not use it.',
