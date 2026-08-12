@@ -1,36 +1,53 @@
 # Render Blueprint for the Kairos app (the `app/` directory).
 #
-# One web service plus a Postgres database. In production the Express server
-# also serves the built client and hands unknown paths back to index.html for
-# client-side routing (see app/server/index.js).
+# One web service. In production the Express server also serves the built
+# client and hands unknown paths back to index.html for client-side routing
+# (see app/server/index.js).
 #
-# To deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply.
-# It has to be New -> Blueprint, not a redeploy of an existing web service: a
-# redeploy re-runs the old service definition and never creates the database
-# below, leaving the app on the ephemeral SQLite this file exists to replace.
+# To deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply,
+# then set DATABASE_URL on the service (see below).
 #
-# The database starts empty. Accounts made against an earlier SQLite deployment
-# do not carry over and cannot be recovered — sign up once more after the first
-# Blueprint deploy. From then on the account survives restarts and deploys.
+# ---------------------------------------------------------------------------
+# DATABASE_URL is the whole point of this file.
 #
-# The database is the point of this file. Render web instances have an
-# ephemeral filesystem: a SQLite file there is wiped on every restart and
-# redeploy, taking every account with it — which looks exactly like "the app
-# doesn't recognise my email". DATABASE_URL below is wired from the managed
-# Postgres instance, and app/server/lib/db.js switches backends on its
-# presence, so data survives restarts, deploys, and the free plan's idle sleep.
-databases:
-  - name: kairos-db
-    databaseName: kairos
-    plan: free
-    # Free Postgres expires 30 days after creation, then allows a 14-day grace
-    # period to upgrade before Render deletes it and its data — roughly 44 days
-    # in total. Render emails warnings at both points, and an account may hold
-    # only one free database at a time.
-    #
-    # The harder limit is that free Postgres has no backups at all. Fine while
-    # evaluating; move to a paid instance before this holds a real principal's
-    # calendar and contacts, whatever the expiry clock says.
+# Render web instances have an ephemeral filesystem: a SQLite file there is
+# wiped on every restart and redeploy, taking every account with it — which
+# arrives at the login screen as "Incorrect email or password" and looks
+# nothing like a storage problem. app/server/lib/db.js switches to Postgres on
+# DATABASE_URL being set, and then data survives restarts, deploys, and the
+# free plan's idle sleep.
+#
+# This blueprint deliberately does NOT declare a database. Render allows one
+# free Postgres instance per account, so a blueprint that creates its own
+# fails with "cannot have more than one active free tier database" for anyone
+# who already has one — which is most people. Point the service at a database
+# instead:
+#
+#   Existing Render Postgres (free tier, one per account)
+#     Dashboard -> that database -> copy the Internal Database URL
+#     -> this service -> Environment -> DATABASE_URL = that value.
+#     If the database already serves another app, also set
+#     DATABASE_SCHEMA = kairos so Kairos keeps its tables in a schema of its
+#     own and cannot collide with the other app's `users` or `tasks`.
+#
+#   No Render database yet
+#     Dashboard -> New -> Postgres (free) -> then as above. Or use any hosted
+#     Postgres — Neon and Supabase both have free tiers with no
+#     one-per-account limit, and their connection strings work unchanged.
+#
+# Free Postgres on Render expires 30 days after creation, then allows a
+# 14-day grace period to upgrade before Render deletes it and its data —
+# roughly 44 days in total, with warning emails at both points. The harder
+# limit is that free Postgres has no backups at all. Fine while evaluating;
+# move to a paid instance before this holds a real principal's calendar and
+# contacts, whatever the expiry clock says.
+#
+# Whatever you point it at, the database starts empty. Accounts made against
+# an earlier SQLite deployment do not carry over and cannot be recovered —
+# sign up once more, after which the account persists. Until DATABASE_URL is
+# set the app still runs, on ephemeral SQLite, and the login screen says so
+# after a failed sign-in rather than blaming your password.
+# ---------------------------------------------------------------------------
 
 services:
   - type: web
@@ -41,10 +58,15 @@ services:
     buildCommand: cd client && npm install && npm run build && cd ../server && npm install
     startCommand: cd server && npm start
     envVars:
+      # sync: false means Render prompts for this at Apply time and never
+      # overwrites it on later deploys — set it to your Postgres connection
+      # string as described above.
       - key: DATABASE_URL
-        fromDatabase:
-          name: kairos-db
-          property: connectionString
+        sync: false
+      # Optional. Set to `kairos` when the database is shared with another
+      # app; leave unset to use the default `public` schema.
+      - key: DATABASE_SCHEMA
+        sync: false
       # server/lib/db.js also uses node:sqlite for local development, which
       # needs Node 22+.
       - key: NODE_VERSION

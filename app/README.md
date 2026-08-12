@@ -50,6 +50,14 @@ cd ../server && npm start     # serves the built client + API on one port (4000)
 - **`DATABASE_URL` set → Postgres.** What production uses.
 - **unset → a local SQLite file.** What `npm run dev` uses, so local development still needs no
   database installed.
+- **`DATABASE_SCHEMA` (optional, Postgres only)** → keeps every table in a named schema instead of
+  `public`. Free Postgres plans generally allow one instance per account, so Kairos may have to
+  share one with another app; set this to `kairos` and its `users` table cannot collide with
+  anyone else's. The value must be a plain lowercase identifier — it reaches the server as a
+  connection startup option and as `CREATE SCHEMA`, neither of which takes a bind parameter, so
+  anything else is refused at boot rather than escaped. Column-existence checks are scoped to
+  `current_schema()`, without which a foreign `public.users` would make the migrations think our
+  columns already existed and skip them.
 
 Both expose the same shape — `await db.prepare(sql).get(...args)` — so no route knows the
 difference, and the SQL stays in the portable subset both dialects accept. `db.tx()` runs a
@@ -68,18 +76,30 @@ would be `"21"`, not `3` — the type parsers coerce them), and Postgres allows 
 
 ## Deploying
 
-`render.yaml` at the repo root is a Render Blueprint: one web service plus a managed Postgres
-instance, with `DATABASE_URL` wired between them. In the Render dashboard go to
-**New → Blueprint**, pick this repo, and apply.
+`render.yaml` at the repo root is a Render Blueprint declaring one web service. In the Render
+dashboard go to **New → Blueprint**, pick this repo, and apply.
+
+It deliberately does **not** declare a database. Render allows one free Postgres instance per
+account, so a blueprint that creates its own fails with *"cannot have more than one active free
+tier database"* for anyone who already has one. Point the service at a database instead: copy the
+**Internal Database URL** from any Postgres in the dashboard into `DATABASE_URL` on the service.
+Any hosted Postgres works — Neon and Supabase have free tiers with no one-per-account limit. If
+that database already serves another app, set `DATABASE_SCHEMA=kairos` alongside it.
+
+Whatever it points at, **the database starts empty**; accounts from an earlier SQLite deployment do
+not carry over. Until `DATABASE_URL` is set the app still runs, on ephemeral SQLite, and after a
+failed sign-in the login screen says storage is temporary rather than blaming the password —
+`GET /api/status` reports `storageDurable`, a property of the deployment and of no account, which
+is why it needs no authentication.
 
 On the free plan, instances still sleep after ~15 minutes idle (the first request back is slow), but
-data now survives that, along with restarts and redeploys.
+data survives that, along with restarts and redeploys.
 
-Two things to diary about free Postgres. It **expires 30 days after creation**, then gives a
-**14-day grace period** to upgrade before Render deletes it and everything in it — about 44 days
-end to end, with email warnings at both points, and one free database per account. More importantly,
-free Postgres has **no backups of any kind**, so move to a paid instance before this holds a real
-principal's calendar and contacts, whatever the expiry clock says.
+Two things to diary about free Postgres on Render. It **expires 30 days after creation**, then gives
+a **14-day grace period** to upgrade before Render deletes it and everything in it — about 44 days
+end to end, with email warnings at both points. More importantly, free Postgres has **no backups of
+any kind**, so move to a paid instance before this holds a real principal's calendar and contacts,
+whatever the expiry clock says.
 
 ## Phase 1 — the core loop (complete)
 

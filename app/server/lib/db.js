@@ -15,6 +15,7 @@ const path = require('path');
 // dialects accept.
 
 const USE_PG = !!process.env.DATABASE_URL;
+const PG_SCHEMA = (process.env.DATABASE_SCHEMA || '').trim();
 const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
 
 let impl;
@@ -30,6 +31,19 @@ if (USE_PG) {
   types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));   // int8
   types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));       // numeric
 
+  // Free Postgres plans generally allow one instance per account, so Kairos
+  // may have to share one with another app. Set DATABASE_SCHEMA and it keeps
+  // its tables in a named schema of its own, where a `users` table belonging
+  // to something else can't collide with this one. Unset, everything lands in
+  // `public` exactly as before.
+  //
+  // Only an identifier is accepted: the value reaches the server as a startup
+  // option and as CREATE SCHEMA, neither of which takes a bind parameter, so
+  // anything else is refused outright rather than escaped.
+  if (PG_SCHEMA && !/^[a-z_][a-z0-9_]*$/.test(PG_SCHEMA)) {
+    throw new Error('DATABASE_SCHEMA must be a plain lowercase identifier, e.g. "kairos".');
+  }
+
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     // Managed Postgres (Render, Supabase, Neon) terminates TLS with a
@@ -37,6 +51,10 @@ if (USE_PG) {
     // encrypted, we just can't verify the chain from here.
     ssl: process.env.DATABASE_SSL === 'off' ? false : { rejectUnauthorized: false },
     max: Number(process.env.DATABASE_POOL_MAX || 10),
+    // Applied during connection startup rather than as a follow-up SET, so
+    // there is no window in which a borrowed client is still pointing at
+    // `public`.
+    ...(PG_SCHEMA ? { options: `-c search_path=${PG_SCHEMA}` } : {}),
   });
 
   // SQLite uses `?` placeholders; Postgres uses $1..$n. Converting here keeps
@@ -95,8 +113,13 @@ if (USE_PG) {
       }
     },
     async columnExists(table, column) {
+      // Scoped to the schema this connection actually writes to. Without that,
+      // sharing an instance with another app whose `users` table sits in
+      // `public` would report our columns as already present and skip the
+      // migration that adds them.
       const r = await pool.query(
-        'SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2',
+        `SELECT 1 FROM information_schema.columns
+         WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`,
         [table, column],
       );
       return r.rowCount > 0;
@@ -155,6 +178,11 @@ let readyPromise = null;
 function ready() {
   if (!readyPromise) {
     readyPromise = (async () => {
+      // Must precede the schema file: every connection already points its
+      // search_path here, and nothing resolves until the schema exists.
+      if (impl.dialect === 'postgres' && PG_SCHEMA) {
+        await impl.exec(`CREATE SCHEMA IF NOT EXISTS ${PG_SCHEMA}`);
+      }
       await impl.exec(schemaSql);
       await ensureColumn('contacts', 'birthday', 'TEXT');
       await ensureColumn('contacts', 'anniversary', 'TEXT');
