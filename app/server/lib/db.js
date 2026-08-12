@@ -51,6 +51,14 @@ if (USE_PG) {
     // encrypted, we just can't verify the chain from here.
     ssl: process.env.DATABASE_SSL === 'off' ? false : { rejectUnauthorized: false },
     max: Number(process.env.DATABASE_POOL_MAX || 10),
+    // node-postgres has no connect timeout by default, which is fine against a
+    // host that refuses (instant ECONNREFUSED) and disastrous against one that
+    // silently drops packets — a wrong region, an external URL that is
+    // firewalled, a host that no longer exists. Then the TCP connect never
+    // returns, db.ready() never settles, the server never binds a port, and
+    // the platform shows a deploy spinning forever with an empty log. A bound
+    // wait turns that into an error someone can act on.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || 10000),
     // Applied during connection startup rather than as a follow-up SET, so
     // there is no window in which a borrowed client is still pointing at
     // `public`.
@@ -180,10 +188,13 @@ async function ensureColumn(table, column, definition) {
 // are retried; anything else (bad credentials, missing database, a syntax error
 // in our own schema) fails immediately, because retrying won't fix it.
 const TRANSIENT = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'EPIPE']);
-const CONNECT_ATTEMPTS = Number(process.env.DATABASE_CONNECT_ATTEMPTS || 6);
+const CONNECT_ATTEMPTS = Number(process.env.DATABASE_CONNECT_ATTEMPTS || 5);
 
 function isTransient(err) {
-  return TRANSIENT.has(err.code) || /terminating connection|starting up|not yet accepting/i.test(err.message || '');
+  // A connect timeout counts: a free-plan instance waking from idle can blow
+  // through the first attempt and answer the second perfectly well.
+  return TRANSIENT.has(err.code)
+    || /terminating connection|starting up|not yet accepting|connection timeout/i.test(err.message || '');
 }
 
 async function connectWithRetry() {
@@ -200,11 +211,33 @@ async function connectWithRetry() {
   }
 }
 
+// A ceiling on the whole startup, not just one connection. Retries with
+// backoff plus a slow schema build could otherwise outlast a platform's
+// patience, and a deploy that is killed while waiting leaves no explanation
+// at all. Failing on our own terms means the log says what happened.
+// Comfortably above the worst honest case (5 attempts x 10s connect, plus
+// ~15s of backoff, plus building the schema) and far below the point where a
+// human assumes the deploy is wedged.
+const READY_TIMEOUT_MS = Number(process.env.DATABASE_READY_TIMEOUT_MS || 120000);
+
+function withDeadline(promise, ms) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Database did not become ready within ${Math.round(ms / 1000)}s.`)),
+      ms,
+    );
+  });
+  // unref so a resolved startup doesn't hold the process open on this timer.
+  if (typeof timer?.unref === 'function') timer.unref();
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 let readyPromise = null;
 /** Creates the schema and applies migrations. Safe to await repeatedly. */
 function ready() {
   if (!readyPromise) {
-    readyPromise = (async () => {
+    readyPromise = withDeadline((async () => {
       if (impl.dialect === 'postgres') await connectWithRetry();
       // Must precede the schema file: every connection already points its
       // search_path here, and nothing resolves until the schema exists.
@@ -225,7 +258,7 @@ function ready() {
       await ensureColumn('itinerary_items', 'decision_note', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn('itinerary_items', 'decided_at', 'TEXT');
       await ensureColumn('itinerary_items', 'decided_by', 'TEXT');
-    })();
+    })(), READY_TIMEOUT_MS);
   }
   return readyPromise;
 }
