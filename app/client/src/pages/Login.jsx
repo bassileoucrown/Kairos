@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext.jsx';
+import { BRAND_FULL } from '../lib/brand.js';
 
 export default function Login() {
   const { login } = useAuth();
@@ -46,7 +47,7 @@ export default function Login() {
   return (
     <div className="centered-page">
       <div className="auth-card">
-        <h1>Log in to Kairos</h1>
+        <h1>Log in to {BRAND_FULL}</h1>
         <p className="subtitle">Welcome back.</p>
 
         {error && <div className="alert alert-error">{error}</div>}

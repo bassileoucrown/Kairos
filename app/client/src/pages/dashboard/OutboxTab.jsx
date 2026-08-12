@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { BRAND_SHORT } from '../../lib/brand.js';
 
 const CATEGORY_LABELS = { transactional: 'System', invite: 'Invite', comms: 'Comms' };
 
@@ -15,7 +16,7 @@ export default function OutboxTab() {
   return (
     <div>
       <p className="tz-note" style={{ marginBottom: 16 }}>
-        Every email Kairos sends lands here too — useful since no real email provider is
+        Every email {BRAND_SHORT} sends lands here too — useful since no real email provider is
         configured in this environment. Set <code>RESEND_API_KEY</code> to also deliver for real.
       </p>
       {error && <div className="alert alert-error">{error}</div>}

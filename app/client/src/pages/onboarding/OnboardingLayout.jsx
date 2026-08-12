@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { peekPostOnboardingRedirect } from '../../lib/postAuthRedirect.js';
+import { BRAND_SHORT } from '../../lib/brand.js';
 
 const STEPS = ['profile', 'meeting_type'];
-const ROLE_LABELS = { pa: 'PA', delegate: 'delegate' };
 
 function InviteContextBanner() {
   const [invite, setInvite] = useState(null);
@@ -19,9 +19,9 @@ function InviteContextBanner() {
 
   return (
     <div className="alert alert-success" style={{ maxWidth: 520, width: '100%', marginBottom: 20 }}>
-      You're setting up your own Kairos account — this gives you your own calendar and booking
+      You're setting up your own {BRAND_SHORT} account — this gives you your own calendar and booking
       page too, not just access to {invite.ownerName}'s. Once you finish, you'll come back here to
-      accept {invite.ownerName}'s invite to be their {ROLE_LABELS[invite.role]}.
+      accept {invite.ownerName}'s invite to be their {invite.roleLabel}.
     </div>
   );
 }

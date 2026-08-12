@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { detectTimezone } from '../lib/timezones.js';
 import { stashPostOnboardingRedirect } from '../lib/postAuthRedirect.js';
+import { BRAND_FULL, BRAND_SHORT } from '../lib/brand.js';
 
 const CATEGORIES = [
   { value: 'principal', label: 'Principal', hint: "It's my own calendar — clients or contacts book me directly." },
@@ -52,7 +53,7 @@ export default function SignUp() {
   return (
     <div className="centered-page">
       <div className="auth-card">
-        <h1>Create your Kairos account</h1>
+        <h1>Create your {BRAND_FULL} account</h1>
         <p className="subtitle">Set up your scheduling page in a few minutes.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -102,7 +103,7 @@ export default function SignUp() {
                 required autoComplete="off"
               />
               <p className="hint">
-                This Kairos is invite-only. If you were invited by email, open that link
+                This {BRAND_SHORT} is invite-only. If you were invited by email, open that link
                 instead — you won't need a code.
               </p>
             </div>

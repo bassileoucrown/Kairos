@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('./db');
+const { emailFrom } = require('./brand');
 
 // Swappable email delivery. Every email is always recorded in the `emails`
 // table — that's the dev-mode outbox (see routes/emails.js) and doubles as
@@ -23,7 +24,7 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'Kairos <onboarding@resend.dev>',
+          from: emailFrom(),
           to: toEmail,
           subject,
           text: body,

@@ -34,7 +34,26 @@ router.post('/:token/accept', requireAuth, async (req, res) => {
     return res.status(403).json({ error: `This invite was sent to ${invite.invited_email}. Log in with that email to accept it.` });
   }
 
-  await db.prepare("UPDATE memberships SET member_user_id = ?, status = 'active' WHERE id = ?").run(req.user.id, invite.id);
+  // Let the person accepting correct their own title.
+  //
+  // An invitation usually goes out before the invitee has an account, so
+  // there was nothing to read their title from and it defaulted to PA. Now
+  // they are here and have told us what they are, so a Chief of Staff stops
+  // being addressed as somebody's PA.
+  //
+  // Strictly limited to the three titles that carry identical access. A
+  // `delegate` invitation is narrower on purpose, and letting the invitee
+  // swap it for a full-access title would be privilege escalation by
+  // self-description — the principal decides remit, the person decides only
+  // what they are called.
+  const EQUAL_ACCESS = new Set(['pa', 'ea', 'chief_of_staff']);
+  const claimed = req.user.account_category;
+  const adoptTitle = EQUAL_ACCESS.has(invite.role) && EQUAL_ACCESS.has(claimed) && claimed !== invite.role;
+
+  await db.prepare(`
+    UPDATE memberships SET member_user_id = ?, status = 'active', role = ? WHERE id = ?
+  `).run(req.user.id, adoptTitle ? claimed : invite.role, invite.id);
+
   res.json({ ok: true });
 });
 

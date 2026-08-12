@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import DeleteAccount from '../../components/DeleteAccount.jsx';
 import { api } from '../../lib/api.js';
+import { BRAND_SHORT } from '../../lib/brand.js';
 
 function IntegrationRow({ name, description, status, configured, onConnect, onDisconnect }) {
   return (
@@ -73,7 +74,7 @@ export default function SettingsTab() {
 
       <IntegrationRow
         name="Google Calendar"
-        description="Two-way sync: read your existing busy time, write Kairos bookings back out."
+        description="Two-way sync: read your existing busy time, write {BRAND_SHORT} bookings back out."
         status={data.calendar.google.status}
         configured={data.calendar.google.configured}
         onConnect={() => handleConnect('/integrations/calendar/google/connect')}

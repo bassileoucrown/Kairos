@@ -28,7 +28,6 @@ const TABS = [
   { id: 'ai_assist', label: 'AI Assist' },
 ];
 
-const ROLE_LABELS = { owner: 'You', pa: 'PA', delegate: 'Delegate' };
 
 export default function PaHome() {
   const { ownerId } = useParams();

@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const { BRAND_FULL } = require('../lib/brand');
 const { requireAuth } = require('../lib/auth');
 const { sendEmail } = require('../lib/email');
 const { isAssistantRole, roleLabel, roleForAccountCategory, ASSISTANT_ROLES } = require('../lib/roles');
@@ -84,8 +85,8 @@ router.post('/', async (req, res) => {
   const label = roleLabel(cleanRole);
   await sendEmail({
     ownerId: req.user.id, toEmail: cleanEmail, category: 'invite',
-    subject: `${req.user.name} invited you to Kairos as their ${label}`,
-    body: `${req.user.name} added you as their ${label} on Kairos, giving you access to their scheduling — approvals, briefs, and contacts.\n\nAccept the invite: /accept-invite/${token}`,
+    subject: `${req.user.name} invited you to ${BRAND_FULL} as their ${label}`,
+    body: `${req.user.name} added you as their ${label} on ${BRAND_FULL}, giving you access to their scheduling — approvals, briefs, and contacts.\n\nAccept the invite: /accept-invite/${token}`,
   });
 
   const row = await db.prepare(`

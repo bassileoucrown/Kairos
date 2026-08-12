@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const { BRAND_SHORT, BRAND_FULL } = require('../lib/brand');
 const {
   hashPassword, verifyPassword, createSession, destroySession,
   setSessionCookie, clearSessionCookie, parseCookies, slugify, SESSION_COOKIE,
@@ -28,6 +29,8 @@ const router = asyncRouter();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ACCOUNT_CATEGORIES = new Set(['principal', 'pa', 'ea', 'chief_of_staff']);
+// The assistant titles that differ in name only. See routes/invites.js.
+const EQUAL_ACCESS_ROLES = new Set(['pa', 'ea', 'chief_of_staff']);
 
 // Closing signup without hiding the app.
 //
@@ -110,7 +113,7 @@ router.post('/signup', async (req, res) => {
     const supplied = String(req.body?.accessCode || '');
     if (!supplied || !timingSafeEqual(supplied, SIGNUP_ACCESS_CODE)) {
       return res.status(403).json({
-        error: 'This Kairos is invite-only. Enter the access code, or ask to be invited by email.',
+        error: `This ${BRAND_SHORT} is invite-only. Enter the access code, or ask to be invited by email.`,
       });
     }
   }
@@ -131,6 +134,25 @@ router.post('/signup', async (req, res) => {
   // MVP note: email_verified is set to 1 immediately — there is no email
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.
+
+  // Correct any invitation that is already waiting for this address.
+  //
+  // Invitations usually go out before the invitee has an account, so there was
+  // nothing to read a title from and it defaulted to PA. This is the moment
+  // that changes: they have just said what they are. Doing it here rather
+  // than at acceptance means the invite banner they see thirty seconds from
+  // now already reads correctly.
+  //
+  // Only among the three titles that carry identical access. A `delegate`
+  // invitation is deliberately narrower, and letting someone widen it by
+  // describing themselves differently would be escalation — the principal
+  // decides remit, the person decides only what they are called.
+  if (EQUAL_ACCESS_ROLES.has(category)) {
+    await db.prepare(`
+      UPDATE memberships SET role = ?
+      WHERE invited_email = ? AND status = 'invited' AND role IN ('pa', 'ea', 'chief_of_staff')
+    `).run(category, normalizedEmail);
+  }
 
   const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   const session = await createSession(id);
@@ -193,7 +215,7 @@ router.post('/forgot-password', async (req, res) => {
 
     await sendEmail({
       ownerId: user.id, toEmail: user.email, category: 'transactional',
-      subject: 'Reset your Kairos password',
+      subject: `Reset your ${BRAND_FULL} password`,
       body: `Hi ${user.name},\n\nSomeone requested a password reset for this account. If that was you, set a new password here (valid for 1 hour):\n\n/reset-password/${token}\n\nIf you didn't request this, you can ignore this email.`,
     });
   }

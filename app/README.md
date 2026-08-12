@@ -1,4 +1,4 @@
-# Kairos App
+# Kairos by Exousia
 
 A real, working build of Phase 1 from the master blueprint (Section 7.2), plus the start of
 Phase 2A. Sign up, set your weekly availability, create meeting types with real access tiers, let
@@ -151,6 +151,19 @@ a **14-day grace period** to upgrade before Render deletes it and everything in 
 end to end, with email warnings at both points. More importantly, free Postgres has **no backups of
 any kind**, so move to a paid instance before this holds a real principal's calendar and contacts,
 whatever the expiry clock says.
+
+## Naming
+
+The product calls itself **Kairos by Exousia**. Two forms, from one place —
+`server/lib/brand.js` and `client/src/lib/brand.js`:
+
+- **full** where it introduces itself: browser tab, wordmark, signup and login
+  headings, booking pages, outbound email.
+- **short** in running prose, where the full name would read as shouting —
+  *"your Kairos account"*, not *"your Kairos by Exousia account"*.
+
+`BRAND_NAME`, `BRAND_SHORT_NAME` and `BRAND_COMPANY` override the server's
+copy without a code change.
 
 ## Two roles, two dashboards
 

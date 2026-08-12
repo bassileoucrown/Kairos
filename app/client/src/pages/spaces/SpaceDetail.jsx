@@ -4,6 +4,7 @@ import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
+import { BRAND_SHORT } from '../../lib/brand.js';
 
 const ROLE_LABELS = { pa: 'PA', ea: 'EA', chief_of_staff: 'Chief of Staff', principal: 'Principal' };
 const DELEGATABLE = [
@@ -202,7 +203,7 @@ export default function SpaceDetail() {
               <form onSubmit={addMember} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <input
                   type="email"
-                  placeholder="Their Kairos email"
+                  placeholder={`Their ${BRAND_SHORT} email`}
                   aria-label="Add member by email"
                   value={memberEmail}
                   onChange={(e) => setMemberEmail(e.target.value)}

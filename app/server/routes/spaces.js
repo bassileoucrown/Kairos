@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const { BRAND_SHORT } = require('../lib/brand');
 const { requireAuth } = require('../lib/auth');
 const {
   CONTEXTS, DEFAULT_DELEGATE_ROLES, ASSISTANT_ROLES, parseRoles, roleCanDelegate,
@@ -134,7 +135,7 @@ router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
 
   const { email, role } = req.body || {};
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim().toLowerCase());
-  if (!user) return res.status(404).json({ error: 'No Kairos account with that email.' });
+  if (!user) return res.status(404).json({ error: `No ${BRAND_SHORT} account with that email.` });
   if (user.id === req.space.owner_id) return res.status(400).json({ error: 'They already own this space.' });
 
   const memberRole = role === 'guest' ? 'guest' : 'member';

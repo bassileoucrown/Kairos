@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
+import { BRAND_FULL } from '../lib/brand.js';
 
 export default function AcceptInvite() {
   const { token } = useParams();
@@ -62,7 +63,7 @@ export default function AcceptInvite() {
     <div className="centered-page">
       <div className="auth-card">
         <h1>{invite.ownerName} invited you</h1>
-        <p className="subtitle">As their {invite.roleLabel} on Kairos, sent to {invite.invitedEmail}.</p>
+        <p className="subtitle">As their {invite.roleLabel} on {BRAND_FULL}, sent to {invite.invitedEmail}.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
 

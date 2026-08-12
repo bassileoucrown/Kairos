@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
+import { BRAND_FULL } from '../lib/brand.js';
 
 // One navigation for the whole app.
 //
@@ -176,7 +177,7 @@ export default function AppShell({ children, title, actions, active }) {
     <div className="app">
       <aside className={'app-nav' + (navOpen ? ' is-open' : '')}>
         <div className="app-brand">
-          <Link to={viewerIsAssistant ? '/workspace' : '/today'}>Kairos</Link>
+          <Link to={viewerIsAssistant ? '/workspace' : '/today'}>{BRAND_FULL}</Link>
           <button
             className="nav-close"
             type="button"
