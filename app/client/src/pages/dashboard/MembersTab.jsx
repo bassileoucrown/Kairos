@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
-const ROLE_LABELS = { pa: 'PA / EA', delegate: 'Delegate' };
-
 export default function MembersTab() {
   const [members, setMembers] = useState(null);
+  // Fetched rather than hard-coded, so the titles offered here are exactly the
+  // ones the server accepts and onboarding asked about — the two drifted apart
+  // once already, and a Chief of Staff was invited as somebody's PA.
+  const [roles, setRoles] = useState([]);
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('pa');
+  // Empty means "whatever they call themselves" — the server reads it off
+  // their account rather than the principal having to know.
+  const [role, setRole] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   function load() {
@@ -16,6 +20,19 @@ export default function MembersTab() {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api.get('/members/roles').then((d) => setRoles(d.roles)).catch(() => {});
+  }, []);
+
+  async function changeRole(id, value) {
+    setError('');
+    try {
+      await api.patch(`/members/${id}`, { role: value });
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function handleInvite(e) {
     e.preventDefault();
@@ -23,7 +40,7 @@ export default function MembersTab() {
     setInviteLink('');
     setSubmitting(true);
     try {
-      const data = await api.post('/members', { email, role });
+      const data = await api.post('/members', role ? { email, role } : { email });
       setEmail('');
       setInviteLink(`${window.location.origin}${data.inviteLink}`);
       load();
@@ -75,7 +92,11 @@ export default function MembersTab() {
       )}
 
       {members === null && <p className="hint">Loading…</p>}
-      {members && members.length === 0 && <div className="empty-state">No PAs or delegates yet — invite one below.</div>}
+      {members && members.length === 0 && (
+        <div className="empty-state">
+          No one on your team yet — invite your PA, EA, or Chief of Staff below.
+        </div>
+      )}
       {members && members.map((m) => (
         <div className="card" key={m.id}>
           <div className="meeting-type-card">
@@ -83,7 +104,17 @@ export default function MembersTab() {
               <div className="name">
                 {m.memberName || m.invitedEmail} <span className={'pill' + (m.status === 'invited' ? ' is-off' : '')}>{m.status === 'invited' ? 'Invited' : 'Active'}</span>
               </div>
-              <div className="meta">{ROLE_LABELS[m.role]} · {m.invitedEmail}</div>
+              <div className="meta">
+                <select
+                  className="role-select"
+                  value={m.role}
+                  aria-label={`Title for ${m.memberName || m.invitedEmail}`}
+                  onChange={(e) => changeRole(m.id, e.target.value)}
+                >
+                  {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </select>
+                {' · '}{m.invitedEmail}
+              </div>
               <label className="member-toggle">
                 <input
                   type="checkbox"
@@ -115,8 +146,8 @@ export default function MembersTab() {
         <div className="field">
           <label htmlFor="invite-role">Role</label>
           <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="pa">PA / EA — full access to approvals, briefs, contacts, comms</option>
-            <option value="delegate">Delegate — scheduling access</option>
+            <option value="">Use their own title, if they already have an account</option>
+            {roles.map((r) => <option key={r.id} value={r.id}>{r.description}</option>)}
           </select>
         </div>
         <button className="btn btn-primary" type="submit" disabled={submitting}>

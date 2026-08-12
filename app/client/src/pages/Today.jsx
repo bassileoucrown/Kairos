@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import AppShell, { getActivePrincipal } from '../components/AppShell.jsx';
+import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 
 export const KIND_ICON = {
@@ -29,14 +29,18 @@ function untilLabel(startAt) {
 
 export function ScheduleEntry({ e }) {
   return (
-    <li className={`sched-row kind-${e.kind}`}>
+    <li className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
       <div className="sched-time">
         <span className="sched-start">{e.startLabel}</span>
         {e.endLabel && <span className="sched-end">{e.endLabel}</span>}
       </div>
       <span className="sched-icon" aria-hidden="true">{KIND_ICON[e.kind] || '•'}</span>
       <div className="sched-main">
-        <div className="sched-title">{e.title}</div>
+        <div className="sched-title">
+          {e.title}
+          {e.status === 'proposed' && <span className="pill is-warn sched-pill">Awaiting you</span>}
+          {e.status === 'draft' && <span className="pill is-off sched-pill">Draft</span>}
+        </div>
         <div className="sched-meta">
           <span className="sched-kind">{KIND_LABEL[e.kind] || e.kind}</span>
           {e.location && <> · {e.location}</>}
@@ -65,11 +69,24 @@ export default function Today() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
-  function load() {
-    const id = getActivePrincipal() || user.id;
+  async function load() {
+    const id = await resolveActivePrincipal(user);
+    if (!id) return;
     return api.get(`/today/${id}`).then(setData).catch((err) => setError(err.message));
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [user?.id]);
+
+  async function decideItinerary(id, approve) {
+    // A decline without a reason is just a dead end for whoever arranged it,
+    // so ask — but never block on it.
+    const note = approve ? '' : (window.prompt('Anything they should know? (optional)') ?? '');
+    try {
+      await api.post(`/itinerary/${data.principal.id}/items/${id}/decide`, { approve, note });
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function approve(id, action) {
     try {
@@ -150,6 +167,23 @@ export default function Today() {
               <div className="needs-actions">
                 <button className="btn btn-primary btn-sm" type="button" onClick={() => approve(a.id, 'approve')}>Approve</button>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={() => approve(a.id, 'decline')}>Decline</button>
+              </div>
+            </div>
+          ))}
+
+          {(needsYou.itineraryRequests || []).map((i) => (
+            <div className="needs-card" key={i.id}>
+              <div className="needs-kind">Itinerary — {i.requestedBy || 'your assistant'} is asking</div>
+              <div className="needs-title">{i.title}</div>
+              <div className="needs-meta">
+                {new Date(i.startAt).toLocaleString()}
+                {i.location ? ` · ${i.location}` : ''}
+                {i.destination ? ` → ${i.destination}` : ''}
+              </div>
+              {i.proposalNote && <div className="needs-note">“{i.proposalNote}”</div>}
+              <div className="needs-actions">
+                <button className="btn btn-primary btn-sm" type="button" onClick={() => decideItinerary(i.id, true)}>Approve</button>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => decideItinerary(i.id, false)}>Decline</button>
               </div>
             </div>
           ))}

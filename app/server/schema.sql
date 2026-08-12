@@ -100,7 +100,13 @@ CREATE TABLE IF NOT EXISTS memberships (
   owner_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   member_user_id  TEXT REFERENCES users(id) ON DELETE CASCADE,
   invited_email   TEXT NOT NULL,
-  role            TEXT NOT NULL DEFAULT 'pa', -- pa | delegate
+  -- pa | ea | chief_of_staff | delegate. The first three are the same access;
+  -- they are titles, not a hierarchy, and a Chief of Staff is not a senior PA.
+  -- Signup asks people which they are, so the invite has to be able to say it
+  -- back — being appointed under the wrong title is a small insult that lands
+  -- every time they open the app. `delegate` is the genuinely narrower one:
+  -- scheduling only.
+  role            TEXT NOT NULL DEFAULT 'pa',
   status          TEXT NOT NULL DEFAULT 'invited', -- invited | active | revoked
   -- Whether this assistant may set the principal's bookable hours and meeting
   -- types. On by default for every assistant role, because deciding who can
@@ -207,8 +213,25 @@ CREATE TABLE IF NOT EXISTS itinerary_items (
   -- Set when the item was generated from a Kairos booking, so the day view can
   -- show one line instead of two for the same meeting.
   booking_id     TEXT REFERENCES bookings(id) ON DELETE SET NULL,
+  -- Where this item is in the assistant's workflow. An assistant arranging a
+  -- trip needs somewhere to put a half-booked flight that the principal must
+  -- not see yet; a principal's day sheet is worthless if it mixes maybes with
+  -- what is actually happening. So:
+  --   draft     — the assistant's working copy. Never on the principal's day.
+  --   proposed  — sent to the principal as a request, awaiting their decision.
+  --   confirmed — on the principal's day. What they can plan around.
+  -- The column defaults to 'confirmed' so existing rows, and anything a
+  -- principal enters for themselves, are live immediately. Only the assistant
+  -- path starts at 'draft'.
+  status         TEXT NOT NULL DEFAULT 'confirmed',
+  proposal_note  TEXT NOT NULL DEFAULT '',  -- why the assistant is asking
+  proposed_at    TEXT,
+  decision_note  TEXT NOT NULL DEFAULT '',  -- the principal's reason, on decline
+  decided_at     TEXT,
+  decided_by     TEXT REFERENCES users(id),
   created_at     TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_itinerary_status ON itinerary_items(owner_id, status);
 CREATE INDEX IF NOT EXISTS idx_itinerary_owner_time ON itinerary_items(owner_id, start_at);
 
 -- Two-way Google/Outlook sync (blueprint Section 3.6, Gap 3). Architecture

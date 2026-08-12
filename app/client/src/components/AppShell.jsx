@@ -11,7 +11,11 @@ import { useAuth } from '../lib/AuthContext.jsx';
 // rail everywhere, one active state, and the principal switcher in a fixed
 // place so "who am I doing this for" is never a guess.
 
+// `assistantOnly` / `principalOnly` keep each role's rail to what that role
+// actually does. An assistant has no Team screen to manage (appointing people
+// is the principal's), and a principal has no workspace of principals.
 const NAV = [
+  { to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
   { to: '/today', label: 'Today', icon: '◉', principalScoped: true },
   { to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
   { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
@@ -21,8 +25,11 @@ const NAV = [
   { to: '/pa?tab=approvals', match: '/pa', label: 'Approvals', icon: '!', principalScoped: true, badge: 'approvals' },
   { to: '/pa?tab=briefs', match: '/pa', label: 'Briefs', icon: '❋', principalScoped: true },
   { to: '/pa?tab=availability', match: '/pa', label: 'Scheduling', icon: '◷', principalScoped: true, needsScheduling: true },
+  { to: '/dashboard?tab=members', match: '/dashboard', label: 'Team', icon: '⚉', principalOnly: true },
   { to: '/dashboard?tab=settings', match: '/dashboard', label: 'Settings', icon: '⚙' },
 ];
+
+const ASSISTANT_CATEGORIES = new Set(['pa', 'ea', 'chief_of_staff']);
 
 // Which principal the PA-scoped screens are acting for.
 //
@@ -38,6 +45,29 @@ export function getActivePrincipal() {
 }
 export function setActivePrincipal(id) {
   try { id ? localStorage.setItem(ACTIVE_KEY, id) : localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+}
+
+/**
+ * Who a principal-scoped screen is acting for, resolved the same way
+ * everywhere: an explicit switcher choice, else the first principal you
+ * actually support, else yourself.
+ *
+ * Pages used to do `getActivePrincipal() || user.id`, which quietly defaulted
+ * an assistant to their own account — so an assistant who had never touched
+ * the switcher would draft a principal's flights onto their own itinerary and
+ * wonder why nothing reached them. The switcher agrees with this, so the rail
+ * and the page can no longer disagree about who is being worked on.
+ */
+export async function resolveActivePrincipal(user) {
+  const stored = getActivePrincipal();
+  try {
+    const { principals } = await api.get('/pa/principals');
+    if (stored && principals.some((p) => p.id === stored)) return stored;
+    const supported = principals.find((p) => p.role !== 'owner');
+    return supported?.id || principals[0]?.id || user?.id || null;
+  } catch {
+    return stored || user?.id || null;
+  }
 }
 
 function initials(name) {
@@ -140,12 +170,13 @@ export default function AppShell({ children, title, actions, active }) {
 
   const current = principals.find((p) => p.id === activeId);
   const actingForSomeoneElse = current && current.role !== 'owner';
+  const viewerIsAssistant = ASSISTANT_CATEGORIES.has(user?.accountCategory);
 
   return (
     <div className="app">
       <aside className={'app-nav' + (navOpen ? ' is-open' : '')}>
         <div className="app-brand">
-          <Link to="/today">Kairos</Link>
+          <Link to={viewerIsAssistant ? '/workspace' : '/today'}>Kairos</Link>
           <button
             className="nav-close"
             type="button"
@@ -174,7 +205,15 @@ export default function AppShell({ children, title, actions, active }) {
         )}
 
         <nav>
-          {NAV.filter((item) => !item.needsScheduling || current?.canManageScheduling !== false).map((item) => {
+          {NAV.filter((item) => {
+            if (item.needsScheduling && current?.canManageScheduling === false) return false;
+            if (item.assistantOnly && !viewerIsAssistant) return false;
+            // Team stays visible to anyone who is not purely someone's
+            // assistant — a principal always needs it, and someone who is both
+            // still has their own account to staff.
+            if (item.principalOnly && viewerIsAssistant && principals.length > 1) return false;
+            return true;
+          }).map((item) => {
             // Only pin a principal into the URL once the list has actually
             // loaded. Before that, activeId is a guess (your own id), and a
             // fast click would open your own account instead of the person you

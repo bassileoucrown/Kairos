@@ -18,6 +18,7 @@ import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
 import Itinerary from './pages/Itinerary.jsx';
+import Workspace from './pages/Workspace.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -33,18 +34,22 @@ function effectiveStep(user) {
   return user.onboardingStep === 'availability' ? 'meeting_type' : user.onboardingStep;
 }
 
-// PA/EA/Chief of Staff accounts land in PA Home by default — that's where
-// their day-to-day work lives — while principals land on their own
-// calendar. Either can still reach the other view via the nav.
+// An assistant and a principal are asking different questions, so they get
+// different landing screens rather than one screen with a switcher on it.
+// A principal opens on their own day; an assistant opens on their workspace,
+// which spans every principal they run. Either can still reach the other.
+const ASSISTANT_CATEGORIES = new Set(['pa', 'ea', 'chief_of_staff']);
+
+export function isAssistant(user) {
+  return !!user && ASSISTANT_CATEGORIES.has(user.accountCategory);
+}
 function homeRouteFor(user) {
   if (!user) return '/dashboard';
   const step = effectiveStep(user);
   if (step !== 'done') {
     return ONBOARDING_STEP_ROUTE[step] || '/onboarding/profile';
   }
-  // Everyone lands on Today — the one screen that answers "what needs me now"
-  // regardless of whether you're the principal or the person running their day.
-  return '/today';
+  return isAssistant(user) ? '/workspace' : '/today';
 }
 
 function FullPageSpinner() {
@@ -115,6 +120,7 @@ export default function App() {
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
+      <Route path="/workspace" element={<RequireAuth><Workspace /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />

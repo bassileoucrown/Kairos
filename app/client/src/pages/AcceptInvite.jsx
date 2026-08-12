@@ -3,8 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
-const ROLE_LABELS = { pa: 'PA / EA', delegate: 'delegate' };
-
 export default function AcceptInvite() {
   const { token } = useParams();
   const { user, loading: authLoading } = useAuth();
@@ -47,9 +45,11 @@ export default function AcceptInvite() {
       <div className="centered-page">
         <div className="auth-card">
           <h1>You're in</h1>
-          <p className="subtitle">You now have {ROLE_LABELS[invite.role]} access to {invite.ownerName}'s account.</p>
-          <button className="btn btn-primary btn-block" type="button" onClick={() => navigate('/pa')}>
-            Go to PA Home
+          <p className="subtitle">
+            You're now {invite.ownerName}'s {invite.roleLabel}, with access to their account.
+          </p>
+          <button className="btn btn-primary btn-block" type="button" onClick={() => navigate('/workspace')}>
+            Go to your workspace
           </button>
         </div>
       </div>
@@ -62,7 +62,7 @@ export default function AcceptInvite() {
     <div className="centered-page">
       <div className="auth-card">
         <h1>{invite.ownerName} invited you</h1>
-        <p className="subtitle">As their {ROLE_LABELS[invite.role]} on Kairos, sent to {invite.invitedEmail}.</p>
+        <p className="subtitle">As their {invite.roleLabel} on Kairos, sent to {invite.invitedEmail}.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -81,7 +81,7 @@ export default function AcceptInvite() {
           </div>
         ) : (
           <button className="btn btn-primary btn-block" type="button" onClick={handleAccept} disabled={accepting}>
-            {accepting ? 'Accepting…' : `Accept and become a ${ROLE_LABELS[invite.role]}`}
+            {accepting ? 'Accepting…' : `Accept and become their ${invite.roleLabel}`}
           </button>
         )}
       </div>

@@ -4,12 +4,12 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { sendEmail } = require('../lib/email');
+const { isAssistantRole, roleLabel, roleForAccountCategory, ASSISTANT_ROLES } = require('../lib/roles');
 
 const router = asyncRouter();
 router.use(requireAuth);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ROLES = new Set(['pa', 'delegate']);
 
 function serialize(m) {
   return {
@@ -17,11 +17,23 @@ function serialize(m) {
     invitedEmail: m.invited_email,
     memberName: m.member_name || null,
     role: m.role,
+    roleLabel: roleLabel(m.role),
     status: m.status,
     canManageScheduling: !!m.can_manage_scheduling,
     createdAt: m.created_at,
   };
 }
+
+// So the invite form offers the same titles onboarding asked about, from one
+// definition, rather than a hard-coded list in the client drifting from the
+// one the server will accept.
+router.get('/roles', async (req, res) => {
+  res.json({
+    roles: Object.entries(ASSISTANT_ROLES).map(([id, r]) => ({
+      id, label: r.label, description: r.description, fullAccess: r.fullAccess,
+    })),
+  });
+});
 
 router.get('/', async (req, res) => {
   const rows = await db.prepare(`
@@ -39,8 +51,19 @@ router.post('/', async (req, res) => {
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
   }
-  const cleanRole = ROLES.has(role) ? role : 'pa';
   const cleanEmail = String(email).trim().toLowerCase();
+
+  // If this address already belongs to someone who told us at signup that
+  // they are an EA or a Chief of Staff, default the invitation to that. Being
+  // appointed under a title you didn't choose is a small thing that lands
+  // every single time they open the app.
+  let cleanRole;
+  if (isAssistantRole(role)) {
+    cleanRole = role;
+  } else {
+    const invitee = await db.prepare('SELECT account_category FROM users WHERE email = ?').get(cleanEmail);
+    cleanRole = roleForAccountCategory(invitee?.account_category);
+  }
 
   if (cleanEmail === req.user.email) {
     return res.status(400).json({ error: "You can't invite yourself." });
@@ -58,11 +81,11 @@ router.post('/', async (req, res) => {
     VALUES (?, ?, NULL, ?, ?, 'invited', ?, ?)
   `).run(id, req.user.id, cleanEmail, cleanRole, token, new Date().toISOString());
 
-  const roleLabel = cleanRole === 'pa' ? 'PA' : 'delegate';
+  const label = roleLabel(cleanRole);
   await sendEmail({
     ownerId: req.user.id, toEmail: cleanEmail, category: 'invite',
-    subject: `${req.user.name} invited you to Kairos as their ${roleLabel}`,
-    body: `${req.user.name} added you as a ${roleLabel} on Kairos, giving you access to their scheduling — approvals, briefs, and contacts.\n\nAccept the invite: /accept-invite/${token}`,
+    subject: `${req.user.name} invited you to Kairos as their ${label}`,
+    body: `${req.user.name} added you as their ${label} on Kairos, giving you access to their scheduling — approvals, briefs, and contacts.\n\nAccept the invite: /accept-invite/${token}`,
   });
 
   const row = await db.prepare(`
@@ -79,11 +102,23 @@ router.patch('/:id', async (req, res) => {
     .get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Member not found.' });
 
-  const { canManageScheduling } = req.body || {};
-  if (canManageScheduling === undefined) return res.status(400).json({ error: 'Nothing to update.' });
+  const { canManageScheduling, role } = req.body || {};
+  if (canManageScheduling === undefined && role === undefined) {
+    return res.status(400).json({ error: 'Nothing to update.' });
+  }
+  if (role !== undefined && !isAssistantRole(role)) {
+    return res.status(400).json({ error: 'Unknown role.' });
+  }
 
-  await db.prepare('UPDATE memberships SET can_manage_scheduling = ? WHERE id = ?')
-    .run(canManageScheduling ? 1 : 0, row.id);
+  if (canManageScheduling !== undefined) {
+    await db.prepare('UPDATE memberships SET can_manage_scheduling = ? WHERE id = ?')
+      .run(canManageScheduling ? 1 : 0, row.id);
+  }
+  // Titles change — someone promoted from EA to Chief of Staff shouldn't have
+  // to be revoked and re-invited to be called the right thing.
+  if (role !== undefined) {
+    await db.prepare('UPDATE memberships SET role = ? WHERE id = ?').run(role, row.id);
+  }
 
   const updated = await db.prepare(`
     SELECT m.*, u.name as member_name FROM memberships m

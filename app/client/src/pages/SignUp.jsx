@@ -6,8 +6,9 @@ import { stashPostOnboardingRedirect } from '../lib/postAuthRedirect.js';
 
 const CATEGORIES = [
   { value: 'principal', label: 'Principal', hint: "It's my own calendar — clients or contacts book me directly." },
-  { value: 'pa', label: 'PA / EA', hint: "I manage someone else's calendar — approvals, briefs, contacts." },
-  { value: 'chief_of_staff', label: 'Chief of Staff', hint: 'Same PA Home access, broader remit across the principal’s operation.' },
+  { value: 'pa', label: 'Personal Assistant', hint: "I manage someone else's calendar — approvals, briefs, contacts." },
+  { value: 'ea', label: 'Executive Assistant', hint: 'Same access as a PA. The title is yours, not a permission level.' },
+  { value: 'chief_of_staff', label: 'Chief of Staff', hint: 'Same access again, broader remit across the principal’s operation.' },
 ];
 
 export default function SignUp() {

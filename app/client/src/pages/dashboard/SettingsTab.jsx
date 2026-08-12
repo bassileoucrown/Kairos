@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DeleteAccount from '../../components/DeleteAccount.jsx';
 import { api } from '../../lib/api.js';
 
 function IntegrationRow({ name, description, status, configured, onConnect, onDisconnect }) {
@@ -94,6 +95,8 @@ export default function SettingsTab() {
         onConnect={() => handleConnect('/integrations/whatsapp/connect')}
         onDisconnect={() => handleDisconnect('/integrations/whatsapp')}
       />
+
+      <DeleteAccount />
     </div>
   );
 }

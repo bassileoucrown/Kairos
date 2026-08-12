@@ -101,6 +101,66 @@ end to end, with email warnings at both points. More importantly, free Postgres 
 any kind**, so move to a paid instance before this holds a real principal's calendar and contacts,
 whatever the expiry clock says.
 
+## Two roles, two dashboards
+
+A principal and an assistant are asking different questions, so they land on
+different screens rather than one screen with a switcher on it.
+
+- **Principal → `/today`.** Their day, and what needs a decision from them.
+- **Assistant → `/workspace`.** Every principal they run, in one view, without
+  having to pick one before the app will say anything. The switcher becomes a
+  way *into* a principal rather than a prerequisite for seeing anything.
+
+### Itinerary: draft → proposed → confirmed
+
+The reason this is a state machine rather than a boolean is that each
+transition has exactly one party entitled to make it.
+
+| status | who sees it | how it moves |
+| --- | --- | --- |
+| `draft` | the assistant only | assistant publishes, or asks |
+| `proposed` | both, marked pending, listed as a request | the principal decides |
+| `confirmed` | both — it is the day | — |
+
+A principal's day sheet has one job: be true. A half-arranged flight does not
+belong on it, so drafts are **absent** from the principal's view, not dimmed —
+and a principal addressing a draft by id gets a 404, not a 403, because
+"forbidden" would confirm that something is there.
+
+Two ways out of a draft, both deliberate. **Publish** puts it straight on the
+principal's day: an assistant who has finished arranging something is
+reporting a fact, not asking permission. **Ask them** sends it as a request
+with a note, and it shows up in the principal's *what needs you*. Declining
+returns it to the assistant's drafts with the reason attached rather than
+deleting it — the work of assembling it was real, and "not this time" usually
+means "come back with a different flight".
+
+### Titles
+
+`pa`, `ea`, `chief_of_staff` and `delegate` live in `server/lib/roles.js`, and
+the invite form fetches them rather than hard-coding a list. The first three
+are the same access — they are titles, not tiers, and a Chief of Staff is not
+a senior PA. Only `delegate` is genuinely narrower (scheduling only). An
+invitation with no role stated adopts whatever the invitee called themselves
+at signup, so nobody gets appointed under the wrong title.
+
+### Closing an account
+
+`server/lib/accountDeletion.js`. Available to anyone — it is their account —
+and confirmed with a password rather than a checkbox, since a session left
+open on a desk should not be enough for the one irreversible action here.
+
+The part that matters: **an assistant's account does not take their
+principals' data with it.** Deleting naively by `created_by` would empty a
+principal's calendar the day their PA leaves. Confirmed items, briefs and
+instructions made *for* someone else are reassigned to that person; only
+unfinished drafts — which the principal has never seen and which mean nothing
+without their author — go. The confirmation screen shows real counts for this
+account, including how many items stay behind, so the decision is informed
+rather than a leap.
+
+Revoking an assistant's access stays the principal's alone.
+
 ## Phase 1 — the core loop (complete)
 
 - **Auth** — email/password signup and login, scrypt password hashing, httpOnly session cookies,

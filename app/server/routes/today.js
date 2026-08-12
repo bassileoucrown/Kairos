@@ -20,8 +20,9 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const nowIso = now.toISOString();
 
   // --- The day itself: itinerary + bookings, merged ---
-  const schedule = await buildDay(req.principal, todayKey);
-  const nextUp = schedule.find((e) => new Date(e.startAt) > now) || null;
+  const viewerIsPrincipal = req.paRole === 'owner';
+  const schedule = await buildDay(req.principal, todayKey, { viewerIsPrincipal });
+  const nextUp = schedule.find((e) => new Date(e.startAt) > now && e.status === 'confirmed') || null;
 
   // --- Bookings held for approval (Tier 3/4) ---
   const approvals = (await db.prepare(`
@@ -111,16 +112,40 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   }
   relationships.sort((a, b) => a.daysUntil - b.daysUntil);
 
-  const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length + blockedStages.length;
+  // --- Itinerary an assistant has sent over for a decision ---
+  //
+  // These are already on the schedule above, marked pending. Listing them
+  // again here is deliberate: "somewhere on today's timeline there is a thing
+  // waiting on you" is not something anyone should have to scan for.
+  const itineraryRequests = (await db.prepare(`
+    SELECT i.id, i.kind, i.title, i.start_at, i.end_at, i.location, i.destination,
+           i.proposal_note, i.proposed_at, u.name AS created_by_name
+    FROM itinerary_items i
+    LEFT JOIN users u ON u.id = i.created_by
+    WHERE i.owner_id = ? AND i.status = 'proposed'
+    ORDER BY i.start_at ASC
+  `).all(req.principal.id)).map((i) => ({
+    id: i.id, kind: i.kind, title: i.title, startAt: i.start_at, endAt: i.end_at,
+    location: i.location, destination: i.destination,
+    proposalNote: i.proposal_note, proposedAt: i.proposed_at,
+    requestedBy: i.created_by_name,
+  }));
+
+  const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length
+    + blockedStages.length + itineraryRequests.length;
 
   res.json({
     date: todayKey,
     timezone: tz,
     principal: { id: req.principal.id, name: req.principal.name },
     isSelf: req.principal.id === req.user.id,
+    viewerIsPrincipal,
     schedule,
     nextUp,
-    needsYou: { approvals, recordsAwaiting, overdueTasks, blockedStages, count: needsYouCount },
+    needsYou: {
+      approvals, recordsAwaiting, overdueTasks, blockedStages, itineraryRequests,
+      count: needsYouCount,
+    },
     todayTasks,
     relationships,
   });

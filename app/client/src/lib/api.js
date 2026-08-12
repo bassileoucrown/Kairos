@@ -28,5 +28,7 @@ export const api = {
   post: (path, body) => request('POST', path, body ?? {}),
   patch: (path, body) => request('PATCH', path, body ?? {}),
   put: (path, body) => request('PUT', path, body ?? {}),
-  del: (path) => request('DELETE', path),
+  // DELETE with a body, for the one place that needs it: confirming account
+  // deletion with a password rather than a checkbox.
+  del: (path, body) => request('DELETE', path, body),
 };

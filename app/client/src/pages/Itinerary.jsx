@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
-import AppShell, { getActivePrincipal } from '../components/AppShell.jsx';
+import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import { listTimezones } from '../lib/timezones.js';
@@ -176,17 +176,44 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
 
 export default function Itinerary() {
   const { user } = useAuth();
-  const ownerId = getActivePrincipal() || user.id;
+  const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
 
-  function load(d = date) {
-    return api.get(`/itinerary/${ownerId}/day?date=${d}`)
+  function load(d = date, owner = ownerId) {
+    if (!owner) return Promise.resolve();
+    return api.get(`/itinerary/${owner}/day?date=${d}`)
       .then(setData).catch((err) => setError(err.message));
   }
-  useEffect(() => { load(date); }, [date]);
+
+  // Resolve who this day belongs to before fetching it — an assistant's
+  // default is the principal they support, not themselves.
+  useEffect(() => {
+    let cancelled = false;
+    resolveActivePrincipal(user).then((id) => {
+      if (cancelled || !id) return;
+      setOwnerId(id);
+      load(date, id);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => { if (ownerId) load(date); }, [date, ownerId]);
+
+  // An assistant's two ways out of a draft: put it straight on the
+  // principal's day, or ask them first. Both live on the item itself so the
+  // decision is made where the work is, not on a separate screen.
+  async function act(id, path, body) {
+    setError('');
+    try {
+      await api.post(`/itinerary/${ownerId}/items/${id}/${path}`, body);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function remove(id) {
     setError('');
@@ -197,6 +224,7 @@ export default function Itinerary() {
   }
 
   const entries = data?.entries || [];
+  const viewerIsPrincipal = data?.viewerIsPrincipal !== false;
 
   return (
     <AppShell
@@ -256,6 +284,29 @@ export default function Itinerary() {
         {entries.map((e) => (
           <div className="itin-entry" key={e.id}>
             <ScheduleEntry e={e} />
+            {e.source === 'itinerary' && !viewerIsPrincipal && e.status === 'draft' && (
+              <>
+                <button className="btn btn-primary btn-sm no-print" type="button"
+                  onClick={() => act(e.id, 'publish')}>Publish</button>
+                <button className="btn btn-sm no-print" type="button"
+                  onClick={() => {
+                    const note = window.prompt('What should they know about this?') ?? null;
+                    if (note === null) return;
+                    act(e.id, 'propose', { note });
+                  }}>Ask them</button>
+              </>
+            )}
+            {e.source === 'itinerary' && !viewerIsPrincipal && e.status === 'proposed' && (
+              <span className="pill is-warn no-print">Waiting on them</span>
+            )}
+            {e.source === 'itinerary' && viewerIsPrincipal && e.status === 'proposed' && (
+              <>
+                <button className="btn btn-primary btn-sm no-print" type="button"
+                  onClick={() => act(e.id, 'decide', { approve: true })}>Approve</button>
+                <button className="btn btn-sm no-print" type="button"
+                  onClick={() => act(e.id, 'decide', { approve: false, note: window.prompt('Anything they should know? (optional)') ?? '' })}>Decline</button>
+              </>
+            )}
             {e.source === 'itinerary' && (
               <button className="btn btn-danger btn-sm no-print" type="button"
                 aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>

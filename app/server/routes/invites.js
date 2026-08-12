@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
+const { roleLabel } = require('../lib/roles');
 
 const router = asyncRouter();
 
@@ -19,6 +20,7 @@ router.get('/:token', async (req, res) => {
       ownerName: invite.owner_name,
       invitedEmail: invite.invited_email,
       role: invite.role,
+      roleLabel: roleLabel(invite.role),
       status: invite.status,
     },
   });

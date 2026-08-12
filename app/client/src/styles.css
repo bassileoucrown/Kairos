@@ -851,3 +851,82 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .account-menu-item:hover { background: var(--bg); text-decoration: none; }
 .account-menu-item.is-signout { color: var(--danger); font-weight: 600; }
 .account-menu-item.is-signout:hover { background: var(--danger-soft); }
+
+/* --- The assistant's workspace ---------------------------------------- */
+.ws-section { margin-bottom: 28px; }
+.ws-heading {
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-count {
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.ws-sub { margin: 0 0 10px; }
+
+.ws-principals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.ws-principal { display: flex; flex-direction: column; gap: 8px; }
+.ws-principal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ws-principal-next { font-size: 0.86rem; color: var(--text-muted); }
+.ws-principal-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.ws-item { display: flex; align-items: flex-start; gap: 10px; }
+.ws-item-icon { font-size: 1rem; line-height: 1.4; }
+.ws-item-body { flex: 1; min-width: 0; }
+.ws-item-title { font-weight: 600; }
+.ws-item-meta { font-size: 0.82rem; color: var(--text-muted); }
+.ws-item-note {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+.ws-item-note.is-decision { border-left-color: var(--warn); color: var(--warn); }
+.ws-item-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ws-task { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* A proposal on the principal's own timeline: present, clearly not settled. */
+.sched-row.is-proposed { opacity: 0.78; border-left: 2px dashed var(--warn); }
+.sched-pill { margin-left: 8px; vertical-align: middle; }
+.pill.is-warn { background: var(--warn-soft); color: var(--warn); }
+.needs-note {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  font-style: italic;
+}
+.role-select {
+  font-size: 0.8rem;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+/* --- Closing an account ------------------------------------------------ */
+.danger-zone {
+  margin-top: 28px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.danger-zone.is-open { border-color: var(--danger); }
+.danger-zone h3 { margin: 0 0 6px; font-size: 0.94rem; }
+.danger-list { margin: 6px 0 12px 18px; font-size: 0.88rem; color: var(--text-muted); }
+.danger-actions { display: flex; flex-wrap: wrap; gap: 8px; }

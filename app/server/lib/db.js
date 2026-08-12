@@ -219,6 +219,12 @@ function ready() {
       await ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
       await ensureColumn('project_stages', 'reminder_stage', 'TEXT');
       await ensureColumn('memberships', 'can_manage_scheduling', 'INTEGER NOT NULL DEFAULT 1');
+      await ensureColumn('itinerary_items', 'status', "TEXT NOT NULL DEFAULT 'confirmed'");
+      await ensureColumn('itinerary_items', 'proposal_note', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'proposed_at', 'TEXT');
+      await ensureColumn('itinerary_items', 'decision_note', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'decided_at', 'TEXT');
+      await ensureColumn('itinerary_items', 'decided_by', 'TEXT');
     })();
   }
   return readyPromise;
