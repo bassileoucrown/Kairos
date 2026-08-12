@@ -7,6 +7,7 @@ const { listVisibleSpaces } = require('../lib/spaceAccess');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { buildDay } = require('./itinerary');
 const { canSee, expiryState, daysUntil } = require('../lib/essentials');
+const { directLineFor } = require('../lib/directLine');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -159,8 +160,11 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length;
 
+  const directLine = await directLineFor(req.principal.id, req.user.id);
+
   res.json({
     date: todayKey,
+    directLine,
     timezone: tz,
     principal: { id: req.principal.id, name: req.principal.name },
     isSelf: req.principal.id === req.user.id,

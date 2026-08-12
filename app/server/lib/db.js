@@ -339,6 +339,7 @@ function ready() {
       // out every database created before the feature. Which is exactly the
       // population most in need of migrating.
       await ensureColumn('essentials', 'reminder_stage', 'TEXT');
+      await ensureColumn('spaces', 'kind', "TEXT NOT NULL DEFAULT 'standard'");
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
       await ensureIndex('idx_threads_stage', 'threads(stage_id)');
     })(), READY_TIMEOUT_MS);

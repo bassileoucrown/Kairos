@@ -63,6 +63,30 @@ export function ScheduleEntry({ e }) {
   );
 }
 
+// The quick word.
+//
+// Most of what passes between a principal and the person running their diary
+// is one line long — "car's outside", "he's running late", "confirm Thursday".
+// It has always gone to WhatsApp because opening the app to say it was more
+// trouble than it was worth. So the room is already there, one tap from the
+// day, and nobody has to set anything up.
+export function DirectLine({ line, isSelf, principalName }) {
+  return (
+    <Link className="direct-line" to={`/threads/${line.threadId}`}>
+      <span className="direct-line-label">
+        Direct line
+        <span className="hint"> · {isSelf ? 'you and your team' : `${principalName} and the team`}</span>
+      </span>
+      <span className="direct-line-last">
+        {line.lastMessage
+          ? <><strong>{line.lastMessage.authorName}:</strong> {line.lastMessage.body}</>
+          : <span className="hint">No messages yet — say something quick.</span>}
+      </span>
+      {line.unanswered > 0 && <span className="count-pill">{line.unanswered}</span>}
+    </Link>
+  );
+}
+
 export default function Today() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -109,6 +133,10 @@ export default function Today() {
       {error && <div className="alert alert-error">{error}</div>}
 
       <p className="today-date">{friendlyDate(data.date)} · {data.timezone.replace('_', ' ')}</p>
+
+      {data.directLine && (
+        <DirectLine line={data.directLine} isSelf={data.isSelf} principalName={data.principal.name} />
+      )}
 
       {nextUp && (
         <div className="next-up">

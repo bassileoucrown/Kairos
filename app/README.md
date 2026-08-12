@@ -220,6 +220,9 @@ are refused with an explanation rather than stored in the clear.
 
 Not built, deliberately: **file uploads**. That needs a storage answer, a
 retention policy, and a considered response to "what happens when this leaks".
+The screen says so in as many words — someone holding a passport expects to be
+able to photograph it, and finding out only after hunting for the button is
+worse than being told.
 
 ## Two roles, two dashboards
 
@@ -503,6 +506,40 @@ actually manages.
   handed to the principal.
 
 Access reuses the existing PA model exactly: whoever can act for a principal can run their day.
+
+## The direct line
+
+Most of what passes between a principal and the people running their diary is
+one line long — *"car's outside"*, *"he's running twenty minutes late"*, *"can
+you confirm Thursday"*. Spaces and threads could already carry it, and a
+principal *could* create a space and invite their assistants into it. Nobody
+does: that message is worth thirty seconds, not a setup flow, so it goes to
+WhatsApp and out of the record entirely.
+
+So every principal has exactly one **direct line** (`lib/directLine.js`),
+created the moment they have somebody to talk to and surfaced one tap from
+Today and from each principal card on an assistant's Workspace.
+
+- **One room, not a DM per pair.** Two assistants covering the same principal
+  need to see each other's traffic, not run parallel private conversations
+  about the same diary.
+- **Nothing to set up, and nothing when it would be empty.** It appears on the
+  first accepted invitation; a principal working alone doesn't get an unused
+  chat cluttering their Spaces list.
+- **Membership mirrors the team, in both directions.** Accepting an invitation
+  puts you in it; being revoked takes you out of it in the same request. A
+  revoked assistant keeping a live line into the principal's team would be a
+  quiet and serious leak. Because it is a mirror rather than a second list,
+  adding or removing someone by hand is **refused with an explanation** instead
+  of accepted and silently undone at the next invite.
+- **An ordinary space and an ordinary thread**, marked `spaces.kind = 'direct'`.
+  Notes, records, acknowledgement and task-from-message all work in it for
+  free — so *"confirm Thursday"* can be promoted into a record on the spot.
+
+The badge counts messages from other people since you last said something.
+Without a read-receipt table that is a decent proxy for unread, and it is the
+question actually being asked at a glance: *has anything happened that I have
+not answered.*
 
 ## What an assistant can and cannot do
 

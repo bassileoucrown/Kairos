@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { roleLabel } = require('../lib/roles');
+const { ensureDirectLine } = require('../lib/directLine');
 
 const router = asyncRouter();
 
@@ -53,6 +54,10 @@ router.post('/:token/accept', requireAuth, async (req, res) => {
   await db.prepare(`
     UPDATE memberships SET member_user_id = ?, status = 'active', role = ? WHERE id = ?
   `).run(req.user.id, adoptTitle ? claimed : invite.role, invite.id);
+
+  // They can talk to the principal from this moment, without anyone having
+  // to think about setting a room up.
+  await ensureDirectLine(invite.owner_id);
 
   res.json({ ok: true });
 });

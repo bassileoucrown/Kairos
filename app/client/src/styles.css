@@ -705,6 +705,29 @@ textarea { resize: vertical; min-height: 70px; }
 .next-up-title { font-size: 1.02rem; font-weight: 600; }
 .next-up-where { font-size: 0.84rem; color: var(--text-muted); }
 
+/* The quick word — deliberately quiet. It sits above the day without
+   competing with Next up, because it is a door rather than an alert. */
+.direct-line {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 9px 13px; margin-bottom: 18px;
+  text-decoration: none; color: inherit;
+}
+.direct-line:hover { border-color: var(--accent); }
+.direct-line-label {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+.direct-line-label .hint { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.direct-line-last {
+  flex: 1; min-width: 0; font-size: 0.86rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+@media (max-width: 620px) {
+  .direct-line { flex-wrap: wrap; gap: 4px; }
+  .direct-line-last { flex-basis: 100%; }
+}
+
 .today-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 30px; }
 @media (max-width: 900px) { .today-grid { grid-template-columns: 1fr; gap: 20px; } }
 
@@ -882,6 +905,17 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .ws-principal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .ws-principal-next { font-size: 0.86rem; color: var(--text-muted); }
 .ws-principal-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ws-principal-line {
+  display: flex; align-items: center; gap: 8px;
+  border-top: 1px solid var(--border); padding-top: 8px;
+  text-decoration: none; color: inherit; font-size: 0.82rem;
+}
+.ws-principal-line:hover .ws-line-label { color: var(--accent); }
+.ws-line-label {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em;
+  font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+.ws-line-last { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ws-item { display: flex; align-items: flex-start; gap: 10px; }
 .ws-item-icon { font-size: 1rem; line-height: 1.4; }
@@ -932,7 +966,8 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .danger-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* --- Essentials and security ------------------------------------------ */
-.ess-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.ess-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.ess-uploads { margin: 0 0 14px; }
 .ess-group { margin-bottom: 24px; }
 .ess-heading { font-size: 0.9rem; font-weight: 600; margin: 0 0 8px; }
 .ess-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }

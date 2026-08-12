@@ -276,6 +276,12 @@ CREATE TABLE IF NOT EXISTS spaces (
   -- the owner tunes it per space — role sets the opening position, not a
   -- ceiling. See docs/collaboration-spec.html section 03.
   auto_delegate_roles TEXT NOT NULL DEFAULT '',
+  -- standard | direct. The direct line is a space the app maintains rather
+  -- than one the owner made: exactly one per principal, membership mirrored
+  -- from memberships. Marking it means the app can find it without guessing
+  -- from the name, and the client can render it as a room rather than a
+  -- project workspace. See lib/directLine.js.
+  kind       TEXT NOT NULL DEFAULT 'standard',
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_spaces_owner ON spaces(owner_id);

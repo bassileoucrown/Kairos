@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { roleLabel } = require('../lib/roles');
 const { buildDay } = require('./itinerary');
+const { directLineFor } = require('../lib/directLine');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -53,6 +54,7 @@ router.get('/', async (req, res) => {
       itemsToday: confirmed.length,
       nextUp: confirmed.find((e) => new Date(e.startAt) > now) || null,
       pendingApprovals: pendingApprovals?.n || 0,
+      directLine: await directLineFor(m.id, req.user.id),
     });
   }
 

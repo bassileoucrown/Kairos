@@ -126,6 +126,13 @@ export default function EssentialsTab({ ownerId }) {
         )}
       </div>
 
+      {/* Said plainly rather than left to be discovered. Someone holding a
+          passport expects to be able to photograph it, and finding out only
+          after they have looked for the button is worse than being told. */}
+      <p className="hint ess-uploads">
+        Details only for now — uploading a scan or photograph of a document isn't available yet.
+      </p>
+
       {adding && (
         <form className="card" onSubmit={submit}>
           <div className="field">

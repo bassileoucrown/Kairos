@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { BRAND_FULL } = require('../lib/brand');
+const { ensureDirectLine } = require('../lib/directLine');
 const { requireAuth } = require('../lib/auth');
 const { sendEmail } = require('../lib/email');
 const { isAssistantRole, roleLabel, roleForAccountCategory, ASSISTANT_ROLES } = require('../lib/roles');
@@ -132,6 +133,9 @@ router.post('/:id/revoke', async (req, res) => {
   const row = await db.prepare('SELECT * FROM memberships WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Member not found.' });
   await db.prepare("UPDATE memberships SET status = 'revoked' WHERE id = ?").run(row.id);
+  // A revoked assistant keeping a live line into the principal's team would
+  // be a quiet and serious leak, so membership is resynced immediately.
+  await ensureDirectLine(req.user.id);
   res.status(204).end();
 });
 

@@ -119,6 +119,22 @@ export default function Workspace() {
                       ? <>Next: <strong>{p.nextUp.title}</strong> at {fmtTime(p.nextUp.startAt, p.timezone)}</>
                       : <span className="hint">Nothing else confirmed today</span>}
                   </div>
+                  {p.directLine && (
+                    <Link className="ws-principal-line" to={`/threads/${p.directLine.threadId}`}>
+                      <span className="ws-line-label">Direct line</span>
+                      {p.directLine.lastMessage
+                        ? (
+                          <span className="ws-line-last">
+                            <strong>{p.directLine.lastMessage.authorName}:</strong>{' '}
+                            {p.directLine.lastMessage.body}
+                          </span>
+                        )
+                        : <span className="hint">Say something quick</span>}
+                      {p.directLine.unanswered > 0 && (
+                        <span className="count-pill">{p.directLine.unanswered}</span>
+                      )}
+                    </Link>
+                  )}
                   <div className="ws-principal-actions">
                     <button className="btn btn-sm" type="button" onClick={() => openPrincipal(p.id, '/today')}>
                       Their day

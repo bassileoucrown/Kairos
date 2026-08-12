@@ -18,6 +18,7 @@ function serializeSpace(s, viewerRole) {
     id: s.id,
     name: s.name,
     context: s.context,
+    kind: s.kind || 'standard',
     autoDelegateRoles: parseRoles(s.auto_delegate_roles),
     viewerRole: viewerRole || s.viewer_role,
     isOwner: (viewerRole || s.viewer_role) === 'owner',
@@ -133,6 +134,14 @@ router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
   if (!req.access.canManageMembers) {
     return res.status(403).json({ error: 'You cannot manage members of this space.' });
   }
+  // The direct line's membership mirrors the team, so anyone added here would
+  // be removed again at the next invite or revoke. Better to say so than to
+  // accept the change and silently undo it.
+  if (req.space.kind === 'direct') {
+    return res.status(400).json({
+      error: 'The direct line always holds exactly your team. Invite them from Team instead.',
+    });
+  }
 
   // Accepts a handle or an email. The handle is the pleasanter half — you
   // know a colleague's handle, you do not always know which of their
@@ -167,6 +176,11 @@ router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
 router.delete('/:spaceId/members/:memberId', requireSpaceAccess, async (req, res) => {
   if (!req.access.canManageMembers) {
     return res.status(403).json({ error: 'You cannot manage members of this space.' });
+  }
+  if (req.space.kind === 'direct') {
+    return res.status(400).json({
+      error: 'Removing someone from the direct line means ending their access in Team.',
+    });
   }
   const member = await db.prepare('SELECT * FROM space_members WHERE id = ? AND space_id = ?')
     .get(req.params.memberId, req.space.id);
