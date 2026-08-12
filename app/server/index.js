@@ -109,10 +109,30 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 // on a deploy log until now.
 console.log(`Kairos starting: ${db.dialect}${db.dialect === 'postgres' ? ` -> ${describeTarget()}` : ''}`);
 
+// A crash after the port is bound reads to the outside world as "502 Bad
+// Gateway" with no further explanation, which is the same diagnostic dead end
+// as a silent deploy. Log it properly and keep serving: a background failure
+// should not take the whole site down, and whatever is still working should
+// stay working.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection (staying up):', reason instanceof Error ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (staying up):', err.stack || err);
+});
+
 // Listen first, so the deployment is always reachable and can account for
 // itself even when the database cannot be reached.
-app.listen(PORT, () => {
-  console.log(`Kairos listening on ${PORT} — preparing the database…`);
+//
+// 0.0.0.0 explicitly: a container's proxy reaches the process over the
+// container network, and a server bound only to loopback answers nothing from
+// outside — which surfaces as a gateway error rather than as a bind failure.
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Kairos listening on 0.0.0.0:${PORT} — preparing the database…`);
+});
+server.on('error', (err) => {
+  console.error(`Could not listen on port ${PORT}: ${err.message}`);
+  process.exit(1);
 });
 
 db.ready()
@@ -123,11 +143,8 @@ db.ready()
   })
   .catch((err) => {
     dbState.error = err.message;
-    // This is the last thing anyone sees when a deploy fails, so it has to be
-    // enough to act on. Exiting rather than falling back to SQLite is
-    // deliberate: DATABASE_URL being set means durable storage was asked for,
-    // and quietly serving from a disk that gets wiped is how accounts went
-    // missing in the first place. Better a failed deploy than a silent one.
+    // Has to be enough to act on: it is what someone reads when the site is
+    // up but refusing to serve.
     console.error(`\nCould not prepare the database: ${err.message}\n`);
     if (db.dialect === 'postgres') {
       console.error([
@@ -144,7 +161,7 @@ db.ready()
         '  - The password contains characters that must be percent-encoded in a URL',
         '    (@ : / ? # are the usual culprits). Re-copy rather than retype it.',
         '  - The database is still starting. The server already retried',
-        `    ${process.env.DATABASE_CONNECT_ATTEMPTS || 6} times with backoff before giving up here.`,
+        `    ${process.env.DATABASE_CONNECT_ATTEMPTS || 5} times with backoff before giving up here.`,
         '',
         'Unset DATABASE_URL to start on local SQLite instead — the app runs, but',
         'stores accounts on disk that is wiped on restart.',
