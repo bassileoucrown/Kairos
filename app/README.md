@@ -227,6 +227,53 @@ shows you the conversation that explains why it exists.
   the existing email service, so with no provider configured these are still visible in the Outbox
   tab and the server log. Set `REMINDER_SWEEP_MS` to change the interval (default 15 minutes).
 
+## Today and the Itinerary
+
+The two screens the job actually runs on.
+
+### One navigation
+
+Kairos had grown to roughly eighteen screens reached through per-page topbar links that differed on
+every page — which is how a tool for busy people becomes work in itself. `components/AppShell.jsx`
+is now the only navigation: the same rail everywhere, one active state, and the **principal
+switcher in a fixed place** so "who am I doing this for" is never a guess. It persists across pages,
+collapses behind a toggle on small screens, and carries a live badge for waiting approvals. Tabs
+inside Dashboard and PA Home moved into the URL (`/dashboard?tab=settings`), so the nav can link
+straight to a view and any view can be bookmarked or sent to someone.
+
+### Today
+
+The landing screen for everyone, principal or assistant. One request (`GET /api/today/:ownerId`)
+assembles it server-side rather than making the client run five round-trips for a screen whose whole
+job is answering *what needs me right now*:
+
+- **The day** — itinerary and confirmed bookings merged into one ordered stream, with the next item
+  called out and how long until it starts.
+- **Needs you** — bookings held for approval, records awaiting your acknowledgement, overdue tasks,
+  and blocked stages, each actionable in place. Approving a booking from here is one click.
+- **Worth remembering** — birthdays and anniversaries inside a week, from Contact Intelligence.
+
+### Itinerary
+
+A booking is something *someone else* asked for. An itinerary item is everything else that fills a
+day — the flight, the car, the hotel, the dinner — and this is what a PA for a busy principal
+actually manages.
+
+- **Travel is timezone-aware by construction.** A leg carries a departure zone *and* an arrival
+  zone, so a flight leaving Lagos at 22:40 shows "arrives 05:15 London" rather than making anyone
+  do the arithmetic at 3am. Instants stay UTC; the zones say how to render each end.
+- **Overnight legs work**, because a red-eye is the most ordinary shape of travel here: an end time
+  at or before the start means the next morning, and the day sheet says "arrives next day".
+- **Bookings appear in the same stream**, so there is never a second list to check. Pull one onto
+  the itinerary (`POST /itinerary/:ownerId/items/from-booking/:bookingId`) to hang the car, the room
+  number, or the pre-read off it — and it stops appearing twice.
+- **Only travel asks travel questions.** The arrival-timezone field appears for flights, trains, and
+  cars, and stays out of the way for a dinner.
+- **Print a day sheet** — a stylesheet strips the navigation and controls so a clean page can be
+  handed to the principal.
+
+Access reuses the existing PA model exactly: whoever can act for a principal can run their day.
+
 ## Account categories
 
 At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**

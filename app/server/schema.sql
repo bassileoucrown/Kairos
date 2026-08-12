@@ -169,6 +169,41 @@ CREATE TABLE IF NOT EXISTS emails (
 );
 CREATE INDEX IF NOT EXISTS idx_emails_owner ON emails(owner_id);
 
+-- ============================================================
+-- Itinerary — the principal's actual day, not just their bookings
+-- ============================================================
+--
+-- A booking is something someone else asked for. An itinerary item is
+-- everything else that fills a day: the flight, the car, the hotel, the
+-- dinner, the twenty minutes of travel between two of them. A PA managing a
+-- principal is managing this, and it has never lived in a calendar app well
+-- because travel crosses timezones.
+--
+-- Hence start_timezone/end_timezone: a flight leaves Lagos at 22:40 WAT and
+-- lands in London at 05:15 BST, and both of those are the truth. Instants are
+-- still stored in UTC; the zones say how to render each end.
+CREATE TABLE IF NOT EXISTS itinerary_items (
+  id             TEXT PRIMARY KEY,
+  owner_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by     TEXT NOT NULL REFERENCES users(id),
+  kind           TEXT NOT NULL DEFAULT 'meeting',
+    -- flight | train | car | hotel | meeting | meal | personal | call | note
+  title          TEXT NOT NULL,
+  start_at       TEXT NOT NULL,  -- ISO-8601 UTC
+  end_at         TEXT,           -- ISO-8601 UTC
+  start_timezone TEXT,           -- departure zone; falls back to the owner's
+  end_timezone   TEXT,           -- arrival zone, for legs that cross zones
+  location       TEXT NOT NULL DEFAULT '',
+  destination    TEXT NOT NULL DEFAULT '',  -- the other end of a travel leg
+  reference      TEXT NOT NULL DEFAULT '',  -- PNR, confirmation, seat, room
+  notes          TEXT NOT NULL DEFAULT '',
+  -- Set when the item was generated from a Kairos booking, so the day view can
+  -- show one line instead of two for the same meeting.
+  booking_id     TEXT REFERENCES bookings(id) ON DELETE SET NULL,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_itinerary_owner_time ON itinerary_items(owner_id, start_at);
+
 -- Two-way Google/Outlook sync (blueprint Section 3.6, Gap 3). Architecture
 -- only — inert until real OAuth client credentials are configured via env
 -- vars; see lib/calendarSync.js.

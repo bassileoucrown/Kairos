@@ -16,6 +16,8 @@ import SpaceDetail from './pages/spaces/SpaceDetail.jsx';
 import ThreadView from './pages/spaces/ThreadView.jsx';
 import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
+import Today from './pages/Today.jsx';
+import Itinerary from './pages/Itinerary.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -40,7 +42,9 @@ function homeRouteFor(user) {
   if (step !== 'done') {
     return ONBOARDING_STEP_ROUTE[step] || '/onboarding/profile';
   }
-  return user.accountCategory && user.accountCategory !== 'principal' ? '/pa' : '/dashboard';
+  // Everyone lands on Today — the one screen that answers "what needs me now"
+  // regardless of whether you're the principal or the person running their day.
+  return '/today';
 }
 
 function FullPageSpinner() {
@@ -109,6 +113,8 @@ export default function App() {
       <Route path="/spaces/:spaceId" element={<RequireAuth><SpaceDetail /></RequireAuth>} />
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
+      <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
+      <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />

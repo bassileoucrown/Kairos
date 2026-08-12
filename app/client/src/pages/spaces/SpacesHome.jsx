@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { useAuth } from '../../lib/AuthContext.jsx';
+import AppShell from '../../components/AppShell.jsx';
 
 export const CONTEXT_LABELS = { work: 'Work', personal: 'Personal', private: 'Private' };
 
@@ -13,7 +13,7 @@ const CONTEXT_BLURB = {
 };
 
 export default function SpacesHome() {
-  const { user, logout } = useAuth();
+  
   const navigate = useNavigate();
   const [spaces, setSpaces] = useState(null);
   const [error, setError] = useState('');
@@ -41,34 +41,18 @@ export default function SpacesHome() {
     }
   }
 
-  async function handleLogout() {
-    await logout();
-    navigate('/login');
-  }
-
   const visible = spaces && (filter === 'all' ? spaces : spaces.filter((s) => s.context === filter));
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <span className="topbar-brand">Kairos — Spaces</span>
-        <div className="topbar-actions">
-          <Link to="/tasks" className="btn btn-secondary btn-sm">My Tasks</Link>
-          <Link to="/dashboard" className="btn btn-secondary btn-sm">My Dashboard</Link>
-          <Link to="/pa" className="btn btn-secondary btn-sm">PA Home</Link>
-          <span>{user.name}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
-        </div>
-      </div>
-
-      <div className="page">
-        <div className="page-header">
-          <h1>Spaces</h1>
-          <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating((c) => !c)}>
-            {creating ? 'Cancel' : 'New space'}
-          </button>
-        </div>
-
+    <AppShell
+      title="Spaces"
+      active="spaces"
+      actions={
+        <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating((c) => !c)}>
+          {creating ? 'Cancel' : 'New space'}
+        </button>
+      }
+    >
         {error && <div className="alert alert-error">{error}</div>}
 
         <p className="tz-note" style={{ marginBottom: 14 }}>
@@ -137,7 +121,6 @@ export default function SpacesHome() {
             </div>
           );
         })}
-      </div>
-    </div>
+    </AppShell>
   );
 }

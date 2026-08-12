@@ -30,9 +30,13 @@ function timeLabel(iso) {
 // Turning a message into a task is the same one-click gesture as promoting it
 // to a record, and for the same reason: the thing you need to do next almost
 // always gets said in passing, and retyping it elsewhere is where it gets lost.
-function TaskMaker({ message, members, onCreate, onCancel }) {
+function TaskMaker({ message, members, viewerId, onCreate, onCancel }) {
   const [title, setTitle] = useState(message.body.slice(0, 120));
-  const [assigneeId, setAssigneeId] = useState('');
+  // Default to yourself. Noting a task off the back of a message almost always
+  // means "I'll handle this" — and leaving it unassigned drops it out of My
+  // Tasks entirely, which is the one list the person is actually going to look
+  // at. Reassigning is one dropdown away.
+  const [assigneeId, setAssigneeId] = useState(viewerId || '');
   const [dueAt, setDueAt] = useState('');
 
   return (
@@ -62,7 +66,7 @@ function TaskMaker({ message, members, onCreate, onCancel }) {
   );
 }
 
-function Note({ m, canWrite, members, onPromote, onMakeTask }) {
+function Note({ m, canWrite, members, viewerId, onPromote, onMakeTask }) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
   return (
@@ -101,6 +105,7 @@ function Note({ m, canWrite, members, onPromote, onMakeTask }) {
           <TaskMaker
             message={m}
             members={members}
+            viewerId={viewerId}
             onCancel={() => setTasking(false)}
             onCreate={(payload) => { setTasking(false); onMakeTask(payload); }}
           />
@@ -330,7 +335,7 @@ export default function ThreadView() {
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
                   onAck={ack} onStatus={setStatus} onSupersede={supersede} />
               : <Note key={m.id} m={m} canWrite={data.canWrite} members={members}
-                  onPromote={promote} onMakeTask={makeTask} />
+                  viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask} />
           ))}
           <div ref={endRef} />
         </div>

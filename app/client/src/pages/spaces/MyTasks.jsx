@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { useAuth } from '../../lib/AuthContext.jsx';
+import AppShell from '../../components/AppShell.jsx';
 import TaskList, { dueState } from './TaskList.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 
 const CONTEXTS = ['work', 'personal', 'private'];
 
 export default function MyTasks() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  
   const [tasks, setTasks] = useState(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
@@ -19,8 +18,6 @@ export default function MyTasks() {
     return api.get('/tasks/mine').then((d) => setTasks(d.tasks)).catch((err) => setError(err.message));
   }
   useEffect(() => { load(); }, []);
-
-  async function handleLogout() { await logout(); navigate('/login'); }
 
   if (error && !tasks) return <div className="spinner-page">{error}</div>;
   if (!tasks) return <div className="spinner-page">Loading…</div>;
@@ -34,22 +31,11 @@ export default function MyTasks() {
   const rest = live.filter((t) => !dueState(t.dueAt, t.status));
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <span className="topbar-brand">Kairos — My Tasks</span>
-        <div className="topbar-actions">
-          <Link to="/spaces" className="btn btn-secondary btn-sm">Spaces</Link>
-          <Link to="/dashboard" className="btn btn-secondary btn-sm">My Dashboard</Link>
-          <span>{user.name}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
-        </div>
-      </div>
-
-      <div className="page">
-        <div className="page-header">
-          <h1>My tasks</h1>
-          <span className="pill">{live.length} open</span>
-        </div>
+    <AppShell
+      title="My tasks"
+      active="tasks"
+      actions={<span className="pill">{live.length} open</span>}
+    >
 
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -105,7 +91,6 @@ export default function MyTasks() {
             {showDone && <div style={{ marginTop: 10 }}><TaskList tasks={done} onChanged={load} showContext /></div>}
           </>
         )}
-      </div>
-    </div>
+    </AppShell>
   );
 }
