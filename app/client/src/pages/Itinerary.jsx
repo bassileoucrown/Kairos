@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
@@ -44,7 +44,7 @@ function endDateFor(date, startTime, endTime) {
   return d.toISOString().slice(0, 10);
 }
 
-function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
+function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
   const [kind, setKind] = useState('meeting');
   const [title, setTitle] = useState('');
   const [startTime, setStartTime] = useState('09:00');
@@ -56,6 +56,8 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
   const [endTimezone, setEndTimezone] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [justAdded, setJustAdded] = useState('');
+  const titleRef = useRef(null);
   const isTravel = TRAVEL_KINDS.has(kind);
 
   async function submit(e) {
@@ -76,6 +78,17 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
         endTimezone: isTravel && endTimezone ? endTimezone : undefined,
         location, destination, reference, notes,
       });
+      // Stay open. A trip is a sequence — outbound, car, hotel, dinner — and
+      // closing the form after each leg means re-opening it and re-picking the
+      // kind four more times. What varies between legs is cleared; what
+      // usually carries (the kind, roughly when) is kept.
+      setJustAdded(title);
+      setTitle('');
+      setLocation('');
+      setDestination('');
+      setReference('');
+      setNotes('');
+      titleRef.current?.focus();
       onAdded();
     } catch (err) { setError(err.message); } finally { setSaving(false); }
   }
@@ -83,6 +96,11 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
   return (
     <form className="card itin-form" onSubmit={submit}>
       {error && <div className="alert alert-error">{error}</div>}
+      {justAdded && !error && (
+        <div className="alert alert-success" role="status">
+          Added “{justAdded}”. Next one, or Done when the day is built.
+        </div>
+      )}
 
       <div className="kind-picker">
         {KINDS.map((k) => (
@@ -101,7 +119,7 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
       <div className="field">
         <label htmlFor="itin-title">What is it?</label>
         <input
-          id="itin-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+          id="itin-title" ref={titleRef} type="text" value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder={isTravel ? 'BA075 to London' : 'Board pre-read with the chair'}
           required
         />
@@ -168,7 +186,9 @@ function AddItem({ ownerId, date, timezone, onAdded, onCancel }) {
         <button className="btn btn-primary" type="submit" disabled={saving}>
           {saving ? 'Adding…' : 'Add to the day'}
         </button>
-        <button className="btn btn-secondary" type="button" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-secondary" type="button" onClick={justAdded ? onDone : onCancel}>
+          {justAdded ? 'Done' : 'Cancel'}
+        </button>
       </div>
     </form>
   );
@@ -266,7 +286,8 @@ export default function Itinerary() {
           ownerId={ownerId}
           date={date}
           timezone={data?.timezone || 'UTC'}
-          onAdded={() => { setAdding(false); load(); }}
+          onAdded={() => load()}
+          onDone={() => setAdding(false)}
           onCancel={() => setAdding(false)}
         />
       )}
