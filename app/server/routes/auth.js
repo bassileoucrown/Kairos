@@ -151,7 +151,11 @@ router.post('/forgot-password', (req, res) => {
     });
   }
 
-  res.json({ ok: true });
+  // Whether this deployment can deliver email at all is a property of the
+  // server, not of any account, so reporting it leaks nothing — and without it
+  // the page cheerfully tells people to check an inbox that will never receive
+  // anything.
+  res.json({ ok: true, emailDeliveryConfigured: !!process.env.RESEND_API_KEY });
 });
 
 router.get('/reset-password/:token', (req, res) => {
