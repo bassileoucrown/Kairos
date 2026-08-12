@@ -173,11 +173,39 @@ async function ensureColumn(table, column, definition) {
   await impl.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+// A managed database is not always accepting connections the instant the web
+// service boots — on a deploy the two start together, and a free-plan instance
+// may be waking from idle. A single refused connection used to end the process,
+// which the platform reports only as "Deploy failed". Transient network faults
+// are retried; anything else (bad credentials, missing database, a syntax error
+// in our own schema) fails immediately, because retrying won't fix it.
+const TRANSIENT = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'EPIPE']);
+const CONNECT_ATTEMPTS = Number(process.env.DATABASE_CONNECT_ATTEMPTS || 6);
+
+function isTransient(err) {
+  return TRANSIENT.has(err.code) || /terminating connection|starting up|not yet accepting/i.test(err.message || '');
+}
+
+async function connectWithRetry() {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await impl.exec('SELECT 1');
+      return;
+    } catch (err) {
+      if (!isTransient(err) || attempt >= CONNECT_ATTEMPTS) throw err;
+      const waitMs = Math.min(1000 * 2 ** (attempt - 1), 16000);
+      console.warn(`Database not reachable yet (${err.code || err.message}); retrying in ${waitMs / 1000}s — attempt ${attempt} of ${CONNECT_ATTEMPTS}.`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+}
+
 let readyPromise = null;
 /** Creates the schema and applies migrations. Safe to await repeatedly. */
 function ready() {
   if (!readyPromise) {
     readyPromise = (async () => {
+      if (impl.dialect === 'postgres') await connectWithRetry();
       // Must precede the schema file: every connection already points its
       // search_path here, and nothing resolves until the schema exists.
       if (impl.dialect === 'postgres' && PG_SCHEMA) {
