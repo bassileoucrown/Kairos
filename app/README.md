@@ -73,9 +73,13 @@ instance, with `DATABASE_URL` wired between them. In the Render dashboard go to
 **New → Blueprint**, pick this repo, and apply.
 
 On the free plan, instances still sleep after ~15 minutes idle (the first request back is slow), but
-data now survives that, along with restarts and redeploys. Render's free Postgres expires after a
-fixed period and is then deleted, so move to a paid instance before it holds anything you'd mind
-losing.
+data now survives that, along with restarts and redeploys.
+
+Two things to diary about free Postgres. It **expires 30 days after creation**, then gives a
+**14-day grace period** to upgrade before Render deletes it and everything in it — about 44 days
+end to end, with email warnings at both points, and one free database per account. More importantly,
+free Postgres has **no backups of any kind**, so move to a paid instance before this holds a real
+principal's calendar and contacts, whatever the expiry clock says.
 
 ## Phase 1 — the core loop (complete)
 

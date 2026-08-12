@@ -16,9 +16,14 @@ databases:
   - name: kairos-db
     databaseName: kairos
     plan: free
-    # Note: Render's free Postgres expires after a fixed period and is then
-    # deleted. Move to a paid instance before this holds anything you'd mind
-    # losing.
+    # Free Postgres expires 30 days after creation, then allows a 14-day grace
+    # period to upgrade before Render deletes it and its data — roughly 44 days
+    # in total. Render emails warnings at both points, and an account may hold
+    # only one free database at a time.
+    #
+    # The harder limit is that free Postgres has no backups at all. Fine while
+    # evaluating; move to a paid instance before this holds a real principal's
+    # calendar and contacts, whatever the expiry clock says.
 
 services:
   - type: web
