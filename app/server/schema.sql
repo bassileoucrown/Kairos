@@ -231,8 +231,13 @@ CREATE TABLE IF NOT EXISTS itinerary_items (
   decided_by     TEXT REFERENCES users(id),
   created_at     TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_itinerary_status ON itinerary_items(owner_id, status);
 CREATE INDEX IF NOT EXISTS idx_itinerary_owner_time ON itinerary_items(owner_id, start_at);
+-- NOTE: indexes over columns added by a later migration (status, stage_id and
+-- friends) are NOT declared in this file. On a database that already has the
+-- table, CREATE TABLE IF NOT EXISTS is a no-op, so the column does not exist
+-- yet when this file runs and the index fails with "column does not exist" —
+-- taking the whole migration down. They are created in lib/db.js immediately
+-- after the column they depend on.
 
 -- Two-way Google/Outlook sync (blueprint Section 3.6, Gap 3). Architecture
 -- only — inert until real OAuth client credentials are configured via env
@@ -335,7 +340,6 @@ CREATE TABLE IF NOT EXISTS threads (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_threads_space ON threads(space_id);
-CREATE INDEX IF NOT EXISTS idx_threads_stage ON threads(stage_id);
 
 -- One table, two registers. A note is chat; a record is a structured, citable
 -- entry in the thread's formal history. The record_* columns are NULL for

@@ -11,7 +11,14 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
+  // A stored value that isn't in `salt:hash` form is not a password that
+  // happens to be wrong — it is a row this code cannot interpret, from a
+  // migration, a restore, or a hand-edit. Throwing turns a failed login into a
+  // 500, which tells an attacker that this account is unusual and tells the
+  // account holder nothing. Refuse the login instead.
+  if (typeof stored !== 'string') return false;
   const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
   const check = crypto.scryptSync(password, salt, 64).toString('hex');
   const a = Buffer.from(hash, 'hex');
   const b = Buffer.from(check, 'hex');

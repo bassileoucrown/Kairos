@@ -246,6 +246,11 @@ async function ensureColumn(table, column, definition) {
   await impl.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+/** Companion to ensureColumn, for indexes that depend on a retrofitted column. */
+async function ensureIndex(name, target) {
+  await impl.exec(`CREATE INDEX IF NOT EXISTS ${name} ON ${target}`);
+}
+
 // A managed database is not always accepting connections the instant the web
 // service boots — on a deploy the two start together, and a free-plan instance
 // may be waking from idle. A single refused connection used to end the process,
@@ -323,6 +328,18 @@ function ready() {
       await ensureColumn('itinerary_items', 'decision_note', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn('itinerary_items', 'decided_at', 'TEXT');
       await ensureColumn('itinerary_items', 'decided_by', 'TEXT');
+
+      // Indexes over columns that arrive by migration, created only once those
+      // columns certainly exist.
+      //
+      // These cannot live in schema.sql. On a database that already has the
+      // table, CREATE TABLE IF NOT EXISTS does nothing, so the file would try
+      // to index a column that is still minutes away from being added — and
+      // "column does not exist" would take the entire migration down, locking
+      // out every database created before the feature. Which is exactly the
+      // population most in need of migrating.
+      await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
+      await ensureIndex('idx_threads_stage', 'threads(stage_id)');
     })(), READY_TIMEOUT_MS);
   }
   return readyPromise;
