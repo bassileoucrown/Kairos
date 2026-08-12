@@ -92,6 +92,30 @@ failed sign-in the login screen says storage is temporary rather than blaming th
 `GET /api/status` reports `storageDurable`, a property of the deployment and of no account, which
 is why it needs no authentication.
 
+### When the database can't be reached
+
+The server **binds its port first** and prepares the database afterwards. This
+matters more than it sounds: the old order made a database problem look like a
+*deploy* problem — nothing listened, so the platform showed a successful build
+followed by a deploy spinning indefinitely, and the log stayed silent. There
+was nothing to read and nothing to click.
+
+Now the deployment always comes up and accounts for itself:
+
+- `GET /api/status` reports `databaseReady`, `databaseBackend`, `databaseTarget`
+  (host, database and user — never the password) and `databaseError`.
+- Every `/api/*` route returns **503 with the reason** until the schema is
+  ready, so a half-built database is never served from.
+- The page itself still loads, because a blank 503 tells nobody anything.
+- The process **stays up** on failure rather than exiting. It still never falls
+  back to ephemeral storage: a broken deployment that says so beats a working
+  one that quietly loses data.
+
+Connections are bounded — 10s per attempt, five attempts with backoff, and a
+120s ceiling on startup overall — because `pg` has no connect timeout by
+default, and a host that silently drops packets (wrong region, firewalled
+external URL, deleted database) would otherwise hang forever.
+
 On the free plan, instances still sleep after ~15 minutes idle (the first request back is slow), but
 data survives that, along with restarts and redeploys.
 

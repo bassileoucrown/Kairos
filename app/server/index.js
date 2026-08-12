@@ -28,19 +28,47 @@ const PORT = process.env.PORT || 4000;
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
-app.use(attachUser);
 
-// Unauthenticated, and deliberately so: it reports properties of the
-// deployment, never of any account. A production server running on SQLite has
-// an ephemeral disk, so every account it holds disappears on the next restart
-// or deploy — which arrives at the login screen disguised as "incorrect email
-// or password". The login page reads this to say what actually happened.
+// Whether the database is usable yet. The server binds its port immediately
+// and reports this, rather than refusing to start until the database answers.
+//
+// The old order made a database problem look like a deploy problem: nothing
+// listened, so the platform showed a build that "succeeded" followed by a
+// deploy spinning forever with no explanation, and the only way to learn
+// anything was to read a log that stayed silent. Coming up and saying what is
+// wrong is strictly more useful than dying quietly.
+//
+// It does NOT mean serving from a half-built database: every route below is
+// held at 503 until the schema is ready. What changes is that the failure is
+// now visible at a URL instead of invisible in a deploy queue.
+const dbState = { ready: false, error: null };
+
 app.get('/api/status', (req, res) => {
   res.json({
     storageDurable: db.dialect !== 'sqlite' || process.env.NODE_ENV !== 'production',
     emailDeliveryConfigured: !!process.env.RESEND_API_KEY,
+    databaseReady: dbState.ready,
+    databaseBackend: db.dialect,
+    // Named so a human can compare it against their dashboard. Never the
+    // password — this endpoint is public.
+    databaseTarget: db.dialect === 'postgres' ? describeTarget() : 'local file',
+    databaseError: dbState.error,
   });
 });
+
+// Only the API is held. The page itself must still load — a blank 503 tells a
+// person nothing, whereas the app loading and reporting the error in its own
+// words is something they can act on.
+app.use('/api', (req, res, next) => {
+  if (dbState.ready) return next();
+  res.status(503).json({
+    error: dbState.error
+      ? `The database is not available: ${dbState.error}`
+      : 'Starting up — the database is not ready yet. Try again in a moment.',
+  });
+});
+
+app.use(attachUser);
 
 app.use('/api/auth', authRouter);
 app.use('/api/profile', profileRouter);
@@ -81,16 +109,20 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 // on a deploy log until now.
 console.log(`Kairos starting: ${db.dialect}${db.dialect === 'postgres' ? ` -> ${describeTarget()}` : ''}`);
 
-// The schema has to exist before the first request touches it, and creating
-// it is now asynchronous, so listen only once it's ready.
+// Listen first, so the deployment is always reachable and can account for
+// itself even when the database cannot be reached.
+app.listen(PORT, () => {
+  console.log(`Kairos listening on ${PORT} — preparing the database…`);
+});
+
 db.ready()
   .then(() => {
+    dbState.ready = true;
     startReminderSweep();
-    app.listen(PORT, () => {
-      console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
-    });
+    console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
   })
   .catch((err) => {
+    dbState.error = err.message;
     // This is the last thing anyone sees when a deploy fails, so it has to be
     // enough to act on. Exiting rather than falling back to SQLite is
     // deliberate: DATABASE_URL being set means durable storage was asked for,
@@ -120,7 +152,12 @@ db.ready()
     } else {
       console.error('No DATABASE_URL is set, so the server tried a local SQLite file and could not open it.');
     }
-    process.exit(1);
+    // Deliberately not exiting. The process stays up serving 503s and an
+    // honest /api/status, which someone can read; exiting would put us back to
+    // a deploy that fails with nothing to look at. It still never falls back
+    // to ephemeral storage — a broken deployment that says so beats a working
+    // one that quietly loses data.
+    console.error('\nStaying up so /api/status can report this. No requests will be served until it is fixed.');
   });
 
 // Enough of the connection target to identify it, never enough to leak the
