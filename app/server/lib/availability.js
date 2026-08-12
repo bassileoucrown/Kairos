@@ -8,8 +8,8 @@ const BOOKING_WINDOW_DAYS = 14;
  * BOOKING_WINDOW_DAYS, starting from "today" in the owner's timezone.
  * Returns an array of { startUtc: Date, endUtc: Date }, soonest first.
  */
-function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
-  const rules = db.prepare('SELECT * FROM availability_rules WHERE owner_id = ?').all(owner.id);
+async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
+  const rules = await db.prepare('SELECT * FROM availability_rules WHERE owner_id = ?').all(owner.id);
   if (rules.length === 0) return [];
 
   const rulesByDay = new Map();
@@ -24,8 +24,7 @@ function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   // otherwise it would appear to conflict with itself and block the move.
   // Pending (Tier 3/4, awaiting PA approval) bookings still hold their slot —
   // only cancelled/declined bookings free it back up.
-  const existingBookings = db
-    .prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status IN ('confirmed', 'pending') AND end_at > ? AND id != ?")
+  const existingBookings = await db.prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status IN ('confirmed', 'pending') AND end_at > ? AND id != ?")
     .all(owner.id, now.toISOString(), excludeBookingId || '');
 
   const durationMs = meetingType.duration_minutes * 60000;

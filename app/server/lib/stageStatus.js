@@ -14,12 +14,12 @@ const db = require('./db');
 //   else, if it was auto-moved  -> back to active
 //   else                        -> left alone (respects a manual not_started/active)
 
-function syncStageFromRecords(stageId) {
+async function syncStageFromRecords(stageId) {
   if (!stageId) return null;
-  const stage = db.prepare('SELECT * FROM project_stages WHERE id = ?').get(stageId);
+  const stage = await db.prepare('SELECT * FROM project_stages WHERE id = ?').get(stageId);
   if (!stage) return null;
 
-  const counts = db.prepare(`
+  const counts = await db.prepare(`
     SELECT
       SUM(CASE WHEN m.record_type = 'blocker'  AND m.record_status = 'open'     THEN 1 ELSE 0 END) AS open_blockers,
       SUM(CASE WHEN m.record_type = 'sign_off' AND m.record_status = 'accepted' THEN 1 ELSE 0 END) AS accepted_signoffs
@@ -38,14 +38,14 @@ function syncStageFromRecords(stageId) {
   else next = stage.status;
 
   if (next !== stage.status) {
-    db.prepare('UPDATE project_stages SET status = ? WHERE id = ?').run(next, stageId);
+    await db.prepare('UPDATE project_stages SET status = ? WHERE id = ?').run(next, stageId);
   }
   return { from: stage.status, to: next, changed: next !== stage.status };
 }
 
 /** Resolves the stage a message belongs to, if any. */
-function stageIdForThread(threadId) {
-  const row = db.prepare('SELECT stage_id FROM threads WHERE id = ?').get(threadId);
+async function stageIdForThread(threadId) {
+  const row = await db.prepare('SELECT stage_id FROM threads WHERE id = ?').get(threadId);
   return row?.stage_id || null;
 }
 

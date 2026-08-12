@@ -1,4 +1,5 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
@@ -7,7 +8,7 @@ const {
   listVisibleSpaces, applyRoleDefaults, requireSpaceAccess,
 } = require('../lib/spaceAccess');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 function serializeSpace(s, viewerRole) {
@@ -22,9 +23,9 @@ function serializeSpace(s, viewerRole) {
   };
 }
 
-router.get('/', (req, res) => {
-  const spaces = listVisibleSpaces(req.user.id);
-  const counts = db.prepare(`
+router.get('/', async (req, res) => {
+  const spaces = await listVisibleSpaces(req.user.id);
+  const counts = await db.prepare(`
     SELECT t.space_id, COUNT(*) AS thread_count
     FROM threads t GROUP BY t.space_id
   `).all();
@@ -38,7 +39,7 @@ router.get('/', (req, res) => {
   });
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, context } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'Give the space a name.' });
@@ -48,25 +49,25 @@ router.post('/', (req, res) => {
   }
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO spaces (id, owner_id, name, context, auto_delegate_roles, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, req.user.id, String(name).trim(), context, DEFAULT_DELEGATE_ROLES[context], new Date().toISOString());
 
-  const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(id);
-  applyRoleDefaults(space);
+  const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(id);
+  await applyRoleDefaults(space);
 
   res.status(201).json({ space: serializeSpace(space, 'owner') });
 });
 
-router.get('/:spaceId', requireSpaceAccess, (req, res) => {
-  const threads = db.prepare('SELECT * FROM threads WHERE space_id = ? ORDER BY created_at').all(req.space.id);
-  const members = db.prepare(`
+router.get('/:spaceId', requireSpaceAccess, async (req, res) => {
+  const threads = await db.prepare('SELECT * FROM threads WHERE space_id = ? ORDER BY created_at').all(req.space.id);
+  const members = await db.prepare(`
     SELECT sm.*, u.name, u.email, u.account_category
     FROM space_members sm JOIN users u ON u.id = sm.user_id
     WHERE sm.space_id = ?
   `).all(req.space.id);
-  const owner = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.space.owner_id);
+  const owner = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.space.owner_id);
 
   res.json({
     space: serializeSpace(req.space, req.access.role),
@@ -88,7 +89,7 @@ router.get('/:spaceId', requireSpaceAccess, (req, res) => {
 
 // Tuning which assistant roles are auto-granted. Owner only — this is the
 // "principal adjusts per space" half of role-sets-the-default.
-router.patch('/:spaceId', requireSpaceAccess, (req, res) => {
+router.patch('/:spaceId', requireSpaceAccess, async (req, res) => {
   if (req.access.role !== 'owner') {
     return res.status(403).json({ error: 'Only the space owner can change delegation.' });
   }
@@ -114,14 +115,14 @@ router.patch('/:spaceId', requireSpaceAccess, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(req.space.id);
-  db.prepare(`UPDATE spaces SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  await db.prepare(`UPDATE spaces SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
-  const space = db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.space.id);
-  applyRoleDefaults(space); // newly-included roles gain access immediately
+  const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.space.id);
+  await applyRoleDefaults(space); // newly-included roles gain access immediately
   res.json({ space: serializeSpace(space, 'owner') });
 });
 
-router.post('/:spaceId/members', requireSpaceAccess, (req, res) => {
+router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
   // The structural guarantee: there is no path to a member row on a private
   // space, so "only you" can't be undone by a permission mistake later.
   if (req.space.context === 'private') {
@@ -132,13 +133,13 @@ router.post('/:spaceId/members', requireSpaceAccess, (req, res) => {
   }
 
   const { email, role } = req.body || {};
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim().toLowerCase());
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim().toLowerCase());
   if (!user) return res.status(404).json({ error: 'No Kairos account with that email.' });
   if (user.id === req.space.owner_id) return res.status(400).json({ error: 'They already own this space.' });
 
   const memberRole = role === 'guest' ? 'guest' : 'member';
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO space_members (id, space_id, user_id, role, can_delegate, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), req.space.id, user.id, memberRole,
@@ -150,20 +151,20 @@ router.post('/:spaceId/members', requireSpaceAccess, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-router.delete('/:spaceId/members/:memberId', requireSpaceAccess, (req, res) => {
+router.delete('/:spaceId/members/:memberId', requireSpaceAccess, async (req, res) => {
   if (!req.access.canManageMembers) {
     return res.status(403).json({ error: 'You cannot manage members of this space.' });
   }
-  const member = db.prepare('SELECT * FROM space_members WHERE id = ? AND space_id = ?')
+  const member = await db.prepare('SELECT * FROM space_members WHERE id = ? AND space_id = ?')
     .get(req.params.memberId, req.space.id);
   if (!member) return res.status(404).json({ error: 'Member not found.' });
 
-  db.prepare('DELETE FROM space_members WHERE id = ?').run(member.id);
+  await db.prepare('DELETE FROM space_members WHERE id = ?').run(member.id);
   res.status(204).end();
 });
 
-router.get('/:spaceId/projects', requireSpaceAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:spaceId/projects', requireSpaceAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT p.*,
       (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id) AS stage_count,
       (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id AND s.status = 'done') AS done_count,
@@ -184,13 +185,13 @@ router.get('/:spaceId/projects', requireSpaceAccess, (req, res) => {
   });
 });
 
-router.post('/:spaceId/projects', requireSpaceAccess, (req, res) => {
+router.post('/:spaceId/projects', requireSpaceAccess, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { name, description } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'Give the project a name.' });
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO projects (id, space_id, name, description, status, created_at)
     VALUES (?, ?, ?, ?, 'active', ?)
   `).run(id, req.space.id, String(name).trim(), String(description || ''), new Date().toISOString());
@@ -198,16 +199,16 @@ router.post('/:spaceId/projects', requireSpaceAccess, (req, res) => {
   res.status(201).json({ project: { id, name: String(name).trim() } });
 });
 
-router.post('/:spaceId/threads', requireSpaceAccess, (req, res) => {
+router.post('/:spaceId/threads', requireSpaceAccess, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { name } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'Give the thread a name.' });
 
   const id = crypto.randomUUID();
-  db.prepare('INSERT INTO threads (id, space_id, name, kind, created_at) VALUES (?, ?, ?, ?, ?)')
+  await db.prepare('INSERT INTO threads (id, space_id, name, kind, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(id, req.space.id, String(name).trim(), 'group', new Date().toISOString());
 
-  const thread = db.prepare('SELECT * FROM threads WHERE id = ?').get(id);
+  const thread = await db.prepare('SELECT * FROM threads WHERE id = ?').get(id);
   res.status(201).json({ thread: { id: thread.id, name: thread.name, kind: thread.kind, createdAt: thread.created_at } });
 });
 

@@ -18,28 +18,28 @@ function verifyPassword(password, stored) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function createSession(userId) {
+async function createSession(userId) {
   const id = crypto.randomBytes(32).toString('hex');
   const now = new Date();
   const expires = new Date(now.getTime() + SESSION_TTL_MS);
-  db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
     .run(id, userId, now.toISOString(), expires.toISOString());
   return { id, expiresAt: expires };
 }
 
-function destroySession(sessionId) {
-  db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+async function destroySession(sessionId) {
+  await db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
 }
 
-function getUserBySession(sessionId) {
+async function getUserBySession(sessionId) {
   if (!sessionId) return null;
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+  const session = await db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
   if (!session) return null;
   if (new Date(session.expires_at).getTime() < Date.now()) {
-    destroySession(sessionId);
+    await destroySession(sessionId);
     return null;
   }
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id) || null;
+  return await db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id) || null;
 }
 
 function parseCookies(header) {
@@ -55,9 +55,9 @@ function parseCookies(header) {
   return out;
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
-  const user = getUserBySession(cookies[SESSION_COOKIE]);
+  const user = await getUserBySession(cookies[SESSION_COOKIE]);
   if (!user) {
     return res.status(401).json({ error: 'Not signed in.' });
   }
@@ -65,9 +65,9 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function attachUser(req, res, next) {
+async function attachUser(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
-  req.user = getUserBySession(cookies[SESSION_COOKIE]);
+  req.user = await getUserBySession(cookies[SESSION_COOKIE]);
   next();
 }
 

@@ -1,10 +1,11 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { resolveAccess, listVisibleSpaces } = require('../lib/spaceAccess');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 const PRIORITIES = new Set(['low', 'normal', 'high']);
@@ -49,10 +50,10 @@ function serialize(t) {
   };
 }
 
-function loadTask(req, res, next) {
-  const task = db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.params.taskId);
+async function loadTask(req, res, next) {
+  const task = await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.params.taskId);
   if (!task) return res.status(404).json({ error: 'Task not found.' });
-  const access = resolveAccess(task.space_id, req.user.id);
+  const access = await resolveAccess(task.space_id, req.user.id);
   if (!access) return res.status(404).json({ error: 'Task not found.' });
   req.task = task;
   req.access = access;
@@ -62,8 +63,8 @@ function loadTask(req, res, next) {
 // Everything assigned to me, across every space I can see — the one list that
 // spans contexts, which is why each row carries its context to be filtered by
 // rather than being silently mixed together.
-router.get('/mine', (req, res) => {
-  const rows = db.prepare(`${SELECT_TASK} WHERE t.assignee_id = ? ORDER BY
+router.get('/mine', async (req, res) => {
+  const rows = await db.prepare(`${SELECT_TASK} WHERE t.assignee_id = ? ORDER BY
     CASE t.status WHEN 'done' THEN 1 ELSE 0 END,
     CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,
     t.due_at ASC, t.created_at DESC
@@ -71,11 +72,11 @@ router.get('/mine', (req, res) => {
 
   // Belt and braces: a task is only visible if its space still is. Membership
   // can be revoked after the task was assigned.
-  const visible = new Set(listVisibleSpaces(req.user.id).map((s) => s.id));
+  const visible = new Set((await listVisibleSpaces(req.user.id)).map((s) => s.id));
   res.json({ tasks: rows.filter((t) => visible.has(t.space_id)).map(serialize) });
 });
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { spaceId, projectId, stageId } = req.query;
   if (!spaceId && !projectId && !stageId) {
     return res.status(400).json({ error: 'Ask for a space, project, or stage.' });
@@ -83,14 +84,14 @@ router.get('/', (req, res) => {
 
   let scopeSpaceId = spaceId;
   if (!scopeSpaceId && projectId) {
-    scopeSpaceId = db.prepare('SELECT space_id FROM projects WHERE id = ?').get(projectId)?.space_id;
+    scopeSpaceId = (await db.prepare('SELECT space_id FROM projects WHERE id = ?').get(projectId))?.space_id;
   }
   if (!scopeSpaceId && stageId) {
-    scopeSpaceId = db.prepare(`
+    scopeSpaceId = (await db.prepare(`
       SELECT p.space_id FROM project_stages s JOIN projects p ON p.id = s.project_id WHERE s.id = ?
-    `).get(stageId)?.space_id;
+    `).get(stageId))?.space_id;
   }
-  if (!scopeSpaceId || !resolveAccess(scopeSpaceId, req.user.id)) {
+  if (!scopeSpaceId || !await resolveAccess(scopeSpaceId, req.user.id)) {
     return res.status(404).json({ error: 'Not found.' });
   }
 
@@ -99,7 +100,7 @@ router.get('/', (req, res) => {
   if (projectId) { where.push('t.project_id = ?'); values.push(projectId); }
   if (stageId) { where.push('t.stage_id = ?'); values.push(stageId); }
 
-  const rows = db.prepare(`${SELECT_TASK} WHERE ${where.join(' AND ')} ORDER BY
+  const rows = await db.prepare(`${SELECT_TASK} WHERE ${where.join(' AND ')} ORDER BY
     CASE t.status WHEN 'done' THEN 1 ELSE 0 END,
     CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,
     t.due_at ASC, t.created_at DESC
@@ -107,7 +108,7 @@ router.get('/', (req, res) => {
   res.json({ tasks: rows.map(serialize) });
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { spaceId, projectId, stageId, sourceMessageId, title, assigneeId, dueAt, priority } = req.body || {};
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'Give the task a title.' });
 
@@ -118,7 +119,7 @@ router.post('/', (req, res) => {
   let resolvedProjectId = projectId || null;
 
   if (sourceMessageId) {
-    const src = db.prepare(`
+    const src = await db.prepare(`
       SELECT th.space_id, th.project_id, th.stage_id FROM messages m
       JOIN threads th ON th.id = m.thread_id WHERE m.id = ?
     `).get(sourceMessageId);
@@ -128,7 +129,7 @@ router.post('/', (req, res) => {
     resolvedProjectId = src.project_id;
   }
 
-  const access = resolvedSpaceId && resolveAccess(resolvedSpaceId, req.user.id);
+  const access = resolvedSpaceId && await resolveAccess(resolvedSpaceId, req.user.id);
   if (!access) return res.status(404).json({ error: 'Space not found.' });
   if (!access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 
@@ -136,12 +137,12 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Priority must be low, normal, or high.' });
   }
   // Only someone who can already see the space may be assigned work in it.
-  if (assigneeId && !resolveAccess(resolvedSpaceId, assigneeId)) {
+  if (assigneeId && !await resolveAccess(resolvedSpaceId, assigneeId)) {
     return res.status(400).json({ error: "That person doesn't have access to this space." });
   }
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO tasks (id, space_id, project_id, stage_id, source_message_id, title,
                        assignee_id, created_by, due_at, priority, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
@@ -149,10 +150,10 @@ router.post('/', (req, res) => {
     String(title).trim().slice(0, 300), assigneeId || null, req.user.id,
     dueAt || null, priority || 'normal', new Date().toISOString());
 
-  res.status(201).json({ task: serialize(db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(id)) });
+  res.status(201).json({ task: serialize(await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(id)) });
 });
 
-router.patch('/:taskId', loadTask, (req, res) => {
+router.patch('/:taskId', loadTask, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { title, status, priority, dueAt, assigneeId } = req.body || {};
   const updates = [];
@@ -179,7 +180,7 @@ router.patch('/:taskId', loadTask, (req, res) => {
     updates.push('reminder_stage = ?'); values.push(null);
   }
   if (assigneeId !== undefined) {
-    if (assigneeId && !resolveAccess(req.task.space_id, assigneeId)) {
+    if (assigneeId && !await resolveAccess(req.task.space_id, assigneeId)) {
       return res.status(400).json({ error: "That person doesn't have access to this space." });
     }
     updates.push('assignee_id = ?'); values.push(assigneeId || null);
@@ -188,13 +189,13 @@ router.patch('/:taskId', loadTask, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(req.task.id);
-  db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  res.json({ task: serialize(db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.task.id)) });
+  await db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  res.json({ task: serialize(await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.task.id)) });
 });
 
-router.delete('/:taskId', loadTask, (req, res) => {
+router.delete('/:taskId', loadTask, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
-  db.prepare('DELETE FROM tasks WHERE id = ?').run(req.task.id);
+  await db.prepare('DELETE FROM tasks WHERE id = ?').run(req.task.id);
   res.status(204).end();
 });
 

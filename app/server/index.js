@@ -19,6 +19,7 @@ const projectsRouter = require('./routes/projects');
 const tasksRouter = require('./routes/tasks');
 const { router: itineraryRouter } = require('./routes/itinerary');
 const todayRouter = require('./routes/today');
+const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 
 const app = express();
@@ -60,8 +61,16 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(500).json({ error: 'Something went wrong.' });
 });
 
-startReminderSweep();
-
-app.listen(PORT, () => {
-  console.log(`Kairos API running at http://localhost:${PORT}`);
-});
+// The schema has to exist before the first request touches it, and creating
+// it is now asynchronous, so listen only once it's ready.
+db.ready()
+  .then(() => {
+    startReminderSweep();
+    app.listen(PORT, () => {
+      console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
+    });
+  })
+  .catch((err) => {
+    console.error('Could not prepare the database:', err.message);
+    process.exit(1);
+  });

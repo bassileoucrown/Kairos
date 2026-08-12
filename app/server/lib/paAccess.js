@@ -4,9 +4,9 @@ const db = require('./db');
 // granted to the principal themselves (self-service — a solo user can use
 // their own Approval Queue without ever inviting anyone) or to a user with
 // an active 'pa'/'delegate' membership on that principal's account.
-function requirePaAccess(req, res, next) {
+async function requirePaAccess(req, res, next) {
   const ownerId = req.params.ownerId;
-  const owner = db.prepare('SELECT * FROM users WHERE id = ?').get(ownerId);
+  const owner = await db.prepare('SELECT * FROM users WHERE id = ?').get(ownerId);
   if (!owner) return res.status(404).json({ error: 'Principal not found.' });
 
   if (ownerId === req.user.id) {
@@ -16,7 +16,7 @@ function requirePaAccess(req, res, next) {
     return next();
   }
 
-  const membership = db.prepare(`
+  const membership = await db.prepare(`
     SELECT * FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status = 'active'
   `).get(ownerId, req.user.id);
   if (!membership) {

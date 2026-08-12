@@ -1,4 +1,5 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
@@ -17,12 +18,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const BRIEF_SECTION_KEYS = ['who', 'why', 'background', 'talkingPoints', 'desiredOutcome', 'logistics', 'sensitiveNotes'];
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
-router.get('/principals', (req, res) => {
-  const self = db.prepare('SELECT id, name, slug FROM users WHERE id = ?').get(req.user.id);
-  const memberships = db.prepare(`
+router.get('/principals', async (req, res) => {
+  const self = await db.prepare('SELECT id, name, slug FROM users WHERE id = ?').get(req.user.id);
+  const memberships = await db.prepare(`
     SELECT u.id, u.name, u.slug, m.role, m.can_manage_scheduling
     FROM memberships m
     JOIN users u ON u.id = m.owner_id
@@ -45,28 +46,28 @@ router.get('/principals', (req, res) => {
 // and gated on the delegation flag. Both paths call lib/scheduling.js, so the
 // validation and error messages are literally the same code.
 
-router.get('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  res.json({ rules: listAvailability(req.principal.id) });
+router.get('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  res.json({ rules: await listAvailability(req.principal.id) });
 }));
 
-router.put('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  res.json({ rules: replaceAvailability(req.principal.id, req.body?.rules) });
+router.put('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  res.json({ rules: await replaceAvailability(req.principal.id, req.body?.rules) });
 }));
 
-router.get('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  res.json({ meetingTypes: listMeetingTypes(req.principal.id) });
+router.get('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  res.json({ meetingTypes: await listMeetingTypes(req.principal.id) });
 }));
 
-router.post('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  res.status(201).json({ meetingType: createMeetingType(req.principal.id, req.body) });
+router.post('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  res.status(201).json({ meetingType: await createMeetingType(req.principal.id, req.body) });
 }));
 
-router.patch('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  res.json({ meetingType: updateMeetingType(req.principal.id, req.params.id, req.body) });
+router.patch('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  res.json({ meetingType: await updateMeetingType(req.principal.id, req.params.id, req.body) });
 }));
 
-router.delete('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
-  deleteMeetingType(req.principal.id, req.params.id);
+router.delete('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
+  await deleteMeetingType(req.principal.id, req.params.id);
   res.status(204).end();
 }));
 
@@ -85,8 +86,8 @@ function serializeBooking(b) {
   };
 }
 
-router.get('/:ownerId/approvals', requirePaAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:ownerId/approvals', requirePaAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT b.*, mt.name as meeting_type_name, mt.access_tier
     FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
@@ -96,8 +97,8 @@ router.get('/:ownerId/approvals', requirePaAccess, (req, res) => {
   res.json({ bookings: rows.map(serializeBooking) });
 });
 
-router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, (req, res) => {
-  const booking = db.prepare(`
+router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare(`
     SELECT b.*, mt.name as meeting_type_name FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
     WHERE b.id = ? AND b.owner_id = ?
@@ -105,9 +106,9 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, (req, res
   if (!booking) return res.status(404).json({ error: 'Request not found.' });
   if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
 
-  db.prepare("UPDATE bookings SET status = 'confirmed' WHERE id = ?").run(booking.id);
+  await db.prepare("UPDATE bookings SET status = 'confirmed' WHERE id = ?").run(booking.id);
 
-  sendEmail({
+  await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Confirmed: ${booking.meeting_type_name} with ${req.principal.name}`,
@@ -117,14 +118,14 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, (req, res
   res.json({ ok: true });
 });
 
-router.post('/:ownerId/approvals/:bookingId/decline', requirePaAccess, (req, res) => {
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
+router.post('/:ownerId/approvals/:bookingId/decline', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Request not found.' });
   if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
 
-  db.prepare("UPDATE bookings SET status = 'declined' WHERE id = ?").run(booking.id);
+  await db.prepare("UPDATE bookings SET status = 'declined' WHERE id = ?").run(booking.id);
 
-  sendEmail({
+  await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Update on your request with ${req.principal.name}`,
@@ -148,8 +149,8 @@ function serializeContact(c) {
   };
 }
 
-router.get('/:ownerId/contacts', requirePaAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:ownerId/contacts', requirePaAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT c.*,
       COUNT(b.id) as meeting_count,
       MAX(b.start_at) as last_meeting_at
@@ -157,7 +158,10 @@ router.get('/:ownerId/contacts', requirePaAccess, (req, res) => {
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
     WHERE c.owner_id = ?
     GROUP BY c.id
-    ORDER BY COALESCE(last_meeting_at, c.created_at) DESC
+    -- Repeat the aggregate rather than referring to its alias: Postgres
+    -- allows a bare alias in ORDER BY but not one nested inside an
+    -- expression, where SQLite is happy either way.
+    ORDER BY COALESCE(MAX(b.start_at), c.created_at) DESC
   `).all(req.principal.id);
   res.json({ contacts: rows.map(serializeContact) });
 });
@@ -169,7 +173,7 @@ const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 // also needs to add people the principal knows who haven't booked yet —
 // board members, family, an assistant reaching out cold on the principal's
 // behalf — so this is a manual, PA-initiated entry point.
-router.post('/:ownerId/contacts', requirePaAccess, (req, res) => {
+router.post('/:ownerId/contacts', requirePaAccess, async (req, res) => {
   const { email, name, notes, relationshipTier, birthday, anniversary } = req.body || {};
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
@@ -179,17 +183,17 @@ router.post('/:ownerId/contacts', requirePaAccess, (req, res) => {
   if (birthday && !MONTH_DAY_RE.test(birthday)) return res.status(400).json({ error: 'Birthday must be MM-DD.' });
   if (anniversary && !MONTH_DAY_RE.test(anniversary)) return res.status(400).json({ error: 'Anniversary must be MM-DD.' });
 
-  const existing = db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
+  const existing = await db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
   if (existing) return res.status(409).json({ error: 'A contact with that email already exists.' });
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, birthday, anniversary, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, req.principal.id, cleanEmail, String(name || '').trim(), String(notes || '').trim(), tier, birthday || null, anniversary || null, now, now);
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at
     FROM contacts c
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
@@ -199,8 +203,8 @@ router.post('/:ownerId/contacts', requirePaAccess, (req, res) => {
   res.status(201).json({ contact: serializeContact(row) });
 });
 
-router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
-  const row = db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
+router.patch('/:ownerId/contacts/:id', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Contact not found.' });
 
   const { notes, relationshipTier, birthday, anniversary } = req.body || {};
@@ -223,9 +227,9 @@ router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
 
   updates.push('updated_at = ?');
   values.push(new Date().toISOString(), row.id);
-  db.prepare(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  await db.prepare(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
-  const updated = db.prepare(`
+  const updated = await db.prepare(`
     SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at
     FROM contacts c
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
@@ -235,8 +239,8 @@ router.patch('/:ownerId/contacts/:id', requirePaAccess, (req, res) => {
   res.json({ contact: serializeContact(updated) });
 });
 
-router.get('/:ownerId/relationships/upcoming', requirePaAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:ownerId/relationships/upcoming', requirePaAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT * FROM contacts WHERE owner_id = ? AND (birthday IS NOT NULL OR anniversary IS NOT NULL)
   `).all(req.principal.id);
 
@@ -258,9 +262,9 @@ router.get('/:ownerId/relationships/upcoming', requirePaAccess, (req, res) => {
 
 // Upcoming confirmed bookings for this principal — used by the Briefs tab's
 // picker (and generally useful to a PA who wants a quick agenda glance).
-router.get('/:ownerId/bookings', requirePaAccess, (req, res) => {
+router.get('/:ownerId/bookings', requirePaAccess, async (req, res) => {
   const now = new Date().toISOString();
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT b.id, b.booker_name, b.booker_email, b.start_at, mt.name as meeting_type_name,
       (SELECT 1 FROM briefs br WHERE br.booking_id = b.id) as has_brief
     FROM bookings b
@@ -285,11 +289,11 @@ function emptySections() {
   return Object.fromEntries(BRIEF_SECTION_KEYS.map((k) => [k, '']));
 }
 
-router.get('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
+router.get('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  const brief = db.prepare('SELECT * FROM briefs WHERE booking_id = ?').get(booking.id);
+  const brief = await db.prepare('SELECT * FROM briefs WHERE booking_id = ?').get(booking.id);
   const sections = brief ? { ...emptySections(), ...JSON.parse(brief.sections) } : emptySections();
   res.json({ sections, updatedAt: brief?.updated_at || null });
 });
@@ -300,15 +304,15 @@ router.get('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
 // filling seven blank textareas per meeting. Doesn't touch sections the PA
 // has already written (only fills ones that are still empty), and never
 // saves on its own — the PA still hits "Save brief" explicitly.
-router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, (req, res) => {
-  const booking = db.prepare(`
+router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare(`
     SELECT b.*, mt.name as meeting_type_name FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
     WHERE b.id = ? AND b.owner_id = ?
   `).get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  const contact = db.prepare(`
+  const contact = await db.prepare(`
     SELECT c.*, COUNT(pb.id) as meeting_count, MAX(pb.start_at) as last_meeting_at
     FROM contacts c
     LEFT JOIN bookings pb ON pb.owner_id = c.owner_id AND pb.booker_email = c.email AND pb.status = 'confirmed' AND pb.id != ?
@@ -340,7 +344,7 @@ router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, (req, res) => 
     logistics: `${formatForEmail(booking.start_at, req.principal.timezone)} (${req.principal.timezone}).`,
   };
 
-  const existing = db.prepare('SELECT sections FROM briefs WHERE booking_id = ?').get(booking.id);
+  const existing = await db.prepare('SELECT sections FROM briefs WHERE booking_id = ?').get(booking.id);
   const currentSections = existing ? JSON.parse(existing.sections) : {};
   const merged = { ...emptySections(), ...currentSections };
   for (const key of Object.keys(draftSections)) {
@@ -350,8 +354,8 @@ router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, (req, res) => 
   res.json({ sections: merged });
 });
 
-router.put('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
+router.put('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
   const { sections } = req.body || {};
@@ -361,12 +365,12 @@ router.put('/:ownerId/briefs/:bookingId', requirePaAccess, (req, res) => {
   const clean = {};
   for (const key of BRIEF_SECTION_KEYS) clean[key] = String(sections[key] || '').slice(0, 4000);
 
-  const existing = db.prepare('SELECT id FROM briefs WHERE booking_id = ?').get(booking.id);
+  const existing = await db.prepare('SELECT id FROM briefs WHERE booking_id = ?').get(booking.id);
   const now = new Date().toISOString();
   if (existing) {
-    db.prepare('UPDATE briefs SET sections = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(clean), now, existing.id);
+    await db.prepare('UPDATE briefs SET sections = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(clean), now, existing.id);
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO briefs (id, booking_id, owner_id, sections, created_by, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), booking.id, req.principal.id, JSON.stringify(clean), req.user.id, now, now);
@@ -386,8 +390,8 @@ function serializeInstruction(i) {
   };
 }
 
-router.get('/:ownerId/instructions', requirePaAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:ownerId/instructions', requirePaAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT i.*, u.name as created_by_name
     FROM instructions i
     JOIN users u ON u.id = i.created_by
@@ -397,42 +401,42 @@ router.get('/:ownerId/instructions', requirePaAccess, (req, res) => {
   res.json({ instructions: rows.map(serializeInstruction) });
 });
 
-router.post('/:ownerId/instructions', requirePaAccess, (req, res) => {
+router.post('/:ownerId/instructions', requirePaAccess, async (req, res) => {
   const { text, priority } = req.body || {};
   if (!text || !String(text).trim()) {
     return res.status(400).json({ error: 'Instruction text is required.' });
   }
   const cleanPriority = priority === 'urgent' ? 'urgent' : 'normal';
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO instructions (id, owner_id, created_by, text, priority, status, created_at)
     VALUES (?, ?, ?, ?, ?, 'open', ?)
   `).run(id, req.principal.id, req.user.id, String(text).trim(), cleanPriority, new Date().toISOString());
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT i.*, u.name as created_by_name FROM instructions i JOIN users u ON u.id = i.created_by WHERE i.id = ?
   `).get(id);
   res.status(201).json({ instruction: serializeInstruction(row) });
 });
 
-router.patch('/:ownerId/instructions/:id', requirePaAccess, (req, res) => {
-  const row = db.prepare('SELECT * FROM instructions WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
+router.patch('/:ownerId/instructions/:id', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM instructions WHERE id = ? AND owner_id = ?').get(req.params.id, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Instruction not found.' });
 
   const { status } = req.body || {};
   if (status !== 'open' && status !== 'done') {
     return res.status(400).json({ error: 'Invalid status.' });
   }
-  db.prepare('UPDATE instructions SET status = ? WHERE id = ?').run(status, row.id);
+  await db.prepare('UPDATE instructions SET status = ? WHERE id = ?').run(status, row.id);
 
-  const updated = db.prepare(`
+  const updated = await db.prepare(`
     SELECT i.*, u.name as created_by_name FROM instructions i JOIN users u ON u.id = i.created_by WHERE i.id = ?
   `).get(row.id);
   res.json({ instruction: serializeInstruction(updated) });
 });
 
-router.get('/:ownerId/comms', requirePaAccess, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:ownerId/comms', requirePaAccess, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT e.*, u.name as sent_by_name FROM emails e
     LEFT JOIN users u ON u.id = e.sent_by_user_id
     WHERE e.owner_id = ? AND e.category = 'comms'
@@ -450,7 +454,7 @@ router.get('/:ownerId/comms', requirePaAccess, (req, res) => {
   });
 });
 
-router.post('/:ownerId/comms', requirePaAccess, (req, res) => {
+router.post('/:ownerId/comms', requirePaAccess, async (req, res) => {
   const { toEmail, subject, body } = req.body || {};
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!toEmail || !EMAIL_RE.test(String(toEmail).trim())) {
@@ -459,7 +463,7 @@ router.post('/:ownerId/comms', requirePaAccess, (req, res) => {
   if (!subject || !String(subject).trim()) return res.status(400).json({ error: 'Subject is required.' });
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Message body is required.' });
 
-  sendEmail({
+  await sendEmail({
     ownerId: req.principal.id,
     sentByUserId: req.user.id,
     toEmail: String(toEmail).trim().toLowerCase(),
@@ -471,14 +475,14 @@ router.post('/:ownerId/comms', requirePaAccess, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-router.post('/:ownerId/ai-assist/parse', requirePaAccess, (req, res) => {
+router.post('/:ownerId/ai-assist/parse', requirePaAccess, async (req, res) => {
   const { message } = req.body || {};
   if (!message || !String(message).trim()) {
     return res.status(400).json({ error: 'Please describe what you want to schedule.' });
   }
 
-  const contacts = db.prepare('SELECT id, name, email FROM contacts WHERE owner_id = ?').all(req.principal.id);
-  const meetingTypes = db.prepare('SELECT id, name, slug, duration_minutes, location_type FROM meeting_types WHERE owner_id = ? AND is_active = 1 ORDER BY created_at').all(req.principal.id);
+  const contacts = await db.prepare('SELECT id, name, email FROM contacts WHERE owner_id = ?').all(req.principal.id);
+  const meetingTypes = await db.prepare('SELECT id, name, slug, duration_minutes, location_type FROM meeting_types WHERE owner_id = ? AND is_active = 1 ORDER BY created_at').all(req.principal.id);
 
   if (meetingTypes.length === 0) {
     return res.status(400).json({ error: 'No active meeting types to schedule against.' });
@@ -495,7 +499,7 @@ router.post('/:ownerId/ai-assist/parse', requirePaAccess, (req, res) => {
     buffer_before_minutes: 0,
     buffer_after_minutes: 0,
   };
-  const allSlots = getOpenSlots({ owner: req.principal, meetingType });
+  const allSlots = await getOpenSlots({ owner: req.principal, meetingType });
   const filtered = filterSlots(allSlots, hints, req.principal.timezone);
   const candidates = (filtered.length > 0 ? filtered : allSlots).slice(0, 5);
 
@@ -510,9 +514,9 @@ router.post('/:ownerId/ai-assist/parse', requirePaAccess, (req, res) => {
 // A PA directly creating a booking is itself the approval — always lands as
 // 'confirmed', regardless of the meeting type's tier, unlike the public
 // booking flow. Still requires an explicit click; nothing here is automatic.
-router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
+router.post('/:ownerId/ai-assist/book', requirePaAccess, async (req, res) => {
   const { meetingTypeId, startAt, contactEmail, contactName } = req.body || {};
-  const meetingType = db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ? AND is_active = 1').get(meetingTypeId, req.principal.id);
+  const meetingType = await db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ? AND is_active = 1').get(meetingTypeId, req.principal.id);
   if (!meetingType) return res.status(404).json({ error: 'Meeting type not found.' });
   if (!contactEmail || !EMAIL_RE.test(String(contactEmail).trim())) {
     return res.status(400).json({ error: 'A valid contact email is required.' });
@@ -522,7 +526,7 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
     return res.status(400).json({ error: 'Please choose a valid future time.' });
   }
 
-  const stillOpen = getOpenSlots({ owner: req.principal, meetingType }).some((s) => s.startUtc.getTime() === start.getTime());
+  const stillOpen = (await getOpenSlots({ owner: req.principal, meetingType })).some((s) => s.startUtc.getTime() === start.getTime());
   if (!stillOpen) return res.status(409).json({ error: 'That slot was just taken. Please pick another time.' });
 
   const end = new Date(start.getTime() + meetingType.duration_minutes * 60000);
@@ -531,20 +535,20 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
   const videoRoom = meetingType.location_type === 'video' ? `kairos-${crypto.randomBytes(8).toString('hex')}` : null;
   const id = crypto.randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO bookings (id, meeting_type_id, owner_id, booker_name, booker_email, booker_timezone, start_at, end_at, status, video_room, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)
   `).run(id, meetingType.id, req.principal.id, cleanName, cleanEmail, req.principal.timezone, start.toISOString(), end.toISOString(), videoRoom, new Date().toISOString());
 
-  const existingContact = db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
+  const existingContact = await db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
   if (!existingContact) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, created_at, updated_at)
       VALUES (?, ?, ?, ?, '', 'professional', ?, ?)
     `).run(crypto.randomUUID(), req.principal.id, cleanEmail, cleanName, new Date().toISOString(), new Date().toISOString());
   }
 
-  sendEmail({
+  await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: cleanEmail, relatedBookingId: id, category: 'transactional',
     subject: `Confirmed: ${meetingType.name} with ${req.principal.name}`,
     body: `Hi ${cleanName},\n\nYou're confirmed for ${formatForEmail(start.toISOString(), req.principal.timezone)} (${req.principal.timezone}).\n\nManage this booking: /book/manage/${id}`,
@@ -558,7 +562,7 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, (req, res) => {
 // times: taking a first pass at the writing itself so the PA edits instead
 // of starting from a blank box. Optional contactId/bookingId pull in real
 // names and times; without them the draft stays generic.
-router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, (req, res) => {
+router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, async (req, res) => {
   const { instruction, contactId, bookingId } = req.body || {};
   if (!instruction || !String(instruction).trim()) {
     return res.status(400).json({ error: 'Describe what the message needs to say.' });
@@ -566,18 +570,18 @@ router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, (req, res) => 
 
   let contact = null;
   if (contactId) {
-    contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(contactId, req.principal.id);
+    contact = await db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?').get(contactId, req.principal.id);
   }
 
   let booking = null;
   if (bookingId) {
-    booking = db.prepare(`
+    booking = await db.prepare(`
       SELECT b.*, mt.name as meeting_type_name FROM bookings b
       JOIN meeting_types mt ON mt.id = b.meeting_type_id
       WHERE b.id = ? AND b.owner_id = ?
     `).get(bookingId, req.principal.id);
     if (booking && !contact) {
-      contact = db.prepare('SELECT * FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, booking.booker_email);
+      contact = await db.prepare('SELECT * FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, booking.booker_email);
     }
   }
 

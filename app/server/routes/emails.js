@@ -1,8 +1,9 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 function serialize(e) {
@@ -17,8 +18,8 @@ function serialize(e) {
   };
 }
 
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM emails WHERE owner_id = ? ORDER BY created_at DESC LIMIT 100').all(req.user.id);
+router.get('/', async (req, res) => {
+  const rows = await db.prepare('SELECT * FROM emails WHERE owner_id = ? ORDER BY created_at DESC LIMIT 100').all(req.user.id);
   res.json({ emails: rows.map(serialize) });
 });
 

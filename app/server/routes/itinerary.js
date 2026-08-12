@@ -1,11 +1,12 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const { isValidTimeZone } = require('../lib/timezone');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 const KINDS = new Set(['flight', 'train', 'car', 'hotel', 'meeting', 'meal', 'personal', 'call', 'note']);
@@ -82,7 +83,7 @@ function serializeBooking(b, ownerTz) {
  * Everything on the principal's plate for a given day, in their timezone:
  * itinerary items plus confirmed bookings, merged and ordered.
  */
-function buildDay(principal, dateKey) {
+async function buildDay(principal, dateKey) {
   const tz = principal.timezone || 'UTC';
 
   // Pull a generous window and filter by day-in-zone rather than trying to
@@ -91,12 +92,12 @@ function buildDay(principal, dateKey) {
   const from = new Date(windowStart.getTime() - 36 * 3600 * 1000).toISOString();
   const to = new Date(windowStart.getTime() + 60 * 3600 * 1000).toISOString();
 
-  const items = db.prepare(`
+  const items = await db.prepare(`
     SELECT * FROM itinerary_items
     WHERE owner_id = ? AND start_at >= ? AND start_at <= ?
   `).all(principal.id, from, to);
 
-  const bookings = db.prepare(`
+  const bookings = await db.prepare(`
     SELECT b.*, mt.name AS meeting_type_name FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
     WHERE b.owner_id = ? AND b.status = 'confirmed' AND b.start_at >= ? AND b.start_at <= ?
@@ -115,7 +116,7 @@ function buildDay(principal, dateKey) {
   return entries;
 }
 
-router.get('/:ownerId/day', requirePaAccess, (req, res) => {
+router.get('/:ownerId/day', requirePaAccess, async (req, res) => {
   const tz = req.principal.timezone || 'UTC';
   const date = req.query.date || new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -126,13 +127,13 @@ router.get('/:ownerId/day', requirePaAccess, (req, res) => {
     date,
     timezone: tz,
     principal: { id: req.principal.id, name: req.principal.name },
-    entries: buildDay(req.principal, date),
+    entries: await buildDay(req.principal, date),
   });
 });
 
 // A compact multi-day outlook, so a PA can see the shape of the week without
 // clicking through seven days.
-router.get('/:ownerId/upcoming', requirePaAccess, (req, res) => {
+router.get('/:ownerId/upcoming', requirePaAccess, async (req, res) => {
   const tz = req.principal.timezone || 'UTC';
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 30);
   const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
@@ -142,13 +143,13 @@ router.get('/:ownerId/upcoming', requirePaAccess, (req, res) => {
     const d = new Date(`${todayKey}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() + i);
     const key = d.toISOString().slice(0, 10);
-    const entries = buildDay(req.principal, key);
+    const entries = await buildDay(req.principal, key);
     out.push({ date: key, count: entries.length, entries });
   }
   res.json({ timezone: tz, days: out });
 });
 
-router.post('/:ownerId/items', requirePaAccess, (req, res) => {
+router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   const { kind, title, startAt, endAt, startTimezone, endTimezone,
     location, destination, reference, notes } = req.body || {};
 
@@ -166,7 +167,7 @@ router.post('/:ownerId/items', requirePaAccess, (req, res) => {
   }
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO itinerary_items
       (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
        location, destination, reference, notes, created_at)
@@ -177,12 +178,12 @@ router.post('/:ownerId/items', requirePaAccess, (req, res) => {
     String(location || '').trim(), String(destination || '').trim(),
     String(reference || '').trim(), String(notes || '').trim(), new Date().toISOString());
 
-  const row = db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
   res.status(201).json({ item: serializeItem(row, req.principal.timezone || 'UTC') });
 });
 
-router.patch('/:ownerId/items/:itemId', requirePaAccess, (req, res) => {
-  const row = db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
     .get(req.params.itemId, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Item not found.' });
 
@@ -212,35 +213,35 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(row.id);
-  db.prepare(`UPDATE itinerary_items SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  const updated = db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(row.id);
+  await db.prepare(`UPDATE itinerary_items SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  const updated = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(row.id);
   res.json({ item: serializeItem(updated, req.principal.timezone || 'UTC') });
 });
 
-router.delete('/:ownerId/items/:itemId', requirePaAccess, (req, res) => {
-  const row = db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+router.delete('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
     .get(req.params.itemId, req.principal.id);
   if (!row) return res.status(404).json({ error: 'Item not found.' });
-  db.prepare('DELETE FROM itinerary_items WHERE id = ?').run(row.id);
+  await db.prepare('DELETE FROM itinerary_items WHERE id = ?').run(row.id);
   res.status(204).end();
 });
 
 // Pull a confirmed booking onto the itinerary so it can carry the things a
 // booking record has no room for — the car that gets them there, the room
 // number, what to read beforehand.
-router.post('/:ownerId/items/from-booking/:bookingId', requirePaAccess, (req, res) => {
-  const booking = db.prepare(`
+router.post('/:ownerId/items/from-booking/:bookingId', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare(`
     SELECT b.*, mt.name AS meeting_type_name FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
     WHERE b.id = ? AND b.owner_id = ?
   `).get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  const existing = db.prepare('SELECT id FROM itinerary_items WHERE booking_id = ?').get(booking.id);
+  const existing = await db.prepare('SELECT id FROM itinerary_items WHERE booking_id = ?').get(booking.id);
   if (existing) return res.status(409).json({ error: "That booking is already on the itinerary." });
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO itinerary_items
       (id, owner_id, created_by, kind, title, start_at, end_at, location, booking_id, created_at)
     VALUES (?, ?, ?, 'meeting', ?, ?, ?, ?, ?, ?)
@@ -249,7 +250,7 @@ router.post('/:ownerId/items/from-booking/:bookingId', requirePaAccess, (req, re
     booking.start_at, booking.end_at, booking.video_room ? 'Video call' : '',
     booking.id, new Date().toISOString());
 
-  const row = db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
   res.status(201).json({ item: serializeItem(row, req.principal.timezone || 'UTC') });
 });
 

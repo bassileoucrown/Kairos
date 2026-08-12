@@ -14,7 +14,7 @@ bookings through an approval queue instead of straight onto your calendar.
   No UI framework dependency — a small hand-rolled design system in `src/styles.css`.
 
 This mirrors the blueprint's target stack (React + Vite frontend, Postgres-backed backend) without
-requiring a Supabase project to start developing. See "Moving to Supabase" below for the swap path.
+requiring a database to be installed for local development — see "The database" below.
 
 ## Running locally
 
@@ -43,18 +43,39 @@ cd app/client && npm run build
 cd ../server && npm start     # serves the built client + API on one port (4000)
 ```
 
+## The database — two backends, one interface
+
+`server/lib/db.js` is the only file that knows which database is in use.
+
+- **`DATABASE_URL` set → Postgres.** What production uses.
+- **unset → a local SQLite file.** What `npm run dev` uses, so local development still needs no
+  database installed.
+
+Both expose the same shape — `await db.prepare(sql).get(...args)` — so no route knows the
+difference, and the SQL stays in the portable subset both dialects accept. `db.tx()` runs a
+transaction on a single pooled connection, which matters on Postgres where issuing BEGIN and COMMIT
+as separate pool queries could land on different connections and silently not transact.
+
+Why this exists: Render web instances have an **ephemeral filesystem**. A SQLite file there is
+wiped on every restart and redeploy, taking every account with it — which presents to a user as
+*"the app doesn't recognise my email"*, and then as *"there's no password recovery"* when the reset
+email for a deleted account never arrives. Postgres fixes both at the root.
+
+Two details the port had to get right, both verified by running the same suite against both
+backends: node-postgres returns `int8`/`numeric` as **strings** (so `MAX(record_seq)` of `2` plus 1
+would be `"21"`, not `3` — the type parsers coerce them), and Postgres allows a bare column alias in
+`ORDER BY` but **not** one nested inside an expression, where SQLite is happy either way.
+
 ## Deploying
 
-`render.yaml` at the repo root is a Render Blueprint for exactly the above: one web service where
-the Express server serves the built client too. In the Render dashboard go to **New → Blueprint**,
-pick this repo, and apply — build and start commands, and the Node 22 requirement for
-`node:sqlite`, are already set.
+`render.yaml` at the repo root is a Render Blueprint: one web service plus a managed Postgres
+instance, with `DATABASE_URL` wired between them. In the Render dashboard go to
+**New → Blueprint**, pick this repo, and apply.
 
-Two things to know on the free plan: instances sleep after ~15 minutes idle (first request back is
-slow), and the filesystem is ephemeral with no persistent disk, so `server/data/kairos.sqlite` —
-and every account in it — resets on each restart or deploy. Fine for trying the app out; for data
-that sticks around, use a paid instance with a disk mounted at the data directory, or port `db.js`
-to Postgres (see "Moving to Supabase" below).
+On the free plan, instances still sleep after ~15 minutes idle (the first request back is slow), but
+data now survives that, along with restarts and redeploys. Render's free Postgres expires after a
+fixed period and is then deleted, so move to a paid instance before it holds anything you'd mind
+losing.
 
 ## Phase 1 — the core loop (complete)
 
@@ -335,8 +356,9 @@ past Phase 2B.
 
 ## Moving to Supabase
 
-`app/server/lib/db.js` is the only file that knows about SQLite. The schema in `schema.sql` was
-written to stay close to standard SQL (explicit foreign keys, ISO-8601 text timestamps, UUID text
-ids) specifically so a Postgres/Supabase port is a matter of re-pointing this module at a Postgres
-client and enabling Row Level Security per the blueprint's security architecture (Section 5) — not
-a rewrite of the route or slot-computation logic, which talk to `db` through plain SQL calls.
+The Postgres port is done, so this is now a connection-string change rather than a rewrite: point
+`DATABASE_URL` at a Supabase project and the app runs against it unmodified. What remains
+Supabase-specific is enabling Row Level Security per the blueprint's security architecture
+(Section 5) — the application already enforces every isolation rule in `lib/spaceAccess.js` and
+`lib/paAccess.js`, but RLS would enforce them a second time at the database, so a bug in a route
+could not leak across a boundary.

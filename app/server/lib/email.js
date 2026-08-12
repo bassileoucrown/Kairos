@@ -9,7 +9,7 @@ const db = require('./db');
 // without a real provider.
 async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject, body, category = 'transactional', relatedBookingId = null }) {
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO emails (id, owner_id, sent_by_user_id, to_email, subject, body, category, related_booking_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, ownerId, sentByUserId, toEmail, subject, body, category, relatedBookingId, new Date().toISOString());

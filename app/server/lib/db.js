@@ -1,36 +1,178 @@
 const fs = require('fs');
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'kairos.sqlite');
+// One database interface, two backends.
+//
+// Set DATABASE_URL and every query runs against Postgres, which is what
+// production needs: Render's free web instances have an ephemeral filesystem,
+// so a SQLite file there is wiped on every restart and redeploy — accounts and
+// all. Leave it unset and it falls back to a local SQLite file, so `npm run
+// dev` still needs no database installed.
+//
+// The API is deliberately the same shape both ways —
+// `await db.prepare(sql).get(...args)` — so route code never learns which
+// backend it is talking to, and the SQL stays in the portable subset both
+// dialects accept.
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+const USE_PG = !!process.env.DATABASE_URL;
+const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
 
-const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA foreign_keys = ON;');
+let impl;
 
-const schema = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
-db.exec(schema);
+if (USE_PG) {
+  const { Pool, types } = require('pg');
 
-// Lightweight migration for columns added after a table already existed —
-// CREATE TABLE IF NOT EXISTS above won't retrofit new columns onto an
-// existing dev database.
-function ensureColumn(table, column, definition) {
-  const existing = db.prepare(`PRAGMA table_info(${table})`).all();
-  if (!existing.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  // node-postgres hands back int8 and numeric as strings, because they can
+  // exceed what a JS number holds safely. Every such column here is a COUNT,
+  // a SUM of a CASE, or MAX(record_seq) — all small integers — and leaving
+  // them as strings breaks arithmetic silently: MAX(seq) of "2" plus 1 is
+  // "21", not 3. Parse them as numbers so both backends agree.
+  types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));   // int8
+  types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));       // numeric
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    // Managed Postgres (Render, Supabase, Neon) terminates TLS with a
+    // certificate this container has no root for; the connection is still
+    // encrypted, we just can't verify the chain from here.
+    ssl: process.env.DATABASE_SSL === 'off' ? false : { rejectUnauthorized: false },
+    max: Number(process.env.DATABASE_POOL_MAX || 10),
+  });
+
+  // SQLite uses `?` placeholders; Postgres uses $1..$n. Converting here keeps
+  // every call site written one way.
+  function toPgPlaceholders(sql) {
+    let i = 0;
+    return sql.replace(/\?/g, () => `$${++i}`);
   }
-}
-ensureColumn('contacts', 'birthday', 'TEXT');
-ensureColumn('contacts', 'anniversary', 'TEXT');
-ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
-// threads predates projects/stages by one phase, so retrofit the links.
-ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
-ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
-ensureColumn('project_stages', 'reminder_stage', 'TEXT');
-ensureColumn('memberships', 'can_manage_scheduling', 'INTEGER NOT NULL DEFAULT 1');
 
-module.exports = db;
+  async function query(sql, args, client) {
+    const runner = client || pool;
+    return runner.query(toPgPlaceholders(sql), args);
+  }
+
+  impl = {
+    prepare(sql) {
+      return {
+        async get(...args) { return (await query(sql, args)).rows[0]; },
+        async all(...args) { return (await query(sql, args)).rows; },
+        async run(...args) {
+          const r = await query(sql, args);
+          return { changes: r.rowCount };
+        },
+      };
+    },
+    async exec(sql) { await pool.query(sql); },
+    /**
+     * Runs fn inside a transaction on a single pooled connection.
+     * Issuing BEGIN and COMMIT as separate pool queries would be a real bug:
+     * they could land on different connections and silently not transact.
+     */
+    async tx(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const scoped = {
+          prepare(sql) {
+            return {
+              async get(...args) { return (await query(sql, args, client)).rows[0]; },
+              async all(...args) { return (await query(sql, args, client)).rows; },
+              async run(...args) {
+                const r = await query(sql, args, client);
+                return { changes: r.rowCount };
+              },
+            };
+          },
+        };
+        const result = await fn(scoped);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+    async columnExists(table, column) {
+      const r = await pool.query(
+        'SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2',
+        [table, column],
+      );
+      return r.rowCount > 0;
+    },
+    async close() { await pool.end(); },
+    dialect: 'postgres',
+  };
+} else {
+  const { DatabaseSync } = require('node:sqlite');
+  const DATA_DIR = path.join(__dirname, '..', 'data');
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const sqlite = new DatabaseSync(path.join(DATA_DIR, 'kairos.sqlite'));
+  sqlite.exec('PRAGMA foreign_keys = ON;');
+
+  // Wrapped in promises so the calling code is identical to the Postgres path
+  // — the whole point of the adapter.
+  impl = {
+    prepare(sql) {
+      const stmt = () => sqlite.prepare(sql);
+      return {
+        async get(...args) { return stmt().get(...args); },
+        async all(...args) { return stmt().all(...args); },
+        async run(...args) { return stmt().run(...args); },
+      };
+    },
+    async exec(sql) { sqlite.exec(sql); },
+    async tx(fn) {
+      sqlite.exec('BEGIN');
+      try {
+        const result = await fn(impl);
+        sqlite.exec('COMMIT');
+        return result;
+      } catch (err) {
+        sqlite.exec('ROLLBACK');
+        throw err;
+      }
+    },
+    async columnExists(table, column) {
+      const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all();
+      return cols.some((c) => c.name === column);
+    },
+    async close() { sqlite.close(); },
+    dialect: 'sqlite',
+  };
+}
+
+// Retrofits columns added after a table already existed — CREATE TABLE IF NOT
+// EXISTS won't do it.
+async function ensureColumn(table, column, definition) {
+  if (await impl.columnExists(table, column)) return;
+  await impl.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+let readyPromise = null;
+/** Creates the schema and applies migrations. Safe to await repeatedly. */
+function ready() {
+  if (!readyPromise) {
+    readyPromise = (async () => {
+      await impl.exec(schemaSql);
+      await ensureColumn('contacts', 'birthday', 'TEXT');
+      await ensureColumn('contacts', 'anniversary', 'TEXT');
+      await ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
+      await ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
+      await ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
+      await ensureColumn('project_stages', 'reminder_stage', 'TEXT');
+      await ensureColumn('memberships', 'can_manage_scheduling', 'INTEGER NOT NULL DEFAULT 1');
+    })();
+  }
+  return readyPromise;
+}
+
+module.exports = {
+  prepare: (sql) => impl.prepare(sql),
+  exec: (sql) => impl.exec(sql),
+  tx: (fn) => impl.tx(fn),
+  close: () => impl.close(),
+  dialect: impl.dialect,
+  ready,
+};

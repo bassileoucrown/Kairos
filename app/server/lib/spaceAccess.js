@@ -29,8 +29,8 @@ function roleCanDelegate(accountCategory) {
   return accountCategory === 'chief_of_staff';
 }
 
-function getSpace(spaceId) {
-  return db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId);
+async function getSpace(spaceId) {
+  return await db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId);
 }
 
 /**
@@ -40,8 +40,8 @@ function getSpace(spaceId) {
  * existence of a space is itself information the owner hasn't shared
  * (isolation rule 7).
  */
-function resolveAccess(spaceId, userId) {
-  const space = getSpace(spaceId);
+async function resolveAccess(spaceId, userId) {
+  const space = await getSpace(spaceId);
   if (!space) return null;
 
   if (space.owner_id === userId) {
@@ -53,7 +53,7 @@ function resolveAccess(spaceId, userId) {
   // future refactor — still can't open a door that is supposed not to exist.
   if (space.context === 'private') return null;
 
-  const member = db.prepare('SELECT * FROM space_members WHERE space_id = ? AND user_id = ?')
+  const member = await db.prepare('SELECT * FROM space_members WHERE space_id = ? AND user_id = ?')
     .get(spaceId, userId);
   if (!member) return null;
 
@@ -67,8 +67,8 @@ function resolveAccess(spaceId, userId) {
 }
 
 /** Every space the user can see: those they own, plus those they're a member of. */
-function listVisibleSpaces(userId) {
-  return db.prepare(`
+async function listVisibleSpaces(userId) {
+  return await db.prepare(`
     SELECT s.*, 'owner' AS viewer_role
     FROM spaces s
     WHERE s.owner_id = ?
@@ -86,7 +86,7 @@ function listVisibleSpaces(userId) {
  * assistants, filtered by the space's auto_delegate_roles. Private spaces are
  * skipped outright.
  */
-function applyRoleDefaults(space) {
+async function applyRoleDefaults(space) {
   if (space.context === 'private') return 0;
   const roles = parseRoles(space.auto_delegate_roles);
   if (roles.length === 0) return 0;
@@ -94,22 +94,25 @@ function applyRoleDefaults(space) {
   // The existing principal<->assistant relationship (memberships) is what
   // makes someone an assistant at all; space_members is the per-space grant
   // layered on top of it.
-  const assistants = db.prepare(`
+  const assistants = await db.prepare(`
     SELECT u.id, u.account_category
     FROM memberships m
     JOIN users u ON u.id = m.member_user_id
     WHERE m.owner_id = ? AND m.status = 'active' AND m.member_user_id IS NOT NULL
   `).all(space.owner_id);
 
+  // ON CONFLICT DO NOTHING is the portable spelling; SQLite understands it too,
+  // where INSERT OR IGNORE would not survive the move to Postgres.
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO space_members (id, space_id, user_id, role, can_delegate, created_at)
+    INSERT INTO space_members (id, space_id, user_id, role, can_delegate, created_at)
     VALUES (?, ?, ?, 'member', ?, ?)
+    ON CONFLICT (space_id, user_id) DO NOTHING
   `);
 
   let added = 0;
   for (const a of assistants) {
     if (!roles.includes(a.account_category)) continue;
-    insert.run(
+    await insert.run(
       crypto.randomUUID(), space.id, a.id,
       roleCanDelegate(a.account_category) ? 1 : 0,
       new Date().toISOString(),
@@ -120,8 +123,8 @@ function applyRoleDefaults(space) {
 }
 
 /** Express guard: attaches req.access for :spaceId, 404s when not visible. */
-function requireSpaceAccess(req, res, next) {
-  const access = resolveAccess(req.params.spaceId, req.user.id);
+async function requireSpaceAccess(req, res, next) {
+  const access = await resolveAccess(req.params.spaceId, req.user.id);
   // 404 rather than 403 — see resolveAccess: never confirm a space exists to
   // someone who isn't in it.
   if (!access) return res.status(404).json({ error: 'Space not found.' });

@@ -29,9 +29,9 @@ function serializeRule(r) {
   return { id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time };
 }
 
-function listAvailability(ownerId) {
-  return db.prepare('SELECT * FROM availability_rules WHERE owner_id = ? ORDER BY day_of_week, start_time')
-    .all(ownerId).map(serializeRule);
+async function listAvailability(ownerId) {
+  return (await db.prepare('SELECT * FROM availability_rules WHERE owner_id = ? ORDER BY day_of_week, start_time')
+    .all(ownerId)).map(serializeRule);
 }
 
 /**
@@ -39,7 +39,7 @@ function listAvailability(ownerId) {
  * day, an evening window); they simply must not overlap, since overlapping
  * windows would emit the same slot twice on the booking page.
  */
-function replaceAvailability(ownerId, rules) {
+async function replaceAvailability(ownerId, rules) {
   if (!Array.isArray(rules)) throw new SchedulingError('Expected a list of availability rules.');
 
   for (const r of rules) {
@@ -68,24 +68,20 @@ function replaceAvailability(ownerId, rules) {
     }
   }
 
-  const del = db.prepare('DELETE FROM availability_rules WHERE owner_id = ?');
-  const insert = db.prepare(
-    'INSERT INTO availability_rules (id, owner_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
-  );
-
-  db.exec('BEGIN');
-  try {
-    del.run(ownerId);
+  // Wiping the week and rewriting it must be one transaction — a failure
+  // halfway through would otherwise leave the principal bookable at no times
+  // at all. db.tx pins this to a single connection, which matters on Postgres
+  // where BEGIN and COMMIT issued separately could land on different ones.
+  await db.tx(async (t) => {
+    await t.prepare('DELETE FROM availability_rules WHERE owner_id = ?').run(ownerId);
     for (const r of rules) {
-      insert.run(crypto.randomUUID(), ownerId, r.dayOfWeek, r.startTime, r.endTime);
+      await t.prepare(
+        'INSERT INTO availability_rules (id, owner_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
+      ).run(crypto.randomUUID(), ownerId, r.dayOfWeek, r.startTime, r.endTime);
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+  });
 
-  return listAvailability(ownerId);
+  return await listAvailability(ownerId);
 }
 
 // ---------- Meeting types ----------
@@ -106,12 +102,12 @@ function serializeMeetingType(mt) {
   };
 }
 
-function uniqueSlug(ownerId, name) {
+async function uniqueSlug(ownerId, name) {
   const base = slugify(name) || 'meeting';
   let candidate = base;
   let n = 1;
   const exists = db.prepare('SELECT 1 FROM meeting_types WHERE owner_id = ? AND slug = ?');
-  while (exists.get(ownerId, candidate)) {
+  while (await exists.get(ownerId, candidate)) {
     n += 1;
     candidate = `${base}-${n}`;
   }
@@ -123,12 +119,12 @@ function normalizeTier(accessTier) {
   return [1, 2, 3, 4].includes(n) ? n : 1;
 }
 
-function listMeetingTypes(ownerId) {
-  return db.prepare('SELECT * FROM meeting_types WHERE owner_id = ? ORDER BY created_at')
-    .all(ownerId).map(serializeMeetingType);
+async function listMeetingTypes(ownerId) {
+  return (await db.prepare('SELECT * FROM meeting_types WHERE owner_id = ? ORDER BY created_at')
+    .all(ownerId)).map(serializeMeetingType);
 }
 
-function createMeetingType(ownerId, body = {}) {
+async function createMeetingType(ownerId, body = {}) {
   const { name, durationMinutes, description, locationType, bufferBeforeMinutes, bufferAfterMinutes, accessTier } = body;
   if (!name || !String(name).trim()) throw new SchedulingError('Give the meeting type a name.');
 
@@ -142,8 +138,8 @@ function createMeetingType(ownerId, body = {}) {
   const tier = normalizeTier(accessTier);
 
   const id = crypto.randomUUID();
-  const slug = uniqueSlug(ownerId, name);
-  db.prepare(`
+  const slug = await uniqueSlug(ownerId, name);
+  await db.prepare(`
     INSERT INTO meeting_types
       (id, owner_id, name, slug, duration_minutes, description, location_type,
        buffer_before_minutes, buffer_after_minutes, access_tier, color, is_active, created_at)
@@ -151,11 +147,11 @@ function createMeetingType(ownerId, body = {}) {
   `).run(id, ownerId, String(name).trim(), slug, duration, String(description || ''),
     location, bufBefore, bufAfter, tier, TIER_COLORS[tier], new Date().toISOString());
 
-  return serializeMeetingType(db.prepare('SELECT * FROM meeting_types WHERE id = ?').get(id));
+  return serializeMeetingType(await db.prepare('SELECT * FROM meeting_types WHERE id = ?').get(id));
 }
 
-function updateMeetingType(ownerId, id, body = {}) {
-  const row = db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ?').get(id, ownerId);
+async function updateMeetingType(ownerId, id, body = {}) {
+  const row = await db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ?').get(id, ownerId);
   if (!row) throw new SchedulingError('Meeting type not found.', 404);
 
   const map = {
@@ -195,21 +191,25 @@ function updateMeetingType(ownerId, id, body = {}) {
   if (updates.length === 0) throw new SchedulingError('Nothing to update.');
 
   values.push(row.id);
-  db.prepare(`UPDATE meeting_types SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  return serializeMeetingType(db.prepare('SELECT * FROM meeting_types WHERE id = ?').get(row.id));
+  await db.prepare(`UPDATE meeting_types SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  return serializeMeetingType(await db.prepare('SELECT * FROM meeting_types WHERE id = ?').get(row.id));
 }
 
-function deleteMeetingType(ownerId, id) {
-  const row = db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ?').get(id, ownerId);
+async function deleteMeetingType(ownerId, id) {
+  const row = await db.prepare('SELECT * FROM meeting_types WHERE id = ? AND owner_id = ?').get(id, ownerId);
   if (!row) throw new SchedulingError('Meeting type not found.', 404);
-  db.prepare('DELETE FROM meeting_types WHERE id = ?').run(row.id);
+  await db.prepare('DELETE FROM meeting_types WHERE id = ?').run(row.id);
 }
 
 /** Wraps a handler so SchedulingError becomes its intended HTTP response. */
 function handle(fn) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     try {
-      fn(req, res);
+      // Must await: these operations are asynchronous now, so a
+      // SchedulingError is raised inside a promise and a synchronous
+      // try/catch would let it escape as an unhandled rejection — taking the
+      // process down instead of returning the 400 the caller deserves.
+      await fn(req, res);
     } catch (err) {
       if (err instanceof SchedulingError) return res.status(err.status).json({ error: err.message });
       next(err);

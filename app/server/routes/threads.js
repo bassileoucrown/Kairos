@@ -1,11 +1,12 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { resolveAccess } = require('../lib/spaceAccess');
 const { syncStageFromRecords } = require('../lib/stageStatus');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 const RECORD_TYPES = new Set(['decision', 'approval', 'request', 'update', 'sign_off', 'blocker']);
@@ -21,10 +22,10 @@ const OPEN_STATUS_BY_TYPE = {
 // Resolves the thread and the caller's access to its space in one step. Same
 // rule as spaces: invisible and non-existent are indistinguishable to the
 // client.
-function loadThread(req, res, next) {
-  const thread = db.prepare('SELECT * FROM threads WHERE id = ?').get(req.params.threadId);
+async function loadThread(req, res, next) {
+  const thread = await db.prepare('SELECT * FROM threads WHERE id = ?').get(req.params.threadId);
   if (!thread) return res.status(404).json({ error: 'Thread not found.' });
-  const access = resolveAccess(thread.space_id, req.user.id);
+  const access = await resolveAccess(thread.space_id, req.user.id);
   if (!access) return res.status(404).json({ error: 'Thread not found.' });
   req.thread = thread;
   req.access = access;
@@ -51,8 +52,8 @@ function serializeMessage(m, acks) {
   };
 }
 
-router.get('/:threadId/messages', loadThread, (req, res) => {
-  const rows = db.prepare(`
+router.get('/:threadId/messages', loadThread, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT m.*, u.name AS author_name, p.name AS promoted_by_name
     FROM messages m
     JOIN users u ON u.id = m.author_id
@@ -61,7 +62,7 @@ router.get('/:threadId/messages', loadThread, (req, res) => {
     ORDER BY m.created_at ASC
   `).all(req.thread.id);
 
-  const acks = db.prepare(`
+  const acks = await db.prepare(`
     SELECT a.*, u.name FROM message_acks a
     JOIN users u ON u.id = a.user_id
     WHERE a.message_id IN (SELECT id FROM messages WHERE thread_id = ?)
@@ -71,7 +72,7 @@ router.get('/:threadId/messages', loadThread, (req, res) => {
   // breadcrumb and the live status the records here are driving.
   let stage = null;
   if (req.thread.stage_id) {
-    stage = db.prepare(`
+    stage = await db.prepare(`
       SELECT s.id, s.name, s.status, s.due_at, p.id AS project_id, p.name AS project_name
       FROM project_stages s JOIN projects p ON p.id = s.project_id
       WHERE s.id = ?
@@ -90,13 +91,13 @@ router.get('/:threadId/messages', loadThread, (req, res) => {
   });
 });
 
-function nextRecordSeq(threadId) {
-  const row = db.prepare("SELECT MAX(record_seq) AS max FROM messages WHERE thread_id = ? AND register = 'record'")
+async function nextRecordSeq(threadId) {
+  const row = await db.prepare("SELECT MAX(record_seq) AS max FROM messages WHERE thread_id = ? AND register = 'record'")
     .get(threadId);
   return (row?.max || 0) + 1;
 }
 
-router.post('/:threadId/messages', loadThread, (req, res) => {
+router.post('/:threadId/messages', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 
   const { body, register, recordType } = req.body || {};
@@ -108,7 +109,7 @@ router.post('/:threadId/messages', loadThread, (req, res) => {
   }
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO messages (id, thread_id, author_id, body, register, record_type, record_status, record_seq, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -116,11 +117,11 @@ router.post('/:threadId/messages', loadThread, (req, res) => {
     isRecord ? 'record' : 'note',
     isRecord ? recordType : null,
     isRecord ? OPEN_STATUS_BY_TYPE[recordType] : null,
-    isRecord ? nextRecordSeq(req.thread.id) : null,
+    isRecord ? await nextRecordSeq(req.thread.id) : null,
     new Date().toISOString(),
   );
 
-  const stage = isRecord ? syncStageFromRecords(req.thread.stage_id) : null;
+  const stage = isRecord ? await syncStageFromRecords(req.thread.stage_id) : null;
   res.status(201).json({ id, stage });
 });
 
@@ -129,10 +130,10 @@ router.post('/:threadId/messages', loadThread, (req, res) => {
 // separately. A record's weight comes from whose words it captures — which is
 // exactly why an assistant filing their principal's decision is the intended
 // use, not a loophole.
-router.post('/:threadId/messages/:messageId/promote', loadThread, (req, res) => {
+router.post('/:threadId/messages/:messageId/promote', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 
-  const note = db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
+  const note = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!note) return res.status(404).json({ error: 'Message not found.' });
   if (note.register !== 'note') return res.status(400).json({ error: 'That is already a record.' });
@@ -142,49 +143,49 @@ router.post('/:threadId/messages/:messageId/promote', loadThread, (req, res) => 
     return res.status(400).json({ error: 'Choose what kind of record this is.' });
   }
 
-  const already = db.prepare('SELECT id FROM messages WHERE promoted_from_id = ?').get(note.id);
+  const already = await db.prepare('SELECT id FROM messages WHERE promoted_from_id = ?').get(note.id);
   if (already) return res.status(409).json({ error: 'That note has already been promoted.' });
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO messages
       (id, thread_id, author_id, body, register, record_type, record_status, record_seq,
        promoted_from_id, promoted_by_id, created_at)
     VALUES (?, ?, ?, ?, 'record', ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.thread.id, note.author_id, note.body,
-    recordType, OPEN_STATUS_BY_TYPE[recordType], nextRecordSeq(req.thread.id),
+    recordType, OPEN_STATUS_BY_TYPE[recordType], await nextRecordSeq(req.thread.id),
     note.id, req.user.id, new Date().toISOString(),
   );
 
-  res.status(201).json({ id, stage: syncStageFromRecords(req.thread.stage_id) });
+  res.status(201).json({ id, stage: await syncStageFromRecords(req.thread.stage_id) });
 });
 
 // First acknowledgement freezes the body. After that a decision can only be
 // changed by superseding it, so what people agreed to can't be edited out from
 // under them.
-router.post('/:threadId/messages/:messageId/ack', loadThread, (req, res) => {
-  const message = db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
+router.post('/:threadId/messages/:messageId/ack', loadThread, async (req, res) => {
+  const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
   if (message.register !== 'record') return res.status(400).json({ error: 'Only records are acknowledged.' });
 
   const now = new Date().toISOString();
   try {
-    db.prepare('INSERT INTO message_acks (id, message_id, user_id, acked_at) VALUES (?, ?, ?, ?)')
+    await db.prepare('INSERT INTO message_acks (id, message_id, user_id, acked_at) VALUES (?, ?, ?, ?)')
       .run(crypto.randomUUID(), message.id, req.user.id, now);
   } catch {
     return res.status(409).json({ error: 'You have already acknowledged this.' });
   }
 
   if (!message.locked_at) {
-    db.prepare('UPDATE messages SET locked_at = ? WHERE id = ?').run(now, message.id);
+    await db.prepare('UPDATE messages SET locked_at = ? WHERE id = ?').run(now, message.id);
   }
   res.json({ ok: true, locked: true });
 });
 
-router.patch('/:threadId/messages/:messageId', loadThread, (req, res) => {
-  const message = db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
+router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {
+  const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
   if (message.author_id !== req.user.id) {
@@ -199,17 +200,17 @@ router.patch('/:threadId/messages/:messageId', loadThread, (req, res) => {
   const { body } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write something first.' });
 
-  db.prepare('UPDATE messages SET body = ?, edited_at = ? WHERE id = ?')
+  await db.prepare('UPDATE messages SET body = ?, edited_at = ? WHERE id = ?')
     .run(String(body).trim(), new Date().toISOString(), message.id);
   res.json({ ok: true });
 });
 
 // The escape hatch from immutability: a new record that replaces a locked one,
 // leaving both in the history.
-router.post('/:threadId/messages/:messageId/supersede', loadThread, (req, res) => {
+router.post('/:threadId/messages/:messageId/supersede', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 
-  const old = db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
+  const old = await db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
     .get(req.params.messageId, req.thread.id);
   if (!old) return res.status(404).json({ error: 'Record not found.' });
 
@@ -227,18 +228,18 @@ router.post('/:threadId/messages/:messageId/supersede', loadThread, (req, res) =
   const newType = recordType || old.record_type;
 
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO messages
       (id, thread_id, author_id, body, register, record_type, record_status, record_seq, supersedes_id, created_at)
     VALUES (?, ?, ?, ?, 'record', ?, ?, ?, ?, ?)
   `).run(id, req.thread.id, req.user.id, String(body).trim(), newType,
-    OPEN_STATUS_BY_TYPE[newType], nextRecordSeq(req.thread.id), old.id, new Date().toISOString());
+    OPEN_STATUS_BY_TYPE[newType], await nextRecordSeq(req.thread.id), old.id, new Date().toISOString());
 
-  db.prepare("UPDATE messages SET record_status = 'superseded' WHERE id = ?").run(old.id);
-  res.status(201).json({ id, stage: syncStageFromRecords(req.thread.stage_id) });
+  await db.prepare("UPDATE messages SET record_status = 'superseded' WHERE id = ?").run(old.id);
+  res.status(201).json({ id, stage: await syncStageFromRecords(req.thread.stage_id) });
 });
 
-router.post('/:threadId/messages/:messageId/status', loadThread, (req, res) => {
+router.post('/:threadId/messages/:messageId/status', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   const { status } = req.body || {};
   // 'resolved' exists for Blockers, where "accepted" and "declined" are both
@@ -246,12 +247,12 @@ router.post('/:threadId/messages/:messageId/status', loadThread, (req, res) => {
   if (!['accepted', 'declined', 'resolved'].includes(status)) {
     return res.status(400).json({ error: 'Status must be accepted, declined, or resolved.' });
   }
-  const message = db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
+  const message = await db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Record not found.' });
 
-  db.prepare('UPDATE messages SET record_status = ? WHERE id = ?').run(status, message.id);
-  res.json({ ok: true, stage: syncStageFromRecords(req.thread.stage_id) });
+  await db.prepare('UPDATE messages SET record_status = ? WHERE id = ?').run(status, message.id);
+  res.json({ ok: true, stage: await syncStageFromRecords(req.thread.stage_id) });
 });
 
 module.exports = router;

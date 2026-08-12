@@ -1,8 +1,9 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
 function serialize(b) {
@@ -22,7 +23,7 @@ function serialize(b) {
   };
 }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { scope } = req.query;
   const now = new Date().toISOString();
   let query = `
@@ -46,14 +47,14 @@ router.get('/', (req, res) => {
   }
   query += ' ORDER BY b.start_at ASC';
 
-  const rows = db.prepare(query).all(...params);
+  const rows = await db.prepare(query).all(...params);
   res.json({ bookings: rows.map(serialize) });
 });
 
-router.post('/:id/cancel', (req, res) => {
-  const row = db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
+router.post('/:id/cancel', async (req, res) => {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Booking not found.' });
-  db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(row.id);
+  await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(row.id);
   res.status(204).end();
 });
 

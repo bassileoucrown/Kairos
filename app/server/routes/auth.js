@@ -1,4 +1,5 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const {
@@ -23,7 +24,7 @@ function isResetRateLimited(email) {
   return timestamps.length > 3;
 }
 
-const router = express.Router();
+const router = asyncRouter();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ACCOUNT_CATEGORIES = new Set(['principal', 'pa', 'ea', 'chief_of_staff']);
@@ -40,19 +41,19 @@ function publicUser(u) {
   };
 }
 
-function uniqueSlugFromName(name) {
+async function uniqueSlugFromName(name) {
   const base = slugify(name) || 'user';
   let candidate = base;
   let n = 1;
   const exists = db.prepare('SELECT 1 FROM users WHERE slug = ?');
-  while (exists.get(candidate)) {
+  while (await exists.get(candidate)) {
     n += 1;
     candidate = `${base}-${n}`;
   }
   return candidate;
 }
 
-router.post('/signup', (req, res) => {
+router.post('/signup', async (req, res) => {
   const { email, password, name, timezone, accountCategory } = req.body || {};
 
   if (!email || !EMAIL_RE.test(String(email).trim())) {
@@ -68,16 +69,16 @@ router.post('/signup', (req, res) => {
   const category = ACCOUNT_CATEGORIES.has(accountCategory) ? accountCategory : 'principal';
 
   const normalizedEmail = String(email).trim().toLowerCase();
-  const existing = db.prepare('SELECT 1 FROM users WHERE email = ?').get(normalizedEmail);
+  const existing = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(normalizedEmail);
   if (existing) {
     return res.status(409).json({ error: 'An account with that email already exists.' });
   }
 
   const id = crypto.randomUUID();
-  const slug = uniqueSlugFromName(name);
+  const slug = await uniqueSlugFromName(name);
   const passwordHash = hashPassword(String(password));
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified, onboarding_step, account_category, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 1, 'profile', ?, ?)
   `).run(id, normalizedEmail, passwordHash, String(name).trim(), slug, tz, category, new Date().toISOString());
@@ -85,30 +86,30 @@ router.post('/signup', (req, res) => {
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  const session = createSession(id);
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  const session = await createSession(id);
   setSessionCookie(res, session);
   res.status(201).json({ user: publicUser(user) });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).trim().toLowerCase());
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).trim().toLowerCase());
   if (!user || !verifyPassword(String(password), user.password_hash)) {
     return res.status(401).json({ error: 'Incorrect email or password.' });
   }
-  const session = createSession(user.id);
+  const session = await createSession(user.id);
   setSessionCookie(res, session);
   res.json({ user: publicUser(user) });
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const sid = cookies[SESSION_COOKIE];
-  if (sid) destroySession(sid);
+  if (sid) await destroySession(sid);
   clearSessionCookie(res);
   res.status(204).end();
 });
@@ -124,7 +125,7 @@ router.get('/me', (req, res) => {
 // sendEmail, logged to the Outbox and the dev console), never returned
 // here, since exposing it in the response would let anyone reset any
 // account's password without owning the inbox.
-router.post('/forgot-password', (req, res) => {
+router.post('/forgot-password', async (req, res) => {
   const { email } = req.body || {};
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
@@ -135,16 +136,16 @@ router.post('/forgot-password', (req, res) => {
     return res.status(429).json({ error: 'Too many reset requests for this address. Please try again later.' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail);
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail);
   if (user) {
     const token = crypto.randomBytes(32).toString('hex');
     const now = new Date();
     const expires = new Date(now.getTime() + RESET_TOKEN_TTL_MS);
-    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
-    db.prepare('INSERT INTO password_resets (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    await db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+    await db.prepare('INSERT INTO password_resets (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
       .run(token, user.id, now.toISOString(), expires.toISOString());
 
-    sendEmail({
+    await sendEmail({
       ownerId: user.id, toEmail: user.email, category: 'transactional',
       subject: 'Reset your Kairos password',
       body: `Hi ${user.name},\n\nSomeone requested a password reset for this account. If that was you, set a new password here (valid for 1 hour):\n\n/reset-password/${token}\n\nIf you didn't request this, you can ignore this email.`,
@@ -158,29 +159,29 @@ router.post('/forgot-password', (req, res) => {
   res.json({ ok: true, emailDeliveryConfigured: !!process.env.RESEND_API_KEY });
 });
 
-router.get('/reset-password/:token', (req, res) => {
-  const reset = db.prepare('SELECT * FROM password_resets WHERE id = ?').get(req.params.token);
+router.get('/reset-password/:token', async (req, res) => {
+  const reset = await db.prepare('SELECT * FROM password_resets WHERE id = ?').get(req.params.token);
   const valid = !!reset && new Date(reset.expires_at).getTime() > Date.now();
   res.json({ valid });
 });
 
-router.post('/reset-password/:token', (req, res) => {
+router.post('/reset-password/:token', async (req, res) => {
   const { password } = req.body || {};
   if (!password || String(password).length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
 
-  const reset = db.prepare('SELECT * FROM password_resets WHERE id = ?').get(req.params.token);
+  const reset = await db.prepare('SELECT * FROM password_resets WHERE id = ?').get(req.params.token);
   if (!reset || new Date(reset.expires_at).getTime() <= Date.now()) {
     return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
   }
 
   const passwordHash = hashPassword(String(password));
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, reset.user_id);
-  db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(reset.user_id);
+  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, reset.user_id);
+  await db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(reset.user_id);
   // Resetting a password should end every existing session, on this device
   // and anywhere else it was signed in.
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(reset.user_id);
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(reset.user_id);
 
   res.json({ ok: true });
 });

@@ -1,16 +1,17 @@
 const express = require('express');
+const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { isConfigured: calendarConfigured } = require('../lib/calendarSync');
 const { isConfigured: whatsappConfigured } = require('../lib/whatsapp');
 
-const router = express.Router();
+const router = asyncRouter();
 router.use(requireAuth);
 
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM calendar_connections WHERE owner_id = ?').all(req.user.id);
+router.get('/', async (req, res) => {
+  const rows = await db.prepare('SELECT * FROM calendar_connections WHERE owner_id = ?').all(req.user.id);
   const byProvider = Object.fromEntries(rows.map((r) => [r.provider, r]));
-  const wa = db.prepare('SELECT * FROM whatsapp_connections WHERE owner_id = ?').get(req.user.id);
+  const wa = await db.prepare('SELECT * FROM whatsapp_connections WHERE owner_id = ?').get(req.user.id);
 
   res.json({
     calendar: {
@@ -45,8 +46,8 @@ router.post('/calendar/:provider/connect', (req, res) => {
   res.status(501).json({ error: 'Credentials are configured, but the OAuth exchange itself is not implemented yet.' });
 });
 
-router.delete('/calendar/:provider', (req, res) => {
-  db.prepare('DELETE FROM calendar_connections WHERE owner_id = ? AND provider = ?').run(req.user.id, req.params.provider);
+router.delete('/calendar/:provider', async (req, res) => {
+  await db.prepare('DELETE FROM calendar_connections WHERE owner_id = ? AND provider = ?').run(req.user.id, req.params.provider);
   res.status(204).end();
 });
 
@@ -59,8 +60,8 @@ router.post('/whatsapp/connect', (req, res) => {
   res.status(501).json({ error: 'Credentials are configured, but the send integration itself is not implemented yet.' });
 });
 
-router.delete('/whatsapp', (req, res) => {
-  db.prepare('DELETE FROM whatsapp_connections WHERE owner_id = ?').run(req.user.id);
+router.delete('/whatsapp', async (req, res) => {
+  await db.prepare('DELETE FROM whatsapp_connections WHERE owner_id = ?').run(req.user.id);
   res.status(204).end();
 });
 

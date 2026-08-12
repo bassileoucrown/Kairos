@@ -1,18 +1,25 @@
 # Render Blueprint for the Kairos app (the `app/` directory).
 #
-# One web service is enough: in production the Express server also serves the
-# built React client and hands unknown paths back to index.html for
+# One web service plus a Postgres database. In production the Express server
+# also serves the built client and hands unknown paths back to index.html for
 # client-side routing (see app/server/index.js).
 #
 # To deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply.
 #
-# Note on data: the free plan has an ephemeral filesystem and no persistent
-# disk, so the SQLite database at app/server/data/kairos.sqlite is wiped
-# whenever the service restarts or redeploys (free instances also sleep after
-# ~15 minutes idle). That's fine for kicking the tyres — accounts you create
-# won't survive a restart. For data that persists, move to a paid instance
-# with a disk mounted at /opt/render/project/src/app/server/data, or port
-# `db.js` to Postgres (see "Moving to Supabase" in app/README.md).
+# The database is the point of this file. Render web instances have an
+# ephemeral filesystem: a SQLite file there is wiped on every restart and
+# redeploy, taking every account with it — which looks exactly like "the app
+# doesn't recognise my email". DATABASE_URL below is wired from the managed
+# Postgres instance, and app/server/lib/db.js switches backends on its
+# presence, so data survives restarts, deploys, and the free plan's idle sleep.
+databases:
+  - name: kairos-db
+    databaseName: kairos
+    plan: free
+    # Note: Render's free Postgres expires after a fixed period and is then
+    # deleted. Move to a paid instance before this holds anything you'd mind
+    # losing.
+
 services:
   - type: web
     name: kairos
@@ -22,9 +29,16 @@ services:
     buildCommand: cd client && npm install && npm run build && cd ../server && npm install
     startCommand: cd server && npm start
     envVars:
-      # server/lib/db.js uses node:sqlite, which needs Node 22+.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kairos-db
+          property: connectionString
+      # server/lib/db.js also uses node:sqlite for local development, which
+      # needs Node 22+.
       - key: NODE_VERSION
         value: "22"
       # Optional: set a Resend API key in the Render dashboard to send real
       # email. Without one, every message is still written to the in-app
-      # Outbox tab and the server log, which is enough to test the flows.
+      # Outbox tab and the server log, and the password-reset screen says so
+      # plainly rather than pointing you at an inbox that will never receive
+      # anything.
