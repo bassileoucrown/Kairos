@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { consumePostOnboardingRedirect } from '../../lib/postAuthRedirect.js';
-import AppShell, { getActivePrincipal, setActivePrincipal } from '../../components/AppShell.jsx';
+import AppShell, { getActivePrincipal } from '../../components/AppShell.jsx';
 import ApprovalsTab from './ApprovalsTab.jsx';
 import ContactsTab from './ContactsTab.jsx';
 import BriefsTab from './BriefsTab.jsx';
@@ -11,9 +11,15 @@ import InstructionsTab from './InstructionsTab.jsx';
 import CommsTab from './CommsTab.jsx';
 import RelationshipsTab from './RelationshipsTab.jsx';
 import AiAssistTab from './AiAssistTab.jsx';
+import AvailabilityTab from '../dashboard/AvailabilityTab.jsx';
+import MeetingTypesTab from '../dashboard/MeetingTypesTab.jsx';
 
+// Scheduling tabs only appear when the principal has delegated them, so an
+// assistant is never shown a door that will 403.
 const TABS = [
   { id: 'approvals', label: 'Approvals' },
+  { id: 'availability', label: 'Availability', scheduling: true },
+  { id: 'meeting_types', label: 'Meeting Types', scheduling: true },
   { id: 'contacts', label: 'Contacts' },
   { id: 'relationships', label: 'Relationships' },
   { id: 'briefs', label: 'Briefs' },
@@ -65,7 +71,6 @@ export default function PaHome() {
         const preferred = data.principals.find((p) => p.id === stored)
           || data.principals.find((p) => p.role !== 'owner')
           || data.principals[0];
-        setActivePrincipal(preferred.id);
         navigate(`/pa/${preferred.id}?tab=${tab}`, { replace: true });
       }
     }).catch((err) => setError(err.message));
@@ -76,8 +81,13 @@ export default function PaHome() {
 
   const current = principals.find((p) => p.id === ownerId);
 
+  const canSchedule = !!current?.canManageScheduling;
+  const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule);
   const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.id, t.label]));
-  const activeNav = { contacts: 'people', relationships: 'people', approvals: 'approvals', briefs: 'briefs' }[tab] || 'people';
+  const activeNav = {
+    contacts: 'people', relationships: 'people', approvals: 'approvals', briefs: 'briefs',
+    availability: 'scheduling', meeting_types: 'scheduling',
+  }[tab] || 'people';
 
   return (
     <AppShell title={TAB_LABEL[tab] || 'PA Home'} active={activeNav}>
@@ -94,7 +104,7 @@ export default function PaHome() {
           )}
 
           <div className="tabs">
-            {TABS.map((t) => (
+            {visibleTabs.map((t) => (
               <button
                 key={t.id}
                 className={'tab-btn' + (tab === t.id ? ' is-active' : '')}
@@ -106,6 +116,16 @@ export default function PaHome() {
             ))}
           </div>
 
+          {tab === 'availability' && (canSchedule
+            ? <AvailabilityTab ownerId={ownerId} principalName={current.role === 'owner' ? null : current.name} />
+            : <div className="empty-state">
+                {current.name} hasn't given you access to their availability.
+              </div>)}
+          {tab === 'meeting_types' && (canSchedule
+            ? <MeetingTypesTab ownerId={ownerId} />
+            : <div className="empty-state">
+                {current.name} hasn't given you access to their meeting types.
+              </div>)}
           {tab === 'approvals' && <ApprovalsTab ownerId={ownerId} />}
           {tab === 'contacts' && <ContactsTab ownerId={ownerId} />}
           {tab === 'relationships' && <RelationshipsTab ownerId={ownerId} />}

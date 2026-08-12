@@ -2,7 +2,11 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
-const { requirePaAccess } = require('../lib/paAccess');
+const { requirePaAccess, requireSchedulingAccess } = require('../lib/paAccess');
+const {
+  listAvailability, replaceAvailability, listMeetingTypes,
+  createMeetingType, updateMeetingType, deleteMeetingType, handle,
+} = require('../lib/scheduling');
 const { sendEmail } = require('../lib/email');
 const { formatForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
@@ -19,7 +23,7 @@ router.use(requireAuth);
 router.get('/principals', (req, res) => {
   const self = db.prepare('SELECT id, name, slug FROM users WHERE id = ?').get(req.user.id);
   const memberships = db.prepare(`
-    SELECT u.id, u.name, u.slug, m.role
+    SELECT u.id, u.name, u.slug, m.role, m.can_manage_scheduling
     FROM memberships m
     JOIN users u ON u.id = m.owner_id
     WHERE m.member_user_id = ? AND m.status = 'active'
@@ -27,11 +31,44 @@ router.get('/principals', (req, res) => {
 
   res.json({
     principals: [
-      { id: self.id, name: self.name, slug: self.slug, role: 'owner' },
-      ...memberships.map((m) => ({ id: m.id, name: m.name, slug: m.slug, role: m.role })),
+      { id: self.id, name: self.name, slug: self.slug, role: 'owner', canManageScheduling: true },
+      ...memberships.map((m) => ({
+        id: m.id, name: m.name, slug: m.slug, role: m.role,
+        canManageScheduling: !!m.can_manage_scheduling,
+      })),
     ],
   });
 });
+
+// --- The principal's bookable hours and meeting types -----------------
+// Same operations as /availability and /meeting-types, scoped to a principal
+// and gated on the delegation flag. Both paths call lib/scheduling.js, so the
+// validation and error messages are literally the same code.
+
+router.get('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  res.json({ rules: listAvailability(req.principal.id) });
+}));
+
+router.put('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  res.json({ rules: replaceAvailability(req.principal.id, req.body?.rules) });
+}));
+
+router.get('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  res.json({ meetingTypes: listMeetingTypes(req.principal.id) });
+}));
+
+router.post('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  res.status(201).json({ meetingType: createMeetingType(req.principal.id, req.body) });
+}));
+
+router.patch('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  res.json({ meetingType: updateMeetingType(req.principal.id, req.params.id, req.body) });
+}));
+
+router.delete('/:ownerId/meeting-types/:id', requirePaAccess, requireSchedulingAccess, handle((req, res) => {
+  deleteMeetingType(req.principal.id, req.params.id);
+  res.status(204).end();
+}));
 
 function serializeBooking(b) {
   return {

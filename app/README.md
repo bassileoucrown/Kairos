@@ -274,6 +274,32 @@ actually manages.
 
 Access reuses the existing PA model exactly: whoever can act for a principal can run their day.
 
+## What an assistant can and cannot do
+
+Approving a Tier 3 booking while being unable to set the hours that produced the slot makes no
+sense, so **availability and meeting types are delegated to every assistant by default** — that is
+the job. A principal who treats their own hours as personal can revoke it **per assistant** from
+Members, without disturbing anything else they do.
+
+The line is drawn at scheduling versus identity:
+
+| Delegated (default on) | Owner-only, always |
+| --- | --- |
+| Availability, meeting types | Profile, timezone, booking-link slug |
+| Approvals, contacts, relationships | Members and delegates |
+| Briefs, instructions, comms | Calendar-sync and WhatsApp integrations |
+| Itinerary, Today, AI assist | |
+| Spaces, projects, tasks | |
+
+Both paths — a principal editing their own, an assistant editing a principal's — run the *same
+code*: `lib/scheduling.js` holds the operations, and `routes/availability.js` /
+`routes/meetingTypes.js` call it with `req.user.id` while `routes/pa.js` calls it with
+`req.principal.id` behind `requireSchedulingAccess`. The validation and error strings are therefore
+identical by construction rather than by discipline.
+
+Assistants get a **Scheduling** entry in the nav that disappears when access is revoked, and the API
+refuses it independently — the UI hides the door, the server locks it.
+
 ## Account categories
 
 At signup, an account declares itself **Principal**, **PA / EA**, or **Chief of Staff**

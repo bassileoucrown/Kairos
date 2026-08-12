@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS memberships (
   invited_email   TEXT NOT NULL,
   role            TEXT NOT NULL DEFAULT 'pa', -- pa | delegate
   status          TEXT NOT NULL DEFAULT 'invited', -- invited | active | revoked
+  -- Whether this assistant may set the principal's bookable hours and meeting
+  -- types. On by default for every assistant role, because deciding who can
+  -- reach the principal and when is the most PA-shaped job in the product —
+  -- but a principal who considers their own hours personal can revoke it per
+  -- assistant. Identity and access (profile, members, integrations) stay
+  -- owner-only regardless.
+  can_manage_scheduling INTEGER NOT NULL DEFAULT 1,
   invite_token    TEXT NOT NULL UNIQUE,
   created_at      TEXT NOT NULL
 );

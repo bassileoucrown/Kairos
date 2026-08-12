@@ -12,10 +12,10 @@ export default function MembersTab() {
   const [submitting, setSubmitting] = useState(false);
 
   function load() {
-    api.get('/members').then((data) => setMembers(data.members)).catch((err) => setError(err.message));
+    return api.get('/members').then((data) => setMembers(data.members)).catch((err) => setError(err.message));
   }
 
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   async function handleInvite(e) {
     e.preventDefault();
@@ -31,6 +31,27 @@ export default function MembersTab() {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Hold the intended value locally while the request is in flight. A
+  // checkbox bound purely to server state springs back on click and reads as
+  // broken.
+  const [pendingScheduling, setPendingScheduling] = useState({});
+  async function setScheduling(id, value) {
+    setError('');
+    setPendingScheduling((p) => ({ ...p, [id]: value }));
+    try {
+      await api.patch(`/members/${id}`, { canManageScheduling: value });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPendingScheduling((p) => {
+        const next = { ...p };
+        delete next[id];
+        return next;
+      });
     }
   }
 
@@ -63,11 +84,28 @@ export default function MembersTab() {
                 {m.memberName || m.invitedEmail} <span className={'pill' + (m.status === 'invited' ? ' is-off' : '')}>{m.status === 'invited' ? 'Invited' : 'Active'}</span>
               </div>
               <div className="meta">{ROLE_LABELS[m.role]} · {m.invitedEmail}</div>
+              <label className="member-toggle">
+                <input
+                  type="checkbox"
+                  checked={pendingScheduling[m.id] ?? m.canManageScheduling}
+                  aria-label={`Let ${m.memberName || m.invitedEmail} manage your availability and meeting types`}
+                  onChange={(e) => setScheduling(m.id, e.target.checked)}
+                />
+                <span>
+                  Can set my availability and meeting types
+                </span>
+              </label>
             </div>
             <button className="btn btn-danger btn-sm" type="button" onClick={() => revoke(m.id)}>Revoke</button>
           </div>
         </div>
       ))}
+
+      <p className="tz-note" style={{ marginTop: 14, marginBottom: 4 }}>
+        Assistants can set your bookable hours and meeting types by default — that's the job. Turn
+        it off for anyone whose remit shouldn't include it. Your profile, integrations, and who else
+        has access stay yours alone either way.
+      </p>
 
       <form onSubmit={handleInvite} className="card" style={{ marginTop: 12 }}>
         <div className="field">

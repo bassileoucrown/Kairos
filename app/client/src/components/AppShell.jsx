@@ -20,12 +20,18 @@ const NAV = [
   { to: '/pa?tab=contacts', match: '/pa', label: 'People', icon: '☺', principalScoped: true },
   { to: '/pa?tab=approvals', match: '/pa', label: 'Approvals', icon: '!', principalScoped: true, badge: 'approvals' },
   { to: '/pa?tab=briefs', match: '/pa', label: 'Briefs', icon: '❋', principalScoped: true },
+  { to: '/pa?tab=availability', match: '/pa', label: 'Scheduling', icon: '◷', principalScoped: true, needsScheduling: true },
   { to: '/dashboard?tab=settings', match: '/dashboard', label: 'Settings', icon: '⚙' },
 ];
 
-// Which principal the PA-scoped screens are acting for. Kept in localStorage
-// so switching principal persists across pages instead of resetting every
-// time you navigate.
+// Which principal the PA-scoped screens are acting for.
+//
+// Only an *explicit* choice from the switcher is stored. Persisting a computed
+// default looked equivalent and wasn't: an assistant who opened the app before
+// accepting an invite had their own id written down, and because that id stays
+// a valid member of the list forever, they were still pointed at their own
+// account after accepting — with nothing on screen suggesting they should
+// switch. Recomputing the default every load keeps it honest.
 const ACTIVE_KEY = 'kairos_active_principal';
 export function getActivePrincipal() {
   try { return localStorage.getItem(ACTIVE_KEY) || null; } catch { return null; }
@@ -46,15 +52,11 @@ export default function AppShell({ children, title, actions, active }) {
     api.get('/pa/principals').then((d) => {
       setPrincipals(d.principals);
       const stored = getActivePrincipal();
-      const valid = stored && d.principals.some((p) => p.id === stored);
-      if (!valid) {
-        // Default to whoever you actually support; your own account is the
-        // fallback, not the assumption.
-        const preferred = d.principals.find((p) => p.role !== 'owner') || d.principals[0];
-        if (preferred) { setActivePrincipal(preferred.id); setActiveId(preferred.id); }
-      } else {
-        setActiveId(stored);
-      }
+      const chosen = stored && d.principals.some((p) => p.id === stored) ? stored : null;
+      // Default to whoever you actually support; your own account is the
+      // fallback, not the assumption.
+      const preferred = d.principals.find((p) => p.role !== 'owner') || d.principals[0];
+      setActiveId(chosen || preferred?.id || null);
     }).catch(() => {});
   }, []);
 
@@ -115,9 +117,16 @@ export default function AppShell({ children, title, actions, active }) {
         )}
 
         <nav>
-          {NAV.map((item) => {
-            const to = item.principalScoped && activeId && item.to.startsWith('/pa')
-              ? `/pa/${activeId}?tab=${item.to.split('tab=')[1]}`
+          {NAV.filter((item) => !item.needsScheduling || current?.canManageScheduling !== false).map((item) => {
+            // Only pin a principal into the URL once the list has actually
+            // loaded. Before that, activeId is a guess (your own id), and a
+            // fast click would open your own account instead of the person you
+            // support. Linking to bare /pa lets PaHome resolve the right
+            // principal itself, preserving the tab.
+            const to = item.principalScoped && item.to.startsWith('/pa')
+              ? (principals.length > 0 && activeId
+                ? `/pa/${activeId}?tab=${item.to.split('tab=')[1]}`
+                : item.to)
               : item.to;
             const count = item.badge ? badges[item.badge] : 0;
             return (

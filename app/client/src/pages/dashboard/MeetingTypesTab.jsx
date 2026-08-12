@@ -10,7 +10,11 @@ const TIER_LABELS = {
 };
 const TIER_SHORT = { 1: 'Public', 2: 'Standard', 3: 'Priority', 4: 'Inner Circle' };
 
-export default function MeetingTypesTab() {
+// Serves both paths: the principal editing their own, and an assistant
+// editing a principal's. Passing ownerId switches the endpoints; everything
+// else — validation, layout, copy — is deliberately identical.
+export default function MeetingTypesTab({ ownerId = null }) {
+  const base = ownerId ? `/pa/${ownerId}` : '';
   const [meetingTypes, setMeetingTypes] = useState(null);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -22,17 +26,17 @@ export default function MeetingTypesTab() {
   const [submitting, setSubmitting] = useState(false);
 
   function load() {
-    api.get('/meeting-types').then((data) => setMeetingTypes(data.meetingTypes)).catch((err) => setError(err.message));
+    api.get(`${base}/meeting-types`).then((data) => setMeetingTypes(data.meetingTypes)).catch((err) => setError(err.message));
   }
 
-  useEffect(load, []);
+  useEffect(load, [ownerId]);
 
   async function handleCreate(e) {
     e.preventDefault();
     setError('');
     setSubmitting(true);
     try {
-      await api.post('/meeting-types', {
+      await api.post(`${base}/meeting-types`, {
         name, durationMinutes: Number(durationMinutes), locationType, description, accessTier: Number(accessTier),
       });
       setName('');
@@ -51,7 +55,7 @@ export default function MeetingTypesTab() {
 
   async function toggleActive(mt) {
     try {
-      await api.patch(`/meeting-types/${mt.id}`, { isActive: !mt.isActive });
+      await api.patch(`${base}/meeting-types/${mt.id}`, { isActive: !mt.isActive });
       load();
     } catch (err) {
       setError(err.message);
@@ -60,7 +64,7 @@ export default function MeetingTypesTab() {
 
   async function changeTier(mt, tier) {
     try {
-      await api.patch(`/meeting-types/${mt.id}`, { accessTier: tier });
+      await api.patch(`${base}/meeting-types/${mt.id}`, { accessTier: tier });
       load();
     } catch (err) {
       setError(err.message);
@@ -70,7 +74,7 @@ export default function MeetingTypesTab() {
   async function remove(mt) {
     if (!window.confirm(`Delete "${mt.name}"? This cannot be undone.`)) return;
     try {
-      await api.del(`/meeting-types/${mt.id}`);
+      await api.del(`${base}/meeting-types/${mt.id}`);
       load();
     } catch (err) {
       setError(err.message);

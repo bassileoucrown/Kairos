@@ -31,5 +31,6 @@ ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
 ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
 ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
 ensureColumn('project_stages', 'reminder_stage', 'TEXT');
+ensureColumn('memberships', 'can_manage_scheduling', 'INTEGER NOT NULL DEFAULT 1');
 
 module.exports = db;

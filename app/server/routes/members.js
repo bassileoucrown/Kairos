@@ -17,6 +17,7 @@ function serialize(m) {
     memberName: m.member_name || null,
     role: m.role,
     status: m.status,
+    canManageScheduling: !!m.can_manage_scheduling,
     createdAt: m.created_at,
   };
 }
@@ -67,6 +68,27 @@ router.post('/', (req, res) => {
     SELECT m.*, u.name as member_name FROM memberships m LEFT JOIN users u ON u.id = m.member_user_id WHERE m.id = ?
   `).get(id);
   res.status(201).json({ member: serialize(row), inviteLink: `/accept-invite/${token}` });
+});
+
+// Availability and meeting types are delegated by default, because that is
+// the job. This is how a principal who treats their own hours as personal
+// takes it back — per assistant, without revoking everything else.
+router.patch('/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM memberships WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Member not found.' });
+
+  const { canManageScheduling } = req.body || {};
+  if (canManageScheduling === undefined) return res.status(400).json({ error: 'Nothing to update.' });
+
+  db.prepare('UPDATE memberships SET can_manage_scheduling = ? WHERE id = ?')
+    .run(canManageScheduling ? 1 : 0, row.id);
+
+  const updated = db.prepare(`
+    SELECT m.*, u.name as member_name FROM memberships m
+    LEFT JOIN users u ON u.id = m.member_user_id WHERE m.id = ?
+  `).get(row.id);
+  res.json({ member: serialize(updated) });
 });
 
 router.post('/:id/revoke', (req, res) => {

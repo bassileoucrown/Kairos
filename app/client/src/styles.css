@@ -799,3 +799,10 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   .sched-row { break-inside: avoid; border-color: #ccc; }
   body { background: #fff; }
 }
+
+.member-toggle {
+  display: flex; align-items: center; gap: 7px;
+  margin-top: 7px; font-size: 0.8rem; color: var(--text-muted);
+  cursor: pointer;
+}
+.member-toggle input { width: 14px; height: 14px; }

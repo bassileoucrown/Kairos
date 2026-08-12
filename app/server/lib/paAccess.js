@@ -12,6 +12,7 @@ function requirePaAccess(req, res, next) {
   if (ownerId === req.user.id) {
     req.principal = owner;
     req.paRole = 'owner';
+    req.membership = null;
     return next();
   }
 
@@ -23,7 +24,31 @@ function requirePaAccess(req, res, next) {
   }
   req.principal = owner;
   req.paRole = membership.role;
+  req.membership = membership;
   next();
 }
 
-module.exports = { requirePaAccess };
+/**
+ * Extra gate for the principal's *bookable hours and meeting types* — who can
+ * reach them, and when.
+ *
+ * On by default for every assistant, because this is the most PA-shaped job in
+ * the product: approving a Tier 3 booking while being unable to set the hours
+ * that produced the slot makes no sense. But some principals treat their own
+ * hours as personal, so it can be revoked per assistant from Members.
+ *
+ * Deliberately narrower than "can act as PA": profile, members, and
+ * integrations stay owner-only whatever this says, since those are identity
+ * and access rather than scheduling.
+ */
+function requireSchedulingAccess(req, res, next) {
+  if (req.paRole === 'owner') return next();
+  if (!req.membership?.can_manage_scheduling) {
+    return res.status(403).json({
+      error: `${req.principal.name} hasn't given you access to their availability and meeting types.`,
+    });
+  }
+  next();
+}
+
+module.exports = { requirePaAccess, requireSchedulingAccess };

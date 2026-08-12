@@ -24,23 +24,29 @@ function nextBlock(blocks) {
   return { startTime, endTime: addMinutes(startTime, 60) };
 }
 
-export default function AvailabilityTab() {
+// Serves both paths: the principal editing their own, and an assistant
+// editing a principal's. Passing ownerId switches the endpoints; everything
+// else — validation, layout, copy — is deliberately identical.
+export default function AvailabilityTab({ ownerId = null, principalName = null }) {
+  const base = ownerId ? `/pa/${ownerId}` : '';
+  const whose = principalName ? `${principalName}'s` : 'your';
   const [week, setWeek] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.get('/availability').then((data) => {
-      const base = emptyWeek();
+    setWeek(null);
+    api.get(`${base}/availability`).then((data) => {
+      const next = emptyWeek();
       for (const rule of data.rules) {
-        const day = base.find((d) => d.dayOfWeek === rule.dayOfWeek);
+        const day = next.find((d) => d.dayOfWeek === rule.dayOfWeek);
         if (day) day.blocks.push({ startTime: rule.startTime, endTime: rule.endTime });
       }
-      for (const day of base) day.blocks.sort((a, b) => a.startTime.localeCompare(b.startTime));
-      setWeek(base);
+      for (const day of next) day.blocks.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      setWeek(next);
     }).catch((err) => setError(err.message));
-  }, []);
+  }, [ownerId]);
 
   function updateDay(dayOfWeek, blocks) {
     setWeek((prev) => prev.map((d) => (d.dayOfWeek === dayOfWeek ? { ...d, blocks } : d)));
@@ -90,9 +96,9 @@ export default function AvailabilityTab() {
 
     setSubmitting(true);
     try {
-      await api.put('/availability', { rules });
+      await api.put(`${base}/availability`, { rules });
       setSuccess(rules.length === 0
-        ? 'Saved — your booking page is closed until you add times.'
+        ? `Saved — ${whose} booking page is closed until there are times.`
         : 'Availability updated.');
     } catch (err) {
       setError(err.message);
@@ -109,8 +115,8 @@ export default function AvailabilityTab() {
       {success && <div className="alert alert-success">{success}</div>}
 
       <p className="tz-note" style={{ marginBottom: 14 }}>
-        Set the hours people can book you, in your own timezone. Add more than one block to a day to
-        split it — mornings only, or 9–12 and 2–5 with lunch protected.
+        Set the hours people can book {principalName || 'you'}, in {whose} timezone. Add more than
+        one block to a day to split it — mornings only, or 9–12 and 2–5 with lunch protected.
       </p>
 
       <div className="week-editor">
