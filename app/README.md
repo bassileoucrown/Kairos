@@ -92,6 +92,27 @@ failed sign-in the login screen says storage is temporary rather than blaming th
 `GET /api/status` reports `storageDurable`, a property of the deployment and of no account, which
 is why it needs no authentication.
 
+### Keeping it to yourself
+
+Deploy it as a **Web Service**. A Render *private service* has no public URL —
+it is reachable only from inside your own Render network, so a browser cannot
+open it at all. That is not a privacy setting; it is an unreachable app.
+
+If the worry is other people getting into your work, the app already answers
+it: everything except public booking pages sits behind a login. The one door
+left open is account creation, so set **`SIGNUP_ACCESS_CODE`** to any phrase
+and that door needs a key too. The URL can exist without anyone else being
+able to walk in.
+
+- People invited by email skip the code — being invited *is* the
+  authorisation, and making a principal recite a shared secret to their own PA
+  is how codes end up pasted into group chats.
+- `GET /api/status` reports `signupRequiresCode` so the form knows to ask. It
+  never returns the code.
+- Public booking pages stay open regardless. Being bookable by people who have
+  no account is the product.
+- Leave it unset and signup is open, exactly as before.
+
 ### When the database can't be reached
 
 The server **binds its port first** and prepares the database afterwards. This

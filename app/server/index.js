@@ -2,7 +2,7 @@ const path = require('path');
 const express = require('express');
 const { attachUser } = require('./lib/auth');
 
-const { router: authRouter } = require('./routes/auth');
+const { router: authRouter, SIGNUP_ACCESS_CODE } = require('./routes/auth');
 const profileRouter = require('./routes/profile');
 const availabilityRouter = require('./routes/availability');
 const meetingTypesRouter = require('./routes/meetingTypes');
@@ -53,6 +53,9 @@ app.get('/api/status', (req, res) => {
     // password — this endpoint is public.
     databaseTarget: db.dialect === 'postgres' ? describeTarget() : 'local file',
     databaseError: dbState.error,
+    // Whether a code is needed, never the code itself. The signup form reads
+    // this so it can ask for one instead of failing the submission.
+    signupRequiresCode: !!SIGNUP_ACCESS_CODE,
   });
 });
 

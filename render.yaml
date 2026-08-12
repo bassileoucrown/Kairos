@@ -49,6 +49,11 @@
 # after a failed sign-in rather than blaming your password.
 # ---------------------------------------------------------------------------
 
+# `type: web` is not incidental. A Render *private service* is given no public
+# URL at all — it is reachable only from inside your own Render network, so a
+# browser has nothing to open. If the goal is "nobody else should get into my
+# work", the answer is not to hide the URL: set SIGNUP_ACCESS_CODE below, and
+# the link can exist while account creation stays shut.
 services:
   - type: web
     name: kairos
@@ -66,6 +71,13 @@ services:
       # Optional. Set to `kairos` when the database is shared with another
       # app; leave unset to use the default `public` schema.
       - key: DATABASE_SCHEMA
+        sync: false
+      # Optional. Set any phrase and account creation requires it, so the URL
+      # can be public without being open. People invited by email skip it —
+      # being invited is already the authorisation. Public booking pages stay
+      # open either way, since being bookable by people without accounts is
+      # the point of the product. Leave unset for open signup.
+      - key: SIGNUP_ACCESS_CODE
         sync: false
       # server/lib/db.js also uses node:sqlite for local development, which
       # needs Node 22+.
