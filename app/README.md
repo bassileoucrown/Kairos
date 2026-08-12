@@ -137,6 +137,12 @@ Connections are bounded — 10s per attempt, five attempts with backoff, and a
 default, and a host that silently drops packets (wrong region, firewalled
 external URL, deleted database) would otherwise hang forever.
 
+**And it keeps trying.** Provisioning a managed database can take minutes,
+which is longer than any startup ladder should wait, so exhausting the ladder
+schedules another attempt (`DATABASE_RECHECK_MS`, default 30s) instead of
+giving up for good. The app repairs itself the moment the database appears —
+no redeploy for a problem that fixed itself.
+
 On the free plan, instances still sleep after ~15 minutes idle (the first request back is slow), but
 data survives that, along with restarts and redeploys.
 

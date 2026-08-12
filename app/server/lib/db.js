@@ -263,8 +263,24 @@ function ready() {
   return readyPromise;
 }
 
+/**
+ * Forget a failed attempt so ready() will genuinely try again.
+ *
+ * ready() memoizes, which is right for the success case — every route awaits
+ * it — but wrong for a failure that was only ever temporary. A database being
+ * provisioned can take minutes, longer than any sensible startup ladder, and
+ * without this the server would sit broken until somebody redeployed it by
+ * hand. Only clears a *rejected* promise; a healthy connection is never
+ * disturbed.
+ */
+function resetIfFailed() {
+  if (!readyPromise) return;
+  readyPromise.catch(() => { readyPromise = null; });
+}
+
 module.exports = {
   prepare: (sql) => impl.prepare(sql),
+  resetIfFailed,
   exec: (sql) => impl.exec(sql),
   tx: (fn) => impl.tx(fn),
   close: () => impl.close(),

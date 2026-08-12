@@ -138,47 +138,68 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-db.ready()
-  .then(() => {
-    dbState.ready = true;
-    startReminderSweep();
-    console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
-  })
-  .catch((err) => {
-    dbState.error = err.message;
-    // Has to be enough to act on: it is what someone reads when the site is
-    // up but refusing to serve.
-    console.error(`\nCould not prepare the database: ${err.message}\n`);
-    if (db.dialect === 'postgres') {
-      console.error([
-        'DATABASE_URL is set, so the server tried Postgres and could not use it.',
-        '',
-        `  code:  ${err.code || '(none)'}`,
-        `  host:  ${describeTarget()}`,
-        '',
-        'Common causes, in the order worth checking:',
-        '  - The URL points at a database that no longer exists (deleted, or expired',
-        '    off the free plan). Confirm it in the dashboard, then re-copy the URL.',
-        '  - The external URL was used where the internal one is needed, or vice',
-        '    versa. On Render, a service in the same region wants the Internal URL.',
-        '  - The password contains characters that must be percent-encoded in a URL',
-        '    (@ : / ? # are the usual culprits). Re-copy rather than retype it.',
-        '  - The database is still starting. The server already retried',
-        `    ${process.env.DATABASE_CONNECT_ATTEMPTS || 5} times with backoff before giving up here.`,
-        '',
-        'Unset DATABASE_URL to start on local SQLite instead — the app runs, but',
-        'stores accounts on disk that is wiped on restart.',
-      ].join('\n'));
-    } else {
-      console.error('No DATABASE_URL is set, so the server tried a local SQLite file and could not open it.');
-    }
-    // Deliberately not exiting. The process stays up serving 503s and an
-    // honest /api/status, which someone can read; exiting would put us back to
-    // a deploy that fails with nothing to look at. It still never falls back
-    // to ephemeral storage — a broken deployment that says so beats a working
-    // one that quietly loses data.
-    console.error('\nStaying up so /api/status can report this. No requests will be served until it is fixed.');
-  });
+// Keep trying, quietly, for as long as it takes.
+//
+// A database being provisioned can take several minutes — longer than any
+// startup ladder should wait — and giving up permanently would leave the app
+// broken until somebody redeployed it by hand, for a problem that fixed
+// itself. So a failed attempt schedules another. The app repairs itself the
+// moment the database appears.
+const RECHECK_MS = Number(process.env.DATABASE_RECHECK_MS || 30000);
+
+function attemptReady() {
+  db.ready()
+    .then(() => {
+      dbState.ready = true;
+      dbState.error = null;
+      startReminderSweep();
+      console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
+    })
+    .catch((err) => {
+      reportFailure(err);
+      db.resetIfFailed();
+      console.error(`Rechecking in ${RECHECK_MS / 1000}s — no redeploy needed if the database simply isn't up yet.`);
+      setTimeout(attemptReady, RECHECK_MS).unref?.();
+    });
+}
+
+attemptReady();
+
+function reportFailure(err) {
+  dbState.error = err.message;
+  // Has to be enough to act on: it is what someone reads when the site is
+  // up but refusing to serve.
+  console.error(`\nCould not prepare the database: ${err.message}\n`);
+  if (db.dialect === 'postgres') {
+    console.error([
+      'DATABASE_URL is set, so the server tried Postgres and could not use it.',
+      '',
+      `  code:  ${err.code || '(none)'}`,
+      `  host:  ${describeTarget()}`,
+      '',
+      'Common causes, in the order worth checking:',
+      '  - The URL points at a database that no longer exists (deleted, or expired',
+      '    off the free plan). Confirm it in the dashboard, then re-copy the URL.',
+      '  - The external URL was used where the internal one is needed, or vice',
+      '    versa. On Render, a service in the same region wants the Internal URL.',
+      '  - The password contains characters that must be percent-encoded in a URL',
+      '    (@ : / ? # are the usual culprits). Re-copy rather than retype it.',
+      '  - The database is still starting. The server already retried',
+      `    ${process.env.DATABASE_CONNECT_ATTEMPTS || 5} times with backoff before giving up here.`,
+      '',
+      'Unset DATABASE_URL to start on local SQLite instead — the app runs, but',
+      'stores accounts on disk that is wiped on restart.',
+    ].join('\n'));
+  } else {
+    console.error('No DATABASE_URL is set, so the server tried a local SQLite file and could not open it.');
+  }
+  // Deliberately not exiting. The process stays up serving 503s and an
+  // honest /api/status, which someone can read; exiting would put us back to
+  // a deploy that fails with nothing to look at. It still never falls back
+  // to ephemeral storage — a broken deployment that says so beats a working
+  // one that quietly loses data.
+  console.error('\nStaying up so /api/status can report this. No requests will be served until it is fixed.');
+}
 
 // Enough of the connection target to identify it, never enough to leak the
 // password — this goes to a deploy log that others may see.
