@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/AuthContext.jsx';
 import { api } from '../../lib/api.js';
 import { listTimezones } from '../../lib/timezones.js';
 import OnboardingLayout from './OnboardingLayout.jsx';
+import { BRAND_SHORT } from '../../lib/brand.js';
 
 const timezones = listTimezones();
 
@@ -51,7 +52,7 @@ export default function ProfileStep() {
           <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
         <div className="field">
-          <label htmlFor="slug">Booking link</label>
+          <label htmlFor="slug">Handle</label>
           <input
             id="slug"
             type="text"
@@ -59,7 +60,10 @@ export default function ProfileStep() {
             onChange={(e) => setSlug(e.target.value.toLowerCase())}
             required
           />
-          <p className="hint">/book/{slug || 'your-name'}</p>
+          <p className="hint">
+            You are <strong>@{slug || 'your-name'}</strong> here — how colleagues refer to you
+            inside {BRAND_SHORT}. Your booking page also lives at /book/{slug || 'your-name'}.
+          </p>
         </div>
         <div className="field">
           <label htmlFor="timezone">Timezone</label>

@@ -6,6 +6,7 @@ const { requirePaAccess } = require('../lib/paAccess');
 const { listVisibleSpaces } = require('../lib/spaceAccess');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { buildDay } = require('./itinerary');
+const { canSee, expiryState, daysUntil } = require('../lib/essentials');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -131,8 +132,32 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     requestedBy: i.created_by_name,
   }));
 
+  // --- Documents about to lapse ---
+  //
+  // The most expensive thing on the whole list to forget: a passport under
+  // six months' validity turns someone away at check-in, and by the time it
+  // has actually expired the trip is already lost. Never carries a value —
+  // only that something needs renewing.
+  const viewerCtx = { isOwner: viewerIsPrincipal, role: req.paRole };
+  const expiring = (await db.prepare(`
+    SELECT id, label, field, expires_on, sensitivity
+    FROM essentials
+    WHERE owner_id = ? AND expires_on IS NOT NULL
+    ORDER BY expires_on ASC
+  `).all(req.principal.id))
+    .filter((e) => canSee(e.sensitivity, viewerCtx))
+    .filter((e) => expiryState(e.expires_on))
+    .map((e) => ({
+      id: e.id,
+      label: e.label,
+      field: e.field,
+      expiresOn: e.expires_on,
+      daysUntil: daysUntil(e.expires_on),
+      state: expiryState(e.expires_on),
+    }));
+
   const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length
-    + blockedStages.length + itineraryRequests.length;
+    + blockedStages.length + itineraryRequests.length + expiring.length;
 
   res.json({
     date: todayKey,
@@ -144,6 +169,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     nextUp,
     needsYou: {
       approvals, recordsAwaiting, overdueTasks, blockedStages, itineraryRequests,
+      expiring,
       count: needsYouCount,
     },
     todayTasks,

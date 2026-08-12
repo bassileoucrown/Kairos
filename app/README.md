@@ -165,6 +165,62 @@ The product calls itself **Kairos by Exousia**. Two forms, from one place —
 `BRAND_NAME`, `BRAND_SHORT_NAME` and `BRAND_COMPANY` override the server's
 copy without a code change.
 
+## Handles
+
+The `slug` column, promoted from "the last part of your booking URL" to what a
+person is called here. Same value, different standing: a principal is `@ada`,
+and their booking page happens to live at `/book/ada`.
+
+Deliberately **not** a directory. A handle resolves only inside a relationship
+that already exists — someone you support, someone who supports you, someone
+you share a space with. Look up a stranger's handle and you get nothing back,
+indistinguishable from a typo, so it can never be used to test whether a given
+person is on Kairos. Establishing a *new* relationship still goes through an
+email invitation, because that is an act and should feel like one.
+
+`lib/handles.js` owns the reserved list — the app's own paths, the names worth
+impersonating, the ones we may want later.
+
+## Custody: essentials, encryption, and two-factor
+
+The things people are asked for and cannot recall — passport numbers, seat
+preferences, loyalty numbers, policy numbers, sizes. Not a document store: a
+set of **answers to questions other people ask**, which is why the unit is a
+field with a copy button rather than a folder with a file in it.
+
+Holding identity documents makes this a custodian, so the machinery around it
+matters more than the feature:
+
+- **Two-factor authentication** (`lib/totp.js`, RFC 6238, no dependency) and
+  **login rate limiting** (`lib/rateLimit.js`). Everything else is downstream
+  of an attacker simply signing in, so these come first.
+- **Encryption at rest** (`lib/secretBox.js`, AES-256-GCM) with the key in
+  `ENCRYPTION_KEY`, outside the database. **Lose the key and the data is
+  gone** — there is no recovery path, by design, because a recovery path is
+  just a second key kept worse.
+- **Masked by default.** A sensitive value goes out as `•••• 4821`. Seeing it
+  is an action: it costs a password, it is rate limited, and it is logged.
+- **An access log the principal reads.** *"Your Chief of Staff viewed your
+  passport on 3 August."* A trust feature more than a compliance one.
+- **Sensitivity, not a boolean.** `lib/essentials.js` marks each category, and
+  a `delegate` engaged for scheduling sees dietary requirements and never an
+  identity document. Withheld fields are **absent** from the response rather
+  than refused — same 404-not-403 reasoning as spaces.
+- **`verified_at`.** Data entered once and never rechecked looks authoritative
+  while quietly going out of date; the number may be from the previous
+  passport. An assistant confirms *"I held the document"*, with the date.
+
+What it is for, once it exists: **expiry warnings** on Today (a passport under
+six months' validity turns someone away at check-in), a **trip-ready check**
+against a travel date, and a **travel block** — one copyable paste of
+everything an airline asks for, which is where the seconds are actually saved.
+
+With no `ENCRYPTION_KEY` set, ordinary fields work normally and sensitive ones
+are refused with an explanation rather than stored in the clear.
+
+Not built, deliberately: **file uploads**. That needs a storage answer, a
+retention policy, and a considered response to "what happens when this leaks".
+
 ## Two roles, two dashboards
 
 A principal and an assistant are asking different questions, so they land on

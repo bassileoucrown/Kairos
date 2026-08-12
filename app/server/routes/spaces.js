@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { BRAND_SHORT } = require('../lib/brand');
+const { resolveVisibleHandle } = require('../lib/handles');
 const { requireAuth } = require('../lib/auth');
 const {
   CONTEXTS, DEFAULT_DELEGATE_ROLES, ASSISTANT_ROLES, parseRoles, roleCanDelegate,
@@ -133,9 +134,20 @@ router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
     return res.status(403).json({ error: 'You cannot manage members of this space.' });
   }
 
-  const { email, role } = req.body || {};
-  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim().toLowerCase());
-  if (!user) return res.status(404).json({ error: `No ${BRAND_SHORT} account with that email.` });
+  // Accepts a handle or an email. The handle is the pleasanter half — you
+  // know a colleague's handle, you do not always know which of their
+  // addresses they signed up with — but it resolves only for people this
+  // caller already works with, so it can never be used to discover anyone.
+  const { email, handle, role } = req.body || {};
+  let user = null;
+  if (handle) {
+    user = await resolveVisibleHandle(req.user.id, handle);
+    if (!user) return res.status(404).json({ error: 'No one you work with has that handle.' });
+    user = await db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  } else {
+    user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim().toLowerCase());
+    if (!user) return res.status(404).json({ error: `No ${BRAND_SHORT} account with that email.` });
+  }
   if (user.id === req.space.owner_id) return res.status(400).json({ error: 'They already own this space.' });
 
   const memberRole = role === 'guest' ? 'guest' : 'member';

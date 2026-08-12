@@ -9,6 +9,8 @@ import CalendarTab from './dashboard/CalendarTab.jsx';
 import AvailabilityTab from './dashboard/AvailabilityTab.jsx';
 import MeetingTypesTab from './dashboard/MeetingTypesTab.jsx';
 import MembersTab from './dashboard/MembersTab.jsx';
+import EssentialsTab from './dashboard/EssentialsTab.jsx';
+import SecurityTab from './dashboard/SecurityTab.jsx';
 import OutboxTab from './dashboard/OutboxTab.jsx';
 import SettingsTab from './dashboard/SettingsTab.jsx';
 
@@ -18,6 +20,8 @@ const TABS = [
   { id: 'availability', label: 'Availability' },
   { id: 'meeting_types', label: 'Meeting Types' },
   { id: 'members', label: 'Members' },
+  { id: 'essentials', label: 'Essentials' },
+  { id: 'security', label: 'Security' },
   { id: 'outbox', label: 'Outbox' },
   { id: 'settings', label: 'Settings' },
 ];
@@ -113,6 +117,8 @@ export default function Dashboard() {
       {tab === 'availability' && <AvailabilityTab />}
       {tab === 'meeting_types' && <MeetingTypesTab />}
       {tab === 'members' && <MembersTab />}
+      {tab === 'essentials' && <EssentialsTab ownerId={user?.id} />}
+      {tab === 'security' && <SecurityTab />}
       {tab === 'outbox' && <OutboxTab />}
       {tab === 'settings' && <SettingsTab />}
     </AppShell>

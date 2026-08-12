@@ -418,3 +418,94 @@ CREATE TABLE IF NOT EXISTS whatsapp_connections (
   status        TEXT NOT NULL DEFAULT 'disconnected',
   created_at    TEXT NOT NULL
 );
+
+-- ============================================================
+-- Custody layer: two-factor auth, essentials, and the access log
+-- ============================================================
+
+-- Second factor. Kept in its own table rather than columns on `users` so a
+-- routine SELECT * on a user never carries the secret along with it into a
+-- log line or an API response.
+CREATE TABLE IF NOT EXISTS user_totp (
+  user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  -- Encrypted with the same key as everything else: a database dump must not
+  -- hand over the ability to mint valid codes.
+  secret_enc  TEXT NOT NULL,
+  -- Set only once the first correct code proves the phone actually scanned it.
+  -- Until then the account is not protected and must not be treated as if it
+  -- were.
+  confirmed_at TEXT,
+  created_at  TEXT NOT NULL
+);
+
+-- Recovery codes for the phone that ends up in a river. Hashed, like
+-- passwords — single-use, and marked used rather than deleted so someone can
+-- see how many they have left.
+CREATE TABLE IF NOT EXISTS user_recovery_codes (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash  TEXT NOT NULL,
+  used_at    TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recovery_user ON user_recovery_codes(user_id);
+
+-- The things people are asked for and cannot recall: passport numbers, seat
+-- preferences, loyalty numbers, sizes, insurance policies.
+--
+-- Attached to a *person*, who may be the account holder or one of their
+-- contacts — because a PA books for the spouse and the children too, and a
+-- design that only holds the principal's own details fails on the first
+-- family trip.
+--
+-- `sensitivity` drives who may see it. A delegate engaged for scheduling has
+-- every reason to know about a nut allergy and none to see a passport.
+CREATE TABLE IF NOT EXISTS essentials (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Exactly one of these is set. subject_user_id for the account holder,
+  -- subject_contact_id for anyone else in their party.
+  subject_user_id    TEXT REFERENCES users(id) ON DELETE CASCADE,
+  subject_contact_id TEXT REFERENCES contacts(id) ON DELETE CASCADE,
+  category      TEXT NOT NULL,   -- see lib/essentials.js for the catalogue
+  field         TEXT NOT NULL,   -- e.g. 'passport_number', 'seat_preference'
+  label         TEXT NOT NULL DEFAULT '',
+  -- Plain values live here; sensitive ones live encrypted in value_enc and
+  -- this stays NULL. Never both.
+  value         TEXT,
+  value_enc     TEXT,
+  sensitivity   TEXT NOT NULL DEFAULT 'ordinary', -- ordinary | sensitive
+  -- Expiry is the point of the whole feature: a passport under six months'
+  -- validity turns someone away at check-in.
+  expires_on    TEXT,            -- 'YYYY-MM-DD'
+  -- Data entered once and never checked is worse than none, because it looks
+  -- authoritative. This is an assistant saying "I held the document and this
+  -- is what it says", with the date they said it.
+  verified_at   TEXT,
+  verified_by   TEXT REFERENCES users(id),
+  notes         TEXT NOT NULL DEFAULT '',
+  reminder_stage TEXT,           -- null | due_soon | overdue, so each nudge fires once
+  created_by    TEXT NOT NULL REFERENCES users(id),
+  updated_by    TEXT REFERENCES users(id),
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_essentials_owner ON essentials(owner_id);
+
+-- Who looked at what, and when.
+--
+-- Two jobs. If something ever leaks, this is the only way to say who saw it.
+-- And people behave differently when they know a reveal is recorded — which
+-- is the larger effect. Shown back to the principal, so it reads as
+-- reassurance rather than surveillance: "your Chief of Staff viewed your
+-- passport on 3 August".
+CREATE TABLE IF NOT EXISTS access_log (
+  id          TEXT PRIMARY KEY,
+  actor_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject_owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  essential_id TEXT,             -- kept as a plain id: the log outlives the row
+  action      TEXT NOT NULL,     -- reveal | create | update | delete
+  field       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_log_subject ON access_log(subject_owner_id, created_at);

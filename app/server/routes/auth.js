@@ -8,6 +8,10 @@ const {
   setSessionCookie, clearSessionCookie, parseCookies, slugify, SESSION_COOKIE,
 } = require('../lib/auth');
 const { isValidTimeZone } = require('../lib/timezone');
+const { handleProblem } = require('../lib/handles');
+const { limit, clear, clientIp } = require('../lib/rateLimit');
+const totp = require('../lib/totp');
+const { decrypt } = require('../lib/secretBox');
 const { sendEmail } = require('../lib/email');
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -85,7 +89,9 @@ async function uniqueSlugFromName(name) {
   let candidate = base;
   let n = 1;
   const exists = db.prepare('SELECT 1 FROM users WHERE slug = ?');
-  while (await exists.get(candidate)) {
+  // Also skips anything reserved or too short — a name like "Ed" or "API"
+  // would otherwise be auto-assigned a handle nobody is allowed to hold.
+  while (handleProblem(candidate) || await exists.get(candidate)) {
     n += 1;
     candidate = `${base}-${n}`;
   }
@@ -160,8 +166,24 @@ router.post('/signup', async (req, res) => {
   res.status(201).json({ user: publicUser(user) });
 });
 
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body || {};
+// Guessing has to cost something.
+//
+// Counted against the account being attacked AND the address attacking, so
+// neither hammering one account nor spraying many gets through. Without this,
+// a password is not a perimeter — it is a puzzle with unlimited attempts, and
+// everything else this app does to protect identity documents is decoration.
+const loginLimiter = limit({
+  limit: 8,
+  windowMs: 15 * 60 * 1000,
+  keys: (req) => [
+    `login:${String(req.body?.email || '').trim().toLowerCase()}`,
+    `login-ip:${clientIp(req)}`,
+  ],
+  message: 'Too many sign-in attempts. Wait a few minutes and try again.',
+});
+
+router.post('/login', loginLimiter, async (req, res) => {
+  const { email, password, code } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
@@ -169,6 +191,35 @@ router.post('/login', async (req, res) => {
   if (!user || !verifyPassword(String(password), user.password_hash)) {
     return res.status(401).json({ error: 'Incorrect email or password.' });
   }
+
+  // Second factor, if this account has one confirmed. An enrolment that was
+  // never confirmed is not protection and is not treated as such.
+  const second = await db.prepare('SELECT * FROM user_totp WHERE user_id = ? AND confirmed_at IS NOT NULL')
+    .get(user.id);
+  if (second) {
+    if (!code) {
+      // Deliberately after the password check: this only tells someone who
+      // already has the right password, which they could learn anyway.
+      return res.status(401).json({ error: 'Enter your authentication code.', needsCode: true });
+    }
+    const secret = decrypt(second.secret_enc);
+    const codeOk = secret && totp.verify(secret, code);
+    const recovery = codeOk ? null : await db.prepare(`
+      SELECT * FROM user_recovery_codes
+       WHERE user_id = ? AND code_hash = ? AND used_at IS NULL
+    `).get(user.id, totp.hashRecoveryCode(code));
+
+    if (!codeOk && !recovery) {
+      return res.status(401).json({ error: 'That code is not right.', needsCode: true });
+    }
+    // Recovery codes are single use — that is the entire point of them.
+    if (recovery) {
+      await db.prepare('UPDATE user_recovery_codes SET used_at = ? WHERE id = ?')
+        .run(new Date().toISOString(), recovery.id);
+    }
+  }
+
+  clear(`login:${String(email).trim().toLowerCase()}`);
   const session = await createSession(user.id);
   setSessionCookie(res, session);
   res.json({ user: publicUser(user) });

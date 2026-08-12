@@ -1,7 +1,8 @@
 const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
-const { requireAuth, slugify, verifyPassword, clearSessionCookie } = require('../lib/auth');
+const { requireAuth, verifyPassword, clearSessionCookie } = require('../lib/auth');
+const { normalizeHandle, handleProblem } = require('../lib/handles');
 const { isValidTimeZone } = require('../lib/timezone');
 const { publicUser } = require('./auth');
 const { summarizeAccount, deleteAccount } = require('../lib/accountDeletion');
@@ -25,13 +26,15 @@ router.patch('/', async (req, res) => {
     updates.push('timezone = ?');
     values.push(timezone);
   }
+  // `slug` on the wire, a handle to everyone who sees it.
   if (slug !== undefined) {
-    const cleanSlug = slugify(slug);
-    if (!cleanSlug) return res.status(400).json({ error: 'Please choose a valid booking link.' });
-    const taken = await db.prepare('SELECT 1 FROM users WHERE slug = ? AND id != ?').get(cleanSlug, req.user.id);
-    if (taken) return res.status(409).json({ error: 'That booking link is already taken.' });
+    const handle = normalizeHandle(slug);
+    const problem = handleProblem(handle);
+    if (problem) return res.status(400).json({ error: problem });
+    const taken = await db.prepare('SELECT 1 FROM users WHERE slug = ? AND id != ?').get(handle, req.user.id);
+    if (taken) return res.status(409).json({ error: 'That handle is already taken.' });
     updates.push('slug = ?');
-    values.push(cleanSlug);
+    values.push(handle);
   }
 
   if (updates.length === 0) {

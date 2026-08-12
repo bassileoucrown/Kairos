@@ -79,6 +79,16 @@ services:
       # the point of the product. Leave unset for open signup.
       - key: SIGNUP_ACCESS_CODE
         sync: false
+      # Required before the app will hold identity details (passport numbers,
+      # policy numbers) or enable two-factor. 32 bytes, as 64 hex characters:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      #
+      # Back this up somewhere that is not this application. Losing it makes
+      # every encrypted field permanently unreadable — there is deliberately no
+      # recovery path. Without it the app runs normally; only sensitive fields
+      # are refused, with an explanation.
+      - key: ENCRYPTION_KEY
+        sync: false
       # server/lib/db.js also uses node:sqlite for local development, which
       # needs Node 22+.
       - key: NODE_VERSION

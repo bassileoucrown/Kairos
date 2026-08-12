@@ -171,6 +171,20 @@ export default function Today() {
             </div>
           ))}
 
+          {(needsYou.expiring || []).map((e) => (
+            <Link className="needs-card" key={e.id} to="/dashboard?tab=essentials">
+              <div className="needs-kind">
+                {e.state === 'expired' ? 'Expired' : 'Expiring soon'}
+              </div>
+              <div className="needs-title">{e.label}</div>
+              <div className="needs-meta">
+                {e.state === 'expired'
+                  ? `Lapsed ${Math.abs(e.daysUntil)} days ago — ${e.expiresOn}`
+                  : `${e.daysUntil} days left — ${e.expiresOn}. Many countries want six months.`}
+              </div>
+            </Link>
+          ))}
+
           {(needsYou.itineraryRequests || []).map((i) => (
             <div className="needs-card" key={i.id}>
               <div className="needs-kind">Itinerary — {i.requestedBy || 'your assistant'} is asking</div>

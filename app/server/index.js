@@ -20,6 +20,8 @@ const tasksRouter = require('./routes/tasks');
 const { router: itineraryRouter } = require('./routes/itinerary');
 const todayRouter = require('./routes/today');
 const workspaceRouter = require('./routes/workspace');
+const securityRouter = require('./routes/security');
+const { router: essentialsRouter } = require('./routes/essentials');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 
@@ -91,6 +93,8 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/itinerary', itineraryRouter);
 app.use('/api/today', todayRouter);
 app.use('/api/workspace', workspaceRouter);
+app.use('/api/security', securityRouter);
+app.use('/api/essentials', essentialsRouter);
 
 // In production, serve the built client and let it handle client-side routing.
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
