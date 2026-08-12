@@ -235,11 +235,16 @@ The two screens the job actually runs on.
 
 Kairos had grown to roughly eighteen screens reached through per-page topbar links that differed on
 every page — which is how a tool for busy people becomes work in itself. `components/AppShell.jsx`
-is now the only navigation: the same rail everywhere, one active state, and the **principal
+is now the only navigation, used by **every** signed-in screen: the same rail everywhere, one active state, and the **principal
 switcher in a fixed place** so "who am I doing this for" is never a guess. It persists across pages,
 collapses behind a toggle on small screens, and carries a live badge for waiting approvals. Tabs
 inside Dashboard and PA Home moved into the URL (`/dashboard?tab=settings`), so the nav can link
 straight to a view and any view can be bookmarked or sent to someone.
+
+**Signing out** lives in the account menu at the top right, next to the signed-in name — where
+people look for it, and where it stays reachable at phone width. It previously sat at the foot of
+the sidebar, which is both the last place anyone checks and, on mobile, hidden behind the menu
+toggle. The menu closes on Escape or an outside click, and also offers Settings.
 
 ### Today
 

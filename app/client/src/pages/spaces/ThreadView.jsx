@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { useAuth } from '../../lib/AuthContext.jsx';
+import AppShell from '../../components/AppShell.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 import TaskList from './TaskList.jsx';
 
@@ -211,7 +211,6 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
 
 export default function ThreadView() {
   const { threadId } = useParams();
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -265,8 +264,6 @@ export default function ThreadView() {
     api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
   const makeTask = (payload) => act(() => api.post('/tasks', payload));
 
-  async function handleLogout() { await logout(); navigate('/login'); }
-
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
 
@@ -275,17 +272,20 @@ export default function ThreadView() {
     : data.messages;
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <span className="topbar-brand">Kairos — Spaces</span>
-        <div className="topbar-actions">
-          <Link to={`/spaces/${data.thread.spaceId}`} className="btn btn-secondary btn-sm">Back to space</Link>
-          <span>{user.name}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
+    <AppShell
+      title={data.thread.name}
+      active="spaces"
+      actions={
+        <div className="register-toggle" role="group" aria-label="Which messages to show">
+          <button type="button" className={view === 'all' ? 'is-on' : ''} onClick={() => setView('all')}>
+            Everything
+          </button>
+          <button type="button" className={view === 'records' ? 'is-on' : ''} onClick={() => setView('records')}>
+            Records only
+          </button>
         </div>
-      </div>
-
-      <div className="page">
+      }
+    >
         {data.stage && (
           <p className="tz-note" style={{ marginBottom: 4 }}>
             <Link to={`/projects/${data.stage.projectId}`}>{data.stage.projectName}</Link>
@@ -296,26 +296,6 @@ export default function ThreadView() {
             </span>
           </p>
         )}
-        <div className="page-header">
-          <h1>{data.thread.name}</h1>
-          <div className="register-toggle" role="group" aria-label="Which messages to show">
-            <button
-              type="button"
-              className={view === 'all' ? 'is-on' : ''}
-              onClick={() => setView('all')}
-            >
-              Everything
-            </button>
-            <button
-              type="button"
-              className={view === 'records' ? 'is-on' : ''}
-              onClick={() => setView('records')}
-            >
-              Records only
-            </button>
-          </div>
-        </div>
-
         {error && <div className="alert alert-error">{error}</div>}
 
         <p className="tz-note" style={{ marginBottom: 14 }}>
@@ -383,7 +363,6 @@ export default function ThreadView() {
             </button>
           </form>
         )}
-      </div>
-    </div>
+    </AppShell>
   );
 }

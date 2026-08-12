@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 
 const ROLE_LABELS = { pa: 'PA', ea: 'EA', chief_of_staff: 'Chief of Staff', principal: 'Principal' };
@@ -13,7 +14,7 @@ const DELEGATABLE = [
 
 export default function SpaceDetail() {
   const { spaceId } = useParams();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -78,8 +79,6 @@ export default function SpaceDetail() {
     } catch (err) { setError(err.message); }
   }
 
-  async function handleLogout() { await logout(); navigate('/login'); }
-
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
 
@@ -87,21 +86,11 @@ export default function SpaceDetail() {
   const isPrivate = space.context === 'private';
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <span className="topbar-brand">Kairos — Spaces</span>
-        <div className="topbar-actions">
-          <Link to="/spaces" className="btn btn-secondary btn-sm">All spaces</Link>
-          <span>{user.name}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
-        </div>
-      </div>
-
-      <div className="page">
-        <div className="page-header">
-          <h1>{space.name}</h1>
-          <span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>
-        </div>
+    <AppShell
+      title={space.name}
+      active="spaces"
+      actions={<span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>}
+    >
 
         {error && <div className="alert alert-error">{error}</div>}
         {notice && <div className="alert alert-success">{notice}</div>}
@@ -254,7 +243,6 @@ export default function SpaceDetail() {
             )}
           </>
         )}
-      </div>
-    </div>
+    </AppShell>
   );
 }

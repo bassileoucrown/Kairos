@@ -806,3 +806,45 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   cursor: pointer;
 }
 .member-toggle input { width: 14px; height: 14px; }
+
+/* ---- Account menu (header, top-right) ---- */
+.account { position: relative; }
+.account-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius); padding: 4px 8px 4px 4px;
+  cursor: pointer; color: var(--text); font-size: 0.86rem;
+}
+.account-btn:hover { border-color: var(--border); background: var(--bg); }
+.account-avatar {
+  flex: 0 0 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: #fff;
+  font-size: 0.7rem; font-weight: 700;
+}
+.account-name { font-weight: 500; }
+.account-caret { color: var(--text-muted); font-size: 0.7rem; }
+@media (max-width: 620px) { .account-name, .account-caret { display: none; } }
+
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 210px; z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(28,33,39,0.12);
+  padding: 6px;
+}
+.account-menu-head { padding: 8px 10px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.account-menu-name { font-size: 0.88rem; font-weight: 600; }
+.account-menu-email { font-size: 0.78rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.account-menu-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none;
+  padding: 8px 10px; border-radius: var(--radius);
+  font-size: 0.87rem; color: var(--text); cursor: pointer;
+  text-decoration: none;
+}
+.account-menu-item:hover { background: var(--bg); text-decoration: none; }
+.account-menu-item.is-signout { color: var(--danger); font-weight: 600; }
+.account-menu-item.is-signout:hover { background: var(--danger-soft); }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { useAuth } from '../../lib/AuthContext.jsx';
+import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 import TaskList from './TaskList.jsx';
 
@@ -12,7 +12,6 @@ const SETTABLE = ['not_started', 'active', 'done'];
 
 export default function ProjectDetail() {
   const { projectId } = useParams();
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -61,8 +60,6 @@ export default function ProjectDetail() {
   const move = (id, direction) => act(() => api.post(`/projects/stages/${id}/move`, { direction }));
   const removeStage = (id) => act(() => api.del(`/projects/stages/${id}`));
 
-  async function handleLogout() { await logout(); navigate('/login'); }
-
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
 
@@ -70,27 +67,16 @@ export default function ProjectDetail() {
   const doneCount = stages.filter((s) => s.status === 'done').length;
 
   return (
-    <div className="shell">
-      <div className="topbar">
-        <span className="topbar-brand">Kairos — Spaces</span>
-        <div className="topbar-actions">
-          <Link to={`/spaces/${space.id}`} className="btn btn-secondary btn-sm">Back to space</Link>
-          <span>{user.name}</span>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
-        </div>
-      </div>
-
-      <div className="page">
+    <AppShell
+      title={project.name}
+      active="spaces"
+      actions={<span className="pill">{doneCount} of {stages.length} stages done</span>}
+    >
         <p className="tz-note" style={{ marginBottom: 4 }}>
           <Link to={`/spaces/${space.id}`}>{space.name}</Link>
           {' · '}
           <span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>
         </p>
-        <div className="page-header">
-          <h1>{project.name}</h1>
-          <span className="pill">{doneCount} of {stages.length} stages done</span>
-        </div>
-
         {error && <div className="alert alert-error">{error}</div>}
 
         <p className="tz-note" style={{ marginBottom: 16 }}>
@@ -195,7 +181,6 @@ export default function ProjectDetail() {
             <button className="btn btn-primary btn-sm" type="submit">Add stage</button>
           </form>
         )}
-      </div>
-    </div>
+    </AppShell>
   );
 }

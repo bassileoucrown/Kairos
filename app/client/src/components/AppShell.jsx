@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
@@ -38,6 +38,63 @@ export function getActivePrincipal() {
 }
 export function setActivePrincipal(id) {
   try { id ? localStorage.setItem(ACTIVE_KEY, id) : localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+}
+
+function initials(name) {
+  return (name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
+// Sign out used to sit at the bottom of the sidebar, which is the one place
+// nobody looks — and on a phone the sidebar is behind a hamburger, so it was
+// effectively hidden. It belongs top-right, under the account name, which is
+// where every other product puts it and where it stays visible at any width.
+function AccountMenu({ user, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDocClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="account" ref={ref}>
+      <button
+        type="button"
+        className="account-btn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="account-avatar" aria-hidden="true">{initials(user?.name)}</span>
+        <span className="account-name">{user?.name}</span>
+        <span className="account-caret" aria-hidden="true">▾</span>
+      </button>
+
+      {open && (
+        <div className="account-menu" role="menu">
+          <div className="account-menu-head">
+            <div className="account-menu-name">{user?.name}</div>
+            <div className="account-menu-email">{user?.email}</div>
+          </div>
+          <Link className="account-menu-item" role="menuitem" to="/dashboard?tab=settings" onClick={() => setOpen(false)}>
+            Settings
+          </Link>
+          <button className="account-menu-item is-signout" role="menuitem" type="button" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AppShell({ children, title, actions, active }) {
@@ -145,8 +202,7 @@ export default function AppShell({ children, title, actions, active }) {
         </nav>
 
         <div className="app-nav-foot">
-          <div className="nav-user">{user?.name}</div>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={handleLogout}>Log out</button>
+          <div className="nav-user">Signed in as {user?.name}</div>
         </div>
       </aside>
 
@@ -168,7 +224,10 @@ export default function AppShell({ children, title, actions, active }) {
               <p className="app-header-sub">for {current.name}</p>
             )}
           </div>
-          <div className="app-header-actions">{actions}</div>
+          <div className="app-header-actions">
+            {actions}
+            <AccountMenu user={user} onSignOut={handleLogout} />
+          </div>
         </header>
         <div className="app-body">{children}</div>
       </main>
