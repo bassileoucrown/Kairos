@@ -22,6 +22,7 @@ import Workspace from './pages/Workspace.jsx';
 import Connections from './pages/Connections.jsx';
 import Household from './pages/Household.jsx';
 import MyInstructions from './pages/MyInstructions.jsx';
+import Announcements from './pages/Announcements.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -131,6 +132,7 @@ export default function App() {
       <Route path="/connections" element={<RequireAuth><Connections /></RequireAuth>} />
       <Route path="/household" element={<RequireAuth><Household /></RequireAuth>} />
       <Route path="/instructions" element={<RequireAuth><MyInstructions /></RequireAuth>} />
+      <Route path="/notices" element={<RequireAuth><Announcements /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />

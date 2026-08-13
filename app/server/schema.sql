@@ -612,3 +612,45 @@ CREATE TABLE IF NOT EXISTS household_replies (
   created_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_household_replies_instr ON household_replies(instruction_id, created_at);
+
+-- ============================================================
+-- Announcements — one way, from the people running Kairos
+-- ============================================================
+
+-- The useful half of "a community for PAs", without the half that would hurt.
+--
+-- A forum where assistants discuss their principals, from accounts traceable
+-- to named executives, is the opposite posture to everything else here — and
+-- no permission check catches that kind of leak, because the person posting
+-- does not experience it as one. A broadcast channel keeps the information and
+-- the notices, carries no moderation surface, and cannot be turned into a
+-- directory of who is on Kairos.
+--
+-- Who may post is read from ANNOUNCEMENT_AUTHORS in the environment, not from
+-- a column. There is deliberately no way to grant yourself this from inside
+-- the app, and nothing in the database to flip.
+CREATE TABLE IF NOT EXISTS announcements (
+  id           TEXT PRIMARY KEY,
+  author_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  -- everyone | assistants | principals | household. Aimed rather than blasted:
+  -- a notice meant for assistants is the thing a PA actually wanted from a
+  -- community, and a principal does not need to read it.
+  audience     TEXT NOT NULL DEFAULT 'everyone',
+  -- Draft until published. Writing a notice to several thousand people is
+  -- worth being able to do in two sittings.
+  published_at TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published_at);
+
+CREATE TABLE IF NOT EXISTS announcement_reads (
+  id              TEXT PRIMARY KEY,
+  announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at         TEXT NOT NULL,
+  UNIQUE(announcement_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_announcement_reads_user ON announcement_reads(user_id);

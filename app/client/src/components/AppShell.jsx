@@ -24,6 +24,7 @@ const NAV = [
   { to: '/spaces', label: 'Spaces', icon: '❑' },
   { to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },
   { to: '/connections', label: 'Connections', icon: '@' },
+  { to: '/notices', label: 'Notices', icon: '✦', badge: 'notices' },
   { to: '/household', label: 'Household', icon: '⌂', principalScoped: true, fullAccessOnly: true, notForStaff: true },
   { to: '/pa?tab=contacts', match: '/pa', label: 'People', icon: '☺', principalScoped: true },
   { to: '/pa?tab=approvals', match: '/pa', label: 'Approvals', icon: '!', principalScoped: true, badge: 'approvals' },
@@ -136,7 +137,7 @@ export default function AppShell({ children, title, actions, active }) {
   const navigate = useNavigate();
   const [principals, setPrincipals] = useState([]);
   const [activeId, setActiveId] = useState(getActivePrincipal() || user?.id || null);
-  const [badges, setBadges] = useState({ approvals: 0 });
+  const [badges, setBadges] = useState({ approvals: 0, notices: 0 });
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -149,6 +150,12 @@ export default function AppShell({ children, title, actions, active }) {
       const preferred = d.principals.find((p) => p.role !== 'owner') || d.principals[0];
       setActiveId(chosen || preferred?.id || null);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.get('/announcements')
+      .then((d) => setBadges((b) => ({ ...b, notices: d.unread })))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

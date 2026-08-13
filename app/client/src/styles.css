@@ -1039,3 +1039,15 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .instr-reply-form { display: flex; gap: 6px; }
 .instr-reply-form input { flex: 1; min-width: 0; }
 .invite-scope { margin: -6px 0 14px; }
+
+/* ---- Notices ---- */
+.ann { display: flex; flex-direction: column; gap: 6px; }
+.ann.is-new { border-left: 3px solid var(--accent); }
+.ann-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ann-title { font-size: 1.05rem; margin: 0; }
+.ann-meta { font-size: 0.8rem; color: var(--text-muted); }
+.ann-body { white-space: pre-wrap; font-size: 0.94rem; line-height: 1.55; }
+.ann-composer { margin-bottom: 20px; }
+.ann-composer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ann-admin { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ann-admin-actions { display: flex; gap: 6px; }

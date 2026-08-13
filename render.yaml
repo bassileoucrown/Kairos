@@ -89,6 +89,14 @@ services:
       # are refused, with an explanation.
       - key: ENCRYPTION_KEY
         sync: false
+      # Comma-separated email addresses allowed to publish notices to everyone.
+      #
+      # Deliberately here rather than a column on users: there is no request
+      # that can add somebody to this list, and nothing in the database to
+      # flip. Unset means nobody can publish, and the Notices screen says so —
+      # to the people who could act on it, and to nobody else.
+      - key: ANNOUNCEMENT_AUTHORS
+        sync: false
       # server/lib/db.js also uses node:sqlite for local development, which
       # needs Node 22+.
       - key: NODE_VERSION

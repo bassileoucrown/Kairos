@@ -609,6 +609,38 @@ somebody could flip later without noticing what it touched.
 - The invitation page says the shape of it **before** they accept, not in terms
   afterwards.
 
+## Notices — one direction
+
+The useful half of "a community for assistants", without the half that would
+hurt. A forum where PAs discuss their principals, from accounts traceable to
+named executives, runs against everything else in this app — and no permission
+check catches that kind of leak, because the person posting does not
+experience it as one. A broadcast channel keeps the information and the
+notices, carries no moderation surface, and cannot be turned into a directory
+of who is here.
+
+- **Who may publish is read from `ANNOUNCEMENT_AUTHORS` in the environment**,
+  not from a column. There is deliberately no request that can add somebody to
+  it and nothing in the database to flip — the same reasoning as
+  `ENCRYPTION_KEY` living outside the data it protects. Unset means nobody can
+  publish, and the screen says so **to the people who could act on it**, and to
+  nobody else.
+- **Aimed rather than blasted.** `everyone`, `assistants`, `principals`, or
+  `household`. An assistants-only notice is the thing a PA actually wanted out
+  of a community, and a principal does not need to read it — a channel nobody
+  can mute is only worth reading if what arrives was meant for the reader.
+- **Nobody may reply, and there is no endpoint to.** That is the property that
+  makes this safe to ship.
+- Drafts, withdraw, and re-publish, because a notice that went out wrong is
+  worth being able to correct. Authors see how many people have read each one.
+- Opening the page marks it read; asking someone to tick off a notice they
+  have just read is make-work.
+- A request from an account that may not publish returns **404, not 403** —
+  the existence of a broadcast channel and who writes to it is not something
+  an ordinary account needs confirmed.
+
+Not sent by email, deliberately: notices are worth a badge, not an inbox.
+
 ## What an assistant can and cannot do
 
 Approving a Tier 3 booking while being unable to set the hours that produced the slot makes no
