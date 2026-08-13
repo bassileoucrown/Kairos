@@ -110,8 +110,10 @@ export default function EssentialsTab({ ownerId }) {
 
       {!data.encryptionConfigured && (
         <div className="alert alert-warning">
-          This deployment has no encryption key, so identity details cannot be stored yet.
-          Preferences, loyalty numbers and sizes work as normal.
+          <strong>Identity documents aren't available yet.</strong> Passports, visas, licences
+          and national IDs need an encryption key, and this deployment has none — so rather than
+          hold them in the clear, Kairos won't hold them at all. Everything else works normally:
+          preferences, allergies, loyalty numbers, sizes, policy numbers.
         </div>
       )}
 
@@ -141,7 +143,18 @@ export default function EssentialsTab({ ownerId }) {
               id="ess-category" value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value, field: '' })}
             >
-              {catalogue.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              {/* Offering a category that will be refused on save is worse than
+                  not offering it: the work is done by then, and a passport
+                  number has been typed into a box that was never going to
+                  keep it. */}
+              {catalogue.map((c) => {
+                const locked = c.sensitivity === 'sensitive' && !data.encryptionConfigured;
+                return (
+                  <option key={c.id} value={c.id} disabled={locked}>
+                    {c.label}{locked ? ' — not available yet' : ''}
+                  </option>
+                );
+              })}
             </select>
             {chosen && <p className="hint">{chosen.hint}</p>}
           </div>

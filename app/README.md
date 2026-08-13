@@ -215,8 +215,15 @@ six months' validity turns someone away at check-in), a **trip-ready check**
 against a travel date, and a **travel block** — one copyable paste of
 everything an airline asks for, which is where the seconds are actually saved.
 
-With no `ENCRYPTION_KEY` set, ordinary fields work normally and sensitive ones
-are refused with an explanation rather than stored in the clear.
+With no `ENCRYPTION_KEY` set, the identity categories are **marked "not
+available yet" and cannot be selected at all**, and the screen says plainly
+why. Not merely refused on save: that is a rejection after the work is done,
+and after a passport number has been typed into a box that was never going to
+keep it. Everything else works normally — preferences, allergies, loyalty
+numbers, sizes, policy numbers.
+
+Set the key later and the categories unlock on the next load. Nothing to
+migrate, because nothing sensitive was ever stored.
 
 Not built, deliberately: **file uploads**. That needs a storage answer, a
 retention policy, and a considered response to "what happens when this leaks".
