@@ -62,17 +62,19 @@ function isLive(row, now = new Date()) {
   return Number(row.uses_spent) < Number(row.uses_allowed);
 }
 
-/** The principal's current code, live or not — they are entitled to see their own. */
-async function currentFor(ownerId) {
-  const row = await db.prepare(`
-    SELECT * FROM access_codes WHERE owner_id = ? AND revoked_at IS NULL
-    ORDER BY created_at DESC LIMIT 1
-  `).get(ownerId);
-  if (!row) return null;
+// A principal can hold several at once, and that is the point. Bringing on a
+// Chief of Staff and a scheduling-only delegate in the same week needs two
+// codes with two different remits, and an earlier design that replaced the old
+// code on every arm would have silently killed the one already given out.
+//
+// Capped, because codes that accumulate are codes nobody turns off — and the
+// expiry window only helps if the pile is small enough to read.
+const MAX_LIVE = 5;
 
-  const now = new Date();
+function serialize(row, now = new Date()) {
   const live = isLive(row, now);
   return {
+    id: row.id,
     code: row.code,
     role: row.role,
     roleLabel: roleLabel(row.role),
@@ -90,23 +92,41 @@ async function currentFor(ownerId) {
   };
 }
 
-/**
- * Arm a code. Replaces whatever was there — a principal has one live code at
- * a time, because two would mean two different remits in circulation with no
- * way to tell which somebody was given.
- */
+/** Every code this principal holds, newest first. Their own only, always. */
+async function listFor(ownerId) {
+  const rows = await db.prepare(`
+    SELECT * FROM access_codes WHERE owner_id = ? AND revoked_at IS NULL
+    ORDER BY created_at DESC LIMIT 20
+  `).all(ownerId);
+  const now = new Date();
+  return rows.map((r) => serialize(r, now));
+}
+
+async function liveFor(ownerId) {
+  return (await listFor(ownerId)).filter((c) => c.live);
+}
+
+/** Arm another code. Existing ones keep working. */
 async function arm({ ownerId, code, role, window: windowId, uses }) {
   const clean = normalizeCode(code);
   const problem = codeProblem(clean);
   if (problem) return { error: problem };
   if (!isAssistantRole(role)) return { error: 'Choose what the code grants.' };
 
+  const live = await liveFor(ownerId);
+  // Two live codes sharing a phrase would be genuinely ambiguous — redeeming
+  // could grant either remit, and nobody could say which.
+  if (live.some((c) => c.code === clean)) {
+    return { error: 'You already have a live code with that phrase.' };
+  }
+  if (live.length >= MAX_LIVE) {
+    return { error: `You can hold ${MAX_LIVE} live codes at once. Turn one off first.` };
+  }
+
   const count = Math.min(10, Math.max(1, Math.round(Number(uses) || 2)));
   const hours = windowHours(windowId);
   const now = new Date();
 
-  await db.prepare('UPDATE access_codes SET revoked_at = ? WHERE owner_id = ? AND revoked_at IS NULL')
-    .run(now.toISOString(), ownerId);
   await db.prepare(`
     INSERT INTO access_codes (id, owner_id, code, role, expires_at, uses_allowed, uses_spent, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, ?)
@@ -116,12 +136,17 @@ async function arm({ ownerId, code, role, window: windowId, uses }) {
     count, now.toISOString(),
   );
 
-  return { code: await currentFor(ownerId) };
+  return { codes: await listFor(ownerId) };
 }
 
-async function turnOff(ownerId) {
-  await db.prepare('UPDATE access_codes SET revoked_at = ? WHERE owner_id = ? AND revoked_at IS NULL')
-    .run(new Date().toISOString(), ownerId);
+/** Turn off one, by id. The others are untouched — that is the whole change. */
+async function turnOff(ownerId, id) {
+  const row = await db.prepare('SELECT id FROM access_codes WHERE id = ? AND owner_id = ?')
+    .get(id, ownerId);
+  if (!row) return { error: 'Code not found.' };
+  await db.prepare('UPDATE access_codes SET revoked_at = ? WHERE id = ?')
+    .run(new Date().toISOString(), row.id);
+  return { codes: await listFor(ownerId) };
 }
 
 function sameCode(a, b) {
@@ -151,12 +176,14 @@ async function redeem({ viewerId, handle, code }) {
   // Answered plainly: you already know this account exists, it is yours.
   if (owner.id === viewerId) return { error: 'That is your own handle.' };
 
-  const row = await db.prepare(`
+  // Checked against every live code this principal holds, since they may have
+  // several with different remits running at once.
+  const rows = await db.prepare(`
     SELECT * FROM access_codes WHERE owner_id = ? AND revoked_at IS NULL
-    ORDER BY created_at DESC LIMIT 1
-  `).get(owner.id);
-  if (!isLive(row)) return NEUTRAL;
-  if (!sameCode(row.code, clean)) return NEUTRAL;
+    ORDER BY created_at DESC
+  `).all(owner.id);
+  const row = rows.filter((r) => isLive(r)).find((r) => sameCode(r.code, clean));
+  if (!row) return NEUTRAL;
 
   const existing = await db.prepare(`
     SELECT * FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status != 'revoked'
@@ -180,6 +207,6 @@ async function redeem({ viewerId, handle, code }) {
 }
 
 module.exports = {
-  WINDOWS, MIN_LENGTH, MAX_LENGTH,
-  normalizeCode, codeProblem, currentFor, arm, turnOff, redeem,
+  WINDOWS, MIN_LENGTH, MAX_LENGTH, MAX_LIVE,
+  normalizeCode, codeProblem, listFor, liveFor, arm, turnOff, redeem,
 };

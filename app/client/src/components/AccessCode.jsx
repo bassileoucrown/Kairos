@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 
-// The principal's pairing code.
+// The principal's pairing codes.
 //
 // An emailed invitation is still the better path when email is working. This
 // is for when it isn't, or when the principal is simply sitting across a table
 // from the person: read them two things, and they're in.
 //
-// Deliberately armed rather than standing. It shows a countdown and a use
-// count because those are the facts that decide whether a code is safe, and a
-// credential whose expiry is invisible is one nobody ever turns off.
+// Several at once, on purpose. Bringing on a Chief of Staff and a
+// scheduling-only delegate in the same week are two different remits, and each
+// wants its own code with its own window — turning one off must not touch the
+// other. Each is listed with what it grants, so the principal can see which is
+// which before deciding what to end.
+//
+// Deliberately armed rather than standing. Every one shows a countdown and a
+// use count because those are the facts that decide whether a code is safe,
+// and a credential whose expiry is invisible is one nobody ever turns off.
 
 function countdown(minutes) {
   if (minutes <= 0) return 'expired';
@@ -22,7 +28,7 @@ function countdown(minutes) {
 export default function AccessCode({ handle }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ code: '', role: 'pa', window: '24h', uses: 2 });
 
   function load() {
@@ -34,20 +40,27 @@ export default function AccessCode({ handle }) {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/access-codes', form);
-      setEditing(false);
-      load();
+      const d = await api.post('/access-codes', form);
+      setData((prev) => ({ ...prev, codes: d.codes }));
+      setForm({ code: '', role: 'pa', window: '24h', uses: 2 });
+      setAdding(false);
     } catch (err) { setError(err.message); }
   }
 
-  async function turnOff() {
+  async function turnOff(id) {
     setError('');
-    try { await api.del('/access-codes'); load(); }
-    catch (err) { setError(err.message); }
+    try {
+      const d = await api.del(`/access-codes/${id}`);
+      setData((prev) => ({ ...prev, codes: d.codes }));
+    } catch (err) { setError(err.message); }
   }
 
   if (!data) return null;
-  const live = data.code?.live ? data.code : null;
+  const codes = data.codes || [];
+  const live = codes.filter((c) => c.live);
+  const ended = codes.filter((c) => !c.live);
+  const maxLive = data.maxLive || 5;
+  const full = live.length >= maxLive;
 
   return (
     <div className="card code-card">
@@ -55,58 +68,68 @@ export default function AccessCode({ handle }) {
 
       <div className="code-head">
         <div>
-          <div className="name">Access code</div>
+          <div className="name">Access codes</div>
           <div className="meta">
-            Bring someone on without email — read them your handle and this code.
+            Bring someone on without email — read them your handle and one of these.
           </div>
         </div>
-        {live
-          ? <span className="pill">Live</span>
+        {live.length
+          ? <span className="pill">{live.length} live</span>
           : <span className="pill is-off">Off</span>}
       </div>
 
-      {live && (
-        <>
+      {live.map((c) => (
+        <div className="code-live" key={c.id}>
           <div className="code-value">
             <span className="code-handle">@{handle}</span>
-            <span className="code-word">{live.code}</span>
+            <span className="code-word">{c.code}</span>
           </div>
           <div className="code-facts">
-            Grants <strong>{live.roleLabel}</strong> · {countdown(live.minutesLeft)} ·{' '}
-            {live.usesLeft} of {live.usesAllowed} {live.usesAllowed === 1 ? 'use' : 'uses'} left
+            Grants <strong>{c.roleLabel}</strong> · {countdown(c.minutesLeft)} ·{' '}
+            {c.usesLeft} of {c.usesAllowed} {c.usesAllowed === 1 ? 'use' : 'uses'} left
           </div>
-          <p className="hint">
-            They need both parts. The handle on its own is public; the code on its own belongs to
-            nobody in particular. Together they mean one specific person joining one specific
-            account.
-          </p>
           <div className="code-actions">
-            <button className="btn btn-sm" type="button" onClick={() => setEditing((v) => !v)}>
-              {editing ? 'Cancel' : 'Replace'}
-            </button>
-            <button className="btn btn-danger btn-sm" type="button" onClick={turnOff}>
+            <button
+              className="btn btn-danger btn-sm" type="button"
+              onClick={() => turnOff(c.id)}
+            >
               Turn off
             </button>
           </div>
-        </>
+        </div>
+      ))}
+
+      {live.length > 0 && (
+        <p className="hint">
+          They need both parts. The handle on its own is public; a code on its own belongs to
+          nobody in particular. Together they mean one specific person joining one specific
+          account.
+        </p>
       )}
 
-      {!live && !editing && (
+      {!adding && (
         <>
-          {data.code && (
+          {full ? (
             <p className="hint">
-              The last code {data.code.endedBecause === 'expired' ? 'expired' : 'was used up'}.
+              You're holding {maxLive} live codes, which is the limit. Turn one off to add
+              another — codes that pile up are codes nobody reads.
+            </p>
+          ) : (
+            <button className="btn btn-primary btn-sm" type="button" onClick={() => setAdding(true)}>
+              {live.length ? 'Add another code' : 'Set a code'}
+            </button>
+          )}
+          {live.length === 0 && ended.length > 0 && (
+            <p className="hint">
+              The last code {ended[0].endedBecause === 'expired' ? 'expired' : 'was used up'}.
               Codes stop working on their own so an old one can't be dug out of a message months
               later.
             </p>
           )}
-          <button className="btn btn-primary btn-sm" type="button" onClick={() => setEditing(true)}>
-            Set a code
-          </button>
         </>
       )}
 
-      {editing && (
+      {adding && (
         <form className="code-form" onSubmit={save}>
           <div className="field">
             <label htmlFor="code-word">Code</label>
@@ -150,7 +173,12 @@ export default function AccessCode({ handle }) {
               />
             </div>
           </div>
-          <button className="btn btn-primary btn-sm" type="submit">Arm it</button>
+          <div className="code-actions">
+            <button className="btn btn-primary btn-sm" type="submit">Arm it</button>
+            <button className="btn btn-sm" type="button" onClick={() => setAdding(false)}>
+              Cancel
+            </button>
+          </div>
         </form>
       )}
     </div>

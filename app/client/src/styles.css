@@ -1100,6 +1100,7 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-size: 1.15rem; font-weight: 600; letter-spacing: 0.04em; color: var(--accent-hover);
   word-break: break-all;
 }
+.code-live { display: flex; flex-direction: column; gap: 8px; }
 .code-facts { font-size: 0.84rem; color: var(--text-muted); }
 .code-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .code-form { display: flex; flex-direction: column; gap: 2px; }

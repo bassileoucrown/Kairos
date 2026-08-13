@@ -5,7 +5,7 @@ const { limit, clientIp } = require('../lib/rateLimit');
 const { ASSISTANT_ROLES } = require('../lib/roles');
 const { ensureDirectLine } = require('../lib/directLine');
 const {
-  WINDOWS, currentFor, arm, turnOff, redeem,
+  WINDOWS, MAX_LIVE, listFor, arm, turnOff, redeem,
 } = require('../lib/accessCodes');
 
 const router = asyncRouter();
@@ -22,10 +22,11 @@ const redeemLimiter = limit({
   message: 'Too many attempts. Wait a few minutes and try again.',
 });
 
-/** The principal's own code. Only ever their own — there is no lookup by anyone else. */
+/** The principal's own codes. Only ever their own — there is no lookup by anyone else. */
 router.get('/', async (req, res) => {
   res.json({
-    code: await currentFor(req.user.id),
+    codes: await listFor(req.user.id),
+    maxLive: MAX_LIVE,
     windows: WINDOWS,
     roles: Object.entries(ASSISTANT_ROLES).map(([id, r]) => ({
       id, label: r.label, description: r.description,
@@ -37,12 +38,16 @@ router.post('/', async (req, res) => {
   const { code, role, window: windowId, uses } = req.body || {};
   const result = await arm({ ownerId: req.user.id, code, role, window: windowId, uses });
   if (result.error) return res.status(400).json({ error: result.error });
-  res.status(201).json({ code: result.code });
+  res.status(201).json({ codes: result.codes });
 });
 
-router.delete('/', async (req, res) => {
-  await turnOff(req.user.id);
-  res.status(204).end();
+// By id, so turning off the delegate's code leaves the Chief of Staff's alone.
+// A code that belongs to somebody else is not found rather than refused — the
+// principal has no business learning that an id exists at all.
+router.delete('/:id', async (req, res) => {
+  const result = await turnOff(req.user.id, req.params.id);
+  if (result.error) return res.status(404).json({ error: result.error });
+  res.json({ codes: result.codes });
 });
 
 // Joining. The one endpoint an assistant uses, and the only place in the app

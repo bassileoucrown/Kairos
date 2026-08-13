@@ -106,6 +106,15 @@ choose how long it lives. They read the assistant their handle and the code
 over the phone, and the assistant enters both on their Workspace. No mailbox,
 no provider, nobody waiting on DNS.
 
+Several codes can be live at once, up to five. Bringing on a Chief of Staff and
+a scheduling-only delegate in the same week is two different remits, and each
+wants its own phrase, window and use count. Arming one never disturbs another —
+an earlier design replaced the previous code on every arm, which would have
+silently killed one already given out. Each is listed with what it grants so
+the principal can see which is which before turning one off, and the same
+phrase cannot be live twice, since redeeming it could then grant either remit.
+The cap is there because codes that accumulate are codes nobody reads.
+
 Four things make a bearer credential to an executive's calendar survivable:
 
 - **Handle *and* code.** Not the code alone. Two principals will eventually
@@ -117,7 +126,7 @@ Four things make a bearer credential to an executive's calendar survivable:
 - **Armed, not standing.** Off by default, live for an hour, a day or a week,
   spent after a set number of joins. A credential that exists only in the
   window it is needed cannot leak six months later out of an old message. The
-  Team screen shows the countdown and the uses left, because a credential
+  Team screen shows each code's countdown and uses left, because a credential
   whose expiry is invisible is one nobody ever turns off.
 - **One neutral failure.** A wrong code, an unknown handle, an expired code
   and a spent one all answer identically. The differences between them are
