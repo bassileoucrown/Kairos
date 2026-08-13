@@ -251,8 +251,36 @@ and after a passport number has been typed into a box that was never going to
 keep it. Everything else works normally — preferences, allergies, loyalty
 numbers, sizes, policy numbers.
 
-Set the key later and the categories unlock on the next load. Nothing to
-migrate, because nothing sensitive was ever stored.
+### Setting the key on a deployment already running without one
+
+Additive, and proven so rather than assumed: nothing sensitive was ever
+accepted without a key, so there is no plaintext waiting to be migrated and
+nothing that now fails to decrypt. A suite runs one database through both
+states and checks the seam from both sides — accounts still sign in, ordinary
+details saved beforehand still read, messages and armed access codes are
+untouched, and what was refused before (identity fields, two-factor, voice
+notes) starts working on the next load.
+
+Generate the key yourself and put it straight into the environment. It should
+not pass through a chat window, an email, or a ticket:
+
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# or, with no Node to hand:
+openssl rand -hex 32
+```
+
+On Render: **Environment → Add Environment Variable**, key `ENCRYPTION_KEY`,
+value the 64 hex characters, save. The service restarts on the same database.
+Confirm with `GET /api/status`, then by opening the vault — the identity
+categories are selectable.
+
+**Back the key up somewhere that is not this application, before anything is
+stored under it.** A password manager, or written down and kept where the
+company keeps things it cannot replace. Losing it destroys every identity
+detail and every recording, permanently and by design. There is no rotation
+path yet: changing the key later orphans everything encrypted under the old
+one, so treat this value as permanent until one exists.
 
 Not built, deliberately: **file uploads**. That needs a storage answer, a
 retention policy, and a considered response to "what happens when this leaks".
