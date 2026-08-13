@@ -65,6 +65,11 @@ export default function AcceptInvite() {
         <h1>{invite.ownerName} invited you</h1>
         <p className="subtitle">As their {invite.roleLabel} on {BRAND_FULL}, sent to {invite.invitedEmail}.</p>
 
+        {/* Said before they agree, not buried in terms afterwards. Someone
+            joining a stranger's household account deserves to know the shape
+            of what they are joining while they can still decline. */}
+        {invite.scope && <p className="hint invite-scope">{invite.scope}</p>}
+
         {error && <div className="alert alert-error">{error}</div>}
 
         {!user ? (

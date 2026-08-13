@@ -22,6 +22,9 @@ const NAV = [
   { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
   { to: '/tasks', label: 'Tasks', icon: '✓' },
   { to: '/spaces', label: 'Spaces', icon: '❑' },
+  { to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },
+  { to: '/connections', label: 'Connections', icon: '@' },
+  { to: '/household', label: 'Household', icon: '⌂', principalScoped: true, fullAccessOnly: true, notForStaff: true },
   { to: '/pa?tab=contacts', match: '/pa', label: 'People', icon: '☺', principalScoped: true },
   { to: '/pa?tab=approvals', match: '/pa', label: 'Approvals', icon: '!', principalScoped: true, badge: 'approvals' },
   { to: '/pa?tab=briefs', match: '/pa', label: 'Briefs', icon: '❋', principalScoped: true },
@@ -209,6 +212,16 @@ export default function AppShell({ children, title, actions, active }) {
           {NAV.filter((item) => {
             if (item.needsScheduling && current?.canManageScheduling === false) return false;
             if (item.assistantOnly && !viewerIsAssistant) return false;
+            // Only shown to somebody who actually has a household post — for
+            // everyone else it is a screen about nothing.
+            if (item.householdOnly && !user?.isHouseholdStaff) return false;
+            // The household is not the diary, so a delegate's scheduling-only
+            // remit does not reach it.
+            if (item.fullAccessOnly && current && current.role === 'delegate') return false;
+            // Somebody who is only household staff has no household of their
+            // own to run, and offering them the screen for it is the app
+            // talking about itself. If they ever support anyone, it returns.
+            if (item.notForStaff && user?.isHouseholdStaff && principals.length <= 1) return false;
             // Team stays visible to anyone who is not purely someone's
             // assistant — a principal always needs it, and someone who is both
             // still has their own account to staff.

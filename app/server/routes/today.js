@@ -8,6 +8,7 @@ const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { buildDay } = require('./itinerary');
 const { canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { directLineFor } = require('../lib/directLine');
+const { serializeInstruction } = require('../lib/household');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -157,8 +158,25 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       state: expiryState(e.expires_on),
     }));
 
+  // Household instructions nobody has confirmed seeing. Silent until it is
+  // too late — an unread word to the driver is a missed flight — so it earns
+  // a place in what needs you rather than a screen you have to think to open.
+  // Only the principal and their full-access assistants see this; a delegate's
+  // remit is the diary, and the household is not the diary.
+  const householdCanSee = viewerIsPrincipal || ['pa', 'ea', 'chief_of_staff'].includes(req.paRole);
+  const unconfirmedInstructions = householdCanSee ? (await db.prepare(`
+    SELECT i.*, u.name AS author_name, hm.name AS member_name, hm.job_title
+    FROM household_instructions i
+    JOIN household_members hm ON hm.id = i.member_id
+    JOIN users u ON u.id = i.author_id
+    WHERE i.owner_id = ? AND i.status = 'open'
+    ORDER BY i.due_at IS NULL, i.due_at ASC
+    LIMIT 10
+  `).all(req.principal.id)).map((i) => serializeInstruction(i)) : [];
+
   const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length
-    + blockedStages.length + itineraryRequests.length + expiring.length;
+    + blockedStages.length + itineraryRequests.length + expiring.length
+    + unconfirmedInstructions.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
 
@@ -173,7 +191,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     nextUp,
     needsYou: {
       approvals, recordsAwaiting, overdueTasks, blockedStages, itineraryRequests,
-      expiring,
+      expiring, unconfirmedInstructions,
       count: needsYouCount,
     },
     todayTasks,

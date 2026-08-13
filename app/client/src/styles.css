@@ -994,3 +994,48 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .ess-codes { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .ess-codes code { font-size: 0.9rem; }
+
+/* ---- Connections ---- */
+.conn-ask { margin-bottom: 18px; }
+.conn-handle-input {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding-left: 10px; background: var(--surface);
+}
+.conn-handle-input span { color: var(--text-muted); font-weight: 600; }
+.conn-handle-input input { border: none; background: none; padding-left: 2px; }
+.conn-handle-input input:focus { outline: none; }
+.conn-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.conn-person { min-width: 140px; }
+.conn-name { font-weight: 600; }
+.conn-handle { font-size: 0.82rem; color: var(--text-muted); }
+.conn-note, .conn-last {
+  flex: 1; min-width: 0; font-size: 0.86rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conn-actions { display: flex; gap: 6px; margin-left: auto; }
+
+/* ---- Household ---- */
+.hh-scope { margin-bottom: 14px; }
+.hh-send { margin-bottom: 20px; }
+.hh-instr, .hh-member { display: flex; flex-direction: column; gap: 6px; }
+.hh-member { flex-direction: row; justify-content: space-between; align-items: center; gap: 10px; }
+.hh-instr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.hh-instr-body { font-size: 0.95rem; }
+
+/* ---- Instructions (the staff member's whole app) ---- */
+.instr { display: flex; flex-direction: column; gap: 8px; }
+.instr.is-open { border-left: 3px solid var(--accent); }
+.instr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.instr-when { font-weight: 700; font-size: 1.02rem; }
+.instr-from { font-size: 0.82rem; color: var(--text-muted); }
+.instr-body { font-size: 1.05rem; line-height: 1.45; }
+.instr-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.instr-thread {
+  border-top: 1px solid var(--border); padding-top: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.instr-reply { font-size: 0.88rem; }
+.instr-reply-form { display: flex; gap: 6px; }
+.instr-reply-form input { flex: 1; min-width: 0; }
+.invite-scope { margin: -6px 0 14px; }

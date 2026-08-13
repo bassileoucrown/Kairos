@@ -19,6 +19,9 @@ import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Workspace from './pages/Workspace.jsx';
+import Connections from './pages/Connections.jsx';
+import Household from './pages/Household.jsx';
+import MyInstructions from './pages/MyInstructions.jsx';
 
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
@@ -49,6 +52,10 @@ function homeRouteFor(user) {
   if (step !== 'done') {
     return ONBOARDING_STEP_ROUTE[step] || '/onboarding/profile';
   }
+  // Household staff open on the one screen that concerns them. Checked before
+  // the assistant/principal split because it is the narrowest answer: someone
+  // who is only a driver has no diary to land on.
+  if (user.isHouseholdStaff) return '/instructions';
   return isAssistant(user) ? '/workspace' : '/today';
 }
 
@@ -121,6 +128,9 @@ export default function App() {
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/workspace" element={<RequireAuth><Workspace /></RequireAuth>} />
+      <Route path="/connections" element={<RequireAuth><Connections /></RequireAuth>} />
+      <Route path="/household" element={<RequireAuth><Household /></RequireAuth>} />
+      <Route path="/instructions" element={<RequireAuth><MyInstructions /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />

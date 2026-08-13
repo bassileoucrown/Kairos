@@ -541,6 +541,74 @@ Without a read-receipt table that is a decent proxy for unread, and it is the
 question actually being asked at a glance: *has anything happened that I have
 not answered.*
 
+## Connections — peers across principals
+
+Two assistants running two different executives, trying to get those two
+executives in a room. It is the most common conversation in the job, and the
+app had nowhere to hold it: they share no principal, no space and no
+membership, so nothing in the model connected them at all. It went to
+WhatsApp, and the confirmation went with it.
+
+- **Reached by an exact handle.** There is no search and no directory, and
+  there won't be one: a list of who is on Kairos, and who they run, is itself
+  the sensitive thing. You get a handle the way you always did — from a
+  signature, or from them.
+- **A request against a handle that does not exist is answered exactly like
+  one that does** (`202`, "if that handle belongs to someone, they will see
+  it"), and the endpoint is rate limited per account and per address. The
+  honest-sounding "no such user" *is* the enumeration attack. The three cases
+  where the caller already knows the person exists — yourself, already
+  connected, already asked — answer plainly, because precision leaks nothing
+  there and silence would just be confusing.
+- **A connection is not a delegation.** It gives neither side any reach into
+  the other's principal, calendar, contacts or team. Its own table, so no
+  query in the app can mistake one for the other; the tests assert it in both
+  directions.
+- **The line is an ordinary thread**, so a confirmation can be promoted to a
+  record on the spot. That is the difference between this and a chat app: "yes,
+  Thursday 3pm at your offices" stops living in someone's phone.
+- **Accepting makes the handle resolve.** It is the only route to a handle
+  meaning anything outside your own principal's orbit, and it took both people
+  agreeing to it.
+- Either side can end it, and the room closes for both.
+
+## The household
+
+A driver, a cook, a housekeeper, a nanny — the people a principal or their PA
+needs to tell something, where the question that matters is *did they get it*.
+
+**They are not on `memberships`, and that is the entire security design.**
+`requirePaAccess` grants on any active membership whatever the role, and five
+other queries do the same. A household role added to that table would have
+handed a cook the approval queue, contacts, briefs and the ordinary tier of the
+essentials vault at six call sites at once — and none of those call sites would
+have looked wrong in review. A separate table means no existing query can
+include them by accident. Structural, like private spaces, rather than a flag
+somebody could flip later without noticing what it touched.
+
+- **Their whole app is one screen**: what they have been asked to do, a "Got
+  it" button, and a line to reply on. The tests walk every principal-scoped
+  endpoint and assert 403/404 on each.
+- **`job_title` is free text and carries no access at all.** A driver and a
+  chef see exactly the same thing: what was addressed to them. One staff
+  member cannot open another's instruction.
+- **Instructions, not tasks or messages** — both of those live in spaces, and
+  using either would have meant giving household staff space membership, which
+  is where everything else in the app lives.
+- **Acknowledgement is the feature.** An unconfirmed instruction appears in the
+  principal's *Needs you*, because a word to the driver that was never read is
+  silent until it is too late.
+- **Sent by email as well as shown in the app.** Somebody driving a car is not
+  refreshing a dashboard, and an instruction that only exists on a screen they
+  are not looking at has not been given.
+- **Who may do what**: the principal and their full-access assistants can
+  instruct; only the principal hires and dismisses; a `delegate` reaches none
+  of it, because that remit is the diary and the household is not the diary.
+- **Dismissal ends access, not the record.** What was asked and whether it was
+  confirmed is exactly what you want when a question comes up later.
+- The invitation page says the shape of it **before** they accept, not in terms
+  afterwards.
+
 ## What an assistant can and cannot do
 
 Approving a Tier 3 booking while being unable to set the hours that produced the slot makes no

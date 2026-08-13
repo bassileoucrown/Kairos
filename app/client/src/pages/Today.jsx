@@ -230,6 +230,19 @@ export default function Today() {
             </div>
           ))}
 
+          {(needsYou.unconfirmedInstructions || []).map((i) => (
+            <Link className="needs-card" key={i.id} to="/household">
+              <div className="needs-kind">
+                {i.memberName} hasn't confirmed
+              </div>
+              <div className="needs-title">{i.body}</div>
+              <div className="needs-meta">
+                {i.memberJobTitle}
+                {i.dueAt ? ` · for ${new Date(i.dueAt).toLocaleString()}` : ''}
+              </div>
+            </Link>
+          ))}
+
           {needsYou.recordsAwaiting.map((r) => (
             <Link className="needs-card" key={r.id} to={`/threads/${r.threadId}`}>
               <div className="needs-kind">

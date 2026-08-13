@@ -515,3 +515,100 @@ CREATE TABLE IF NOT EXISTS access_log (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_access_log_subject ON access_log(subject_owner_id, created_at);
+
+-- ============================================================
+-- Connections — peers across principals
+-- ============================================================
+
+-- Two assistants who work for different principals, arranging a meeting
+-- between their bosses. This is the most common conversation in the job and
+-- the app had no place for it: they share no principal, no space, and no
+-- membership, so nothing in the model connected them at all.
+--
+-- A connection is deliberately NOT a delegation. It grants no access to
+-- either side's principal, data, calendar or team — only a line of
+-- communication. That is why it is its own table rather than a role on
+-- memberships: there is no query anywhere that could mistake one for the
+-- other.
+--
+-- Reached by typing an exact handle. There is no search and no directory, and
+-- a request against a handle that does not exist is answered exactly like one
+-- that does, so this cannot be used to discover who is on Kairos.
+CREATE TABLE IF NOT EXISTS connections (
+  id            TEXT PRIMARY KEY,
+  requester_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  addressee_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status        TEXT NOT NULL DEFAULT 'pending', -- pending | accepted | declined | ended
+  note          TEXT NOT NULL DEFAULT '',        -- one line of context sent with the request
+  space_id      TEXT REFERENCES spaces(id) ON DELETE SET NULL,
+  created_at    TEXT NOT NULL,
+  responded_at  TEXT,
+  UNIQUE(requester_id, addressee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_connections_addressee ON connections(addressee_id, status);
+CREATE INDEX IF NOT EXISTS idx_connections_requester ON connections(requester_id, status);
+
+-- ============================================================
+-- Household — staff, and the instructions they are given
+-- ============================================================
+
+-- A driver, cook, housekeeper or nanny.
+--
+-- A separate table from memberships, and that is the entire security design.
+-- `requirePaAccess` grants on any active membership whatever the role, and
+-- five other queries do the same; a household role added to that table would
+-- have handed a cook the approval queue, contacts, briefs and the ordinary
+-- tier of the essentials vault at six call sites at once. Keeping them out of
+-- it means no existing query can include them by accident — structural, like
+-- private spaces, rather than a flag someone could flip later.
+--
+-- job_title is free text and carries no access whatever. A driver and a chef
+-- see the same thing: what was addressed to them.
+CREATE TABLE IF NOT EXISTS household_members (
+  id             TEXT PRIMARY KEY,
+  owner_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  member_user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  invited_email  TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  job_title      TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'invited', -- invited | active | revoked
+  invite_token   TEXT NOT NULL UNIQUE,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_household_owner ON household_members(owner_id);
+CREATE INDEX IF NOT EXISTS idx_household_member ON household_members(member_user_id);
+
+-- "Car at 7:15 for Heathrow." One line, one person, one acknowledgement.
+--
+-- Not a task and not a message: a task lives in a space and a message lives in
+-- a thread, and both would have required giving household staff space
+-- membership — which is where everything else in the app lives. This stays in
+-- its own compartment.
+CREATE TABLE IF NOT EXISTS household_instructions (
+  id              TEXT PRIMARY KEY,
+  owner_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  member_id       TEXT NOT NULL REFERENCES household_members(id) ON DELETE CASCADE,
+  author_id       TEXT NOT NULL REFERENCES users(id),
+  body            TEXT NOT NULL,
+  due_at          TEXT,
+  -- open: sent. acknowledged: they have seen it and taken it on. done: it
+  -- happened. The middle state is the one that matters — "did the driver
+  -- actually get this" is the question being asked at 6am.
+  status          TEXT NOT NULL DEFAULT 'open',
+  acknowledged_at TEXT,
+  done_at         TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_household_instr_member ON household_instructions(member_id, status);
+CREATE INDEX IF NOT EXISTS idx_household_instr_owner ON household_instructions(owner_id, created_at);
+
+-- Enough of a line back to be useful: "traffic on the bridge, I'll be ten
+-- minutes". Without it this is a notice board rather than a working channel.
+CREATE TABLE IF NOT EXISTS household_replies (
+  id             TEXT PRIMARY KEY,
+  instruction_id TEXT NOT NULL REFERENCES household_instructions(id) ON DELETE CASCADE,
+  author_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body           TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_household_replies_instr ON household_replies(instruction_id, created_at);

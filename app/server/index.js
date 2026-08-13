@@ -22,6 +22,8 @@ const todayRouter = require('./routes/today');
 const workspaceRouter = require('./routes/workspace');
 const securityRouter = require('./routes/security');
 const { router: essentialsRouter } = require('./routes/essentials');
+const connectionsRouter = require('./routes/connections');
+const householdRouter = require('./routes/household');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 
@@ -95,6 +97,19 @@ app.use('/api/today', todayRouter);
 app.use('/api/workspace', workspaceRouter);
 app.use('/api/security', securityRouter);
 app.use('/api/essentials', essentialsRouter);
+app.use('/api/connections', connectionsRouter);
+app.use('/api/household', householdRouter);
+
+// An unmatched API path is a mistake, and it should say so.
+//
+// Without this it fell through to the SPA catch-all below and answered 200
+// with a page of HTML, which the client then failed to parse — and, worse,
+// made a security test that asked "can this person reach that endpoint" read
+// as a pass. An API that answers 200 to a route it does not have cannot be
+// checked by anything.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'No such endpoint.' });
+});
 
 // In production, serve the built client and let it handle client-side routing.
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

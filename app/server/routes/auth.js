@@ -8,6 +8,7 @@ const {
   setSessionCookie, clearSessionCookie, parseCookies, slugify, SESSION_COOKIE,
 } = require('../lib/auth');
 const { isValidTimeZone } = require('../lib/timezone');
+const { isHouseholdStaff } = require('../lib/household');
 const { handleProblem } = require('../lib/handles');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
 const totp = require('../lib/totp');
@@ -233,9 +234,12 @@ router.post('/logout', async (req, res) => {
   res.status(204).end();
 });
 
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not signed in.' });
-  res.json({ user: publicUser(req.user) });
+  // Household staff land on their instructions rather than a dashboard built
+  // for running somebody's diary. Carried on /me so the shell doesn't have to
+  // ask a second question on every page load.
+  res.json({ user: { ...publicUser(req.user), isHouseholdStaff: await isHouseholdStaff(req.user.id) } });
 });
 
 // Deliberately returns the same response whether or not the email matches

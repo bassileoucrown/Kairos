@@ -68,7 +68,10 @@ async function resolveVisibleHandle(viewerId, rawHandle) {
   if (!person) return null;
   if (person.id === viewerId) return person;
 
-  // Connected if either supports the other, or they share a space.
+  // Connected if either supports the other, they share a space, or they have
+  // accepted a peer connection. The last one is the only route to a handle
+  // resolving for someone outside your own principal's orbit, and it took
+  // both of them agreeing to it.
   const related = await db.prepare(`
     SELECT 1 FROM memberships
      WHERE status = 'active'
@@ -77,8 +80,16 @@ async function resolveVisibleHandle(viewerId, rawHandle) {
     SELECT 1 FROM space_members a
       JOIN space_members b ON a.space_id = b.space_id
      WHERE a.user_id = ? AND b.user_id = ?
+    UNION ALL
+    SELECT 1 FROM connections
+     WHERE status = 'accepted'
+       AND ((requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?))
     LIMIT 1
-  `).get(viewerId, person.id, person.id, viewerId, viewerId, person.id);
+  `).get(
+    viewerId, person.id, person.id, viewerId,
+    viewerId, person.id,
+    viewerId, person.id, person.id, viewerId,
+  );
 
   return related ? person : null;
 }

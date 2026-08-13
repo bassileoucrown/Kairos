@@ -7,7 +7,37 @@ const { ensureDirectLine } = require('../lib/directLine');
 
 const router = asyncRouter();
 
+// Household staff are invited from a different table, but arriving at a link
+// and being told it is invalid because it is the wrong *kind* of invitation
+// would be nonsense to the person holding it. One URL, both rosters.
+async function findHouseholdInvite(token) {
+  return db.prepare(`
+    SELECT h.*, u.name as owner_name FROM household_members h
+    JOIN users u ON u.id = h.owner_id
+    WHERE h.invite_token = ?
+  `).get(token);
+}
+
 router.get('/:token', async (req, res) => {
+  const household = await findHouseholdInvite(req.params.token);
+  if (household) {
+    if (household.status === 'revoked') return res.status(410).json({ error: 'This invite has been revoked.' });
+    return res.json({
+      invite: {
+        ownerName: household.owner_name,
+        invitedEmail: household.invited_email,
+        role: 'household',
+        roleLabel: household.job_title || 'Household',
+        status: household.status,
+        // Said on the page they accept from, not buried in terms. Somebody
+        // joining a stranger's household account deserves to know the shape
+        // of it before they agree.
+        scope: 'You will see what you have been asked to do, and can confirm you have it. '
+          + 'You will not see their calendar, their contacts, or anything else.',
+      },
+    });
+  }
+
   const invite = await db.prepare(`
     SELECT m.*, u.name as owner_name FROM memberships m
     JOIN users u ON u.id = m.owner_id
@@ -28,6 +58,29 @@ router.get('/:token', async (req, res) => {
 });
 
 router.post('/:token/accept', requireAuth, async (req, res) => {
+  const household = await findHouseholdInvite(req.params.token);
+  if (household) {
+    if (household.status === 'revoked') return res.status(410).json({ error: 'This invite has been revoked.' });
+    if (household.invited_email !== req.user.email) {
+      return res.status(403).json({ error: `This invite was sent to ${household.invited_email}. Log in with that email to accept it.` });
+    }
+    await db.prepare(`
+      UPDATE household_members SET member_user_id = ?, status = 'active', name = ? WHERE id = ?
+    `).run(req.user.id, household.name || req.user.name, household.id);
+
+    // Onboarding is "set up your bookable calendar", and a driver accepting a
+    // household post has no use for a meeting type. Making them name one
+    // before they can read what they have been asked to do is the app talking
+    // about itself. Their handle was assigned at signup, so nothing is
+    // skipped that they actually need.
+    if (req.user.onboarding_step !== 'done') {
+      await db.prepare("UPDATE users SET onboarding_step = 'done' WHERE id = ?").run(req.user.id);
+    }
+    // No direct line, no space, no membership row. Accepting a household post
+    // grants exactly one thing: the instructions addressed to you.
+    return res.json({ ok: true, kind: 'household' });
+  }
+
   const invite = await db.prepare('SELECT * FROM memberships WHERE invite_token = ?').get(req.params.token);
   if (!invite) return res.status(404).json({ error: 'This invite link is invalid.' });
   if (invite.status === 'revoked') return res.status(410).json({ error: 'This invite has been revoked.' });
