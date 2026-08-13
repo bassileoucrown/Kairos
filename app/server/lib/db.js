@@ -340,6 +340,11 @@ function ready() {
       // population most in need of migrating.
       await ensureColumn('essentials', 'reminder_stage', 'TEXT');
       await ensureColumn('spaces', 'kind', "TEXT NOT NULL DEFAULT 'standard'");
+      // The day as a chain rather than a list. See lib/cascade.js.
+      await ensureColumn('itinerary_items', 'is_anchor', 'INTEGER NOT NULL DEFAULT 0');
+      await ensureColumn('itinerary_items', 'travel_minutes', 'INTEGER NOT NULL DEFAULT 0');
+      await ensureColumn('itinerary_items', 'household_member_id', 'TEXT');
+      await ensureColumn('itinerary_items', 'serves_id', 'TEXT');
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
       await ensureIndex('idx_threads_stage', 'threads(stage_id)');
     })(), READY_TIMEOUT_MS);

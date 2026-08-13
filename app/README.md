@@ -609,6 +609,53 @@ somebody could flip later without noticing what it touched.
 - The invitation page says the shape of it **before** they accept, not in terms
   afterwards.
 
+## Running late — the day is a chain
+
+The most common thing that happens to a principal's day, and for a long time
+the app had no answer for it. Moving an item moved one row: the meeting it now
+sat on top of, the driver waiting at the old time, and the flight that would be
+missed were all somebody else's problem. The person this is built for would
+have found out by being late.
+
+A delay is now computed against the whole rest of the day (`lib/cascade.js`)
+and **shown before it is applied**. Two rules carry most of the weight:
+
+- **A gap absorbs.** If the next thing doesn't start for another hour, a
+  twenty-minute overrun changes nothing and the cascade stops there. This is
+  what a good assistant does in their head, and a system that shunts the whole
+  afternoon regardless is worse than useless — it cries wolf, and then nobody
+  reads it.
+- **An anchor does not move.** A flight departs when it departs. If the day
+  would overrun one, that's a conflict stated in plain words — *"you would
+  reach this 30 min after it leaves; it will not wait"* — never a time quietly
+  rewritten. Applying over a conflict takes a second, explicit confirmation, so
+  nobody moves a morning and discovers the flight afterwards.
+
+`travel_minutes` is what keeps the arithmetic honest: without it the engine
+produces a schedule that is valid on paper and impossible in a car.
+
+When it's applied: shifted legs with a driver generate a **fresh instruction**
+("car at 11:15, not 11:00") that goes back to unconfirmed, because a changed
+time is a new thing to be confirmed and the record should show both. A note
+lands in the direct line naming what moved and what couldn't. External
+attendees are **flagged, never messaged automatically** — how you word running
+late is a judgement call, not a template.
+
+## Trips — a flight is never just a flight
+
+It's a check-out, a car, the flight, and something at the other end. Those get
+forgotten because entering them is four more forms at the moment you've already
+finished the interesting part. So one form builds the chain:
+
+    10:30  Check out — The Connaught
+    11:00  Car to Heathrow T5          → driver told, must confirm
+    14:00  BA 083 to Lagos             ← anchor
+    20:45  Car from Lagos              → bags and immigration, not wheels-down
+
+The flight is marked as the anchor automatically. Anyone assigned a driving leg
+is sent it immediately and has to confirm — rather than in a follow-up step,
+which is the step that actually gets missed.
+
 ## Notices — one direction
 
 The useful half of "a community for assistants", without the half that would

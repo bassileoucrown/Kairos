@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import RunningLate from '../components/RunningLate.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 
 export const KIND_ICON = {
@@ -92,6 +93,7 @@ export default function Today() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [lateItem, setLateItem] = useState(null);
 
   async function load() {
     const id = await resolveActivePrincipal(user);
@@ -151,13 +153,36 @@ export default function Today() {
       <div className="today-grid">
         <section>
           <h2 className="section-head">The day</h2>
+          {lateItem && (
+            <RunningLate
+              ownerId={data.principal.id}
+              item={lateItem}
+              onDone={() => { setLateItem(null); load(); }}
+              onCancel={() => setLateItem(null)}
+            />
+          )}
+
           {schedule.length === 0 ? (
             <div className="empty-state">
               Nothing scheduled. <Link to="/itinerary">Add something to the itinerary</Link>.
             </div>
           ) : (
             <ul className="sched-list">
-              {schedule.map((e) => <ScheduleEntry key={e.id} e={e} />)}
+              {schedule.map((e) => (
+                <div className="today-row" key={e.id}>
+                  <ScheduleEntry e={e} />
+                  {e.source === 'itinerary' && (
+                    <button
+                      className="btn btn-sm today-late"
+                      type="button"
+                      aria-label={`${e.title} is running late`}
+                      onClick={() => setLateItem(e)}
+                    >
+                      Running late
+                    </button>
+                  )}
+                </div>
+              ))}
             </ul>
           )}
 

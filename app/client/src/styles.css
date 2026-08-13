@@ -1051,3 +1051,35 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .ann-composer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .ann-admin { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ann-admin-actions { display: flex; gap: 6px; }
+
+/* ---- Running late ---- */
+.today-row { display: flex; align-items: center; gap: 8px; }
+.today-row > .sched-row { flex: 1; min-width: 0; }
+.today-late { white-space: nowrap; }
+.late { border-left: 3px solid var(--warn); margin-bottom: 18px; }
+.late-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.late-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.late-summary { font-weight: 600; }
+.late-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.late-row {
+  display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  padding: 7px 10px; border-radius: var(--radius); font-size: 0.86rem;
+  border: 1px solid var(--border);
+}
+.late-row.is-unchanged { opacity: 0.6; }
+.late-row.is-shifted { border-color: var(--warn); background: var(--warn-soft); }
+.late-row.is-conflict { border-color: var(--danger); background: var(--danger-soft); }
+.late-time { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.late-time s { opacity: 0.5; font-weight: 400; }
+.late-title { flex: 1; min-width: 120px; }
+.late-verdict { color: var(--text-muted); }
+.late-row.is-conflict .late-verdict { color: var(--danger); }
+
+/* ---- Build a trip ---- */
+.trip { margin-bottom: 20px; }
+.trip-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.trip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 14px; }
+.trip-section {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--text-muted); font-weight: 700; margin: 18px 0 10px;
+}

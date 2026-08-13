@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import RunningLate from '../components/RunningLate.jsx';
+import BuildTrip from '../components/BuildTrip.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import { listTimezones } from '../lib/timezones.js';
@@ -201,6 +203,8 @@ export default function Itinerary() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [buildingTrip, setBuildingTrip] = useState(false);
+  const [lateItem, setLateItem] = useState(null);
 
   function load(d = date, owner = ownerId) {
     if (!owner) return Promise.resolve();
@@ -255,6 +259,9 @@ export default function Itinerary() {
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => window.print()}>
             Print day sheet
           </button>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => setBuildingTrip((t) => !t)}>
+            {buildingTrip ? 'Cancel' : 'Build a trip'}
+          </button>
           <button className="btn btn-primary btn-sm" type="button" onClick={() => setAdding((a) => !a)}>
             {adding ? 'Cancel' : 'Add item'}
           </button>
@@ -279,6 +286,25 @@ export default function Itinerary() {
           {data.principal.name}'s day, shown in {data.timezone.replace('_', ' ')}.
           {entries.length > 0 && ` ${entries.length} item${entries.length === 1 ? '' : 's'}.`}
         </p>
+      )}
+
+      {buildingTrip && (
+        <BuildTrip
+          ownerId={ownerId}
+          date={date}
+          timezone={data?.timezone || 'UTC'}
+          onDone={() => { setBuildingTrip(false); load(); }}
+          onCancel={() => setBuildingTrip(false)}
+        />
+      )}
+
+      {lateItem && (
+        <RunningLate
+          ownerId={ownerId}
+          item={lateItem}
+          onDone={() => { setLateItem(null); load(); }}
+          onCancel={() => setLateItem(null)}
+        />
       )}
 
       {adding && (
@@ -327,6 +353,10 @@ export default function Itinerary() {
                 <button className="btn btn-sm no-print" type="button"
                   onClick={() => act(e.id, 'decide', { approve: false, note: window.prompt('Anything they should know? (optional)') ?? '' })}>Decline</button>
               </>
+            )}
+            {e.source === 'itinerary' && e.status !== 'draft' && (
+              <button className="btn btn-sm no-print" type="button"
+                aria-label={`${e.title} is running late`} onClick={() => setLateItem(e)}>Running late</button>
             )}
             {e.source === 'itinerary' && (
               <button className="btn btn-danger btn-sm no-print" type="button"

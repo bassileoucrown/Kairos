@@ -654,3 +654,21 @@ CREATE TABLE IF NOT EXISTS announcement_reads (
   UNIQUE(announcement_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_announcement_reads_user ON announcement_reads(user_id);
+
+-- ============================================================
+-- The day as a chain (see lib/cascade.js)
+-- ============================================================
+--
+-- These four columns are added to itinerary_items by migration in lib/db.js,
+-- not here, because the table long predates them:
+--
+--   is_anchor            A flight departs when it departs. An anchor is never
+--                        moved by a cascade; if the day would overrun it, that
+--                        is a conflict to be told about, not a time to rewrite.
+--   travel_minutes       How long it takes to get here from the previous thing.
+--                        Without it a cascade computes a schedule that is
+--                        arithmetically valid and physically impossible.
+--   household_member_id  Who is driving this leg. The reason a delay can reach
+--                        the person standing next to a car.
+--   serves_id            This item exists to get them to that one. A car
+--                        serves a flight; a check-out serves the car.
