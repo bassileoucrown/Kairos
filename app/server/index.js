@@ -28,12 +28,27 @@ const announcementsRouter = require('./routes/announcements');
 const accessCodesRouter = require('./routes/accessCodes');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
+const { startVoiceExpiry } = require('./lib/voiceNotes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '100kb' }));
+
+// 100 KB everywhere, and one exception that has to be carved out here rather
+// than at the route.
+//
+// A voice note is a recording inside a JSON body, and no recording fits in
+// 100 KB. A parser mounted on the route cannot help: this one runs first,
+// rejects the body, and the route's own limit never sees it — which showed up
+// as a 500 on any note longer than a few seconds. So the voice paths skip the
+// global parser and declare their own ceiling, and every other endpoint keeps
+// the tight limit that stops an ordinary JSON route being handed megabytes.
+const standardJson = express.json({ limit: '100kb' });
+app.use((req, res, next) => {
+  if (req.method === 'POST' && /^\/api\/threads\/[^/]+\/voice$/.test(req.path)) return next();
+  return standardJson(req, res, next);
+});
 
 // Whether the database is usable yet. The server binds its port immediately
 // and reports this, rather than refusing to start until the database answers.
@@ -122,6 +137,12 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  // An oversized body is the caller's problem and they can act on it. Reported
+  // as "something went wrong" it looks like a fault in the app, and the person
+  // holding a recording that will not send has no idea it was simply too big.
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'That is too large to send.' });
+  }
   console.error(err);
   res.status(500).json({ error: 'Something went wrong.' });
 });
@@ -173,6 +194,9 @@ function attemptReady() {
       dbState.ready = true;
       dbState.error = null;
       startReminderSweep();
+      // Recordings past their retention date are dropped on a timer, so the
+      // deadline holds without anybody remembering to enforce it.
+      startVoiceExpiry();
       console.log(`Kairos API running at http://localhost:${PORT} (${db.dialect})`);
     })
     .catch((err) => {

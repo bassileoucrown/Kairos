@@ -577,6 +577,60 @@ Without a read-receipt table that is a decent proxy for unread, and it is the
 question actually being asked at a glance: *has anything happened that I have
 not answered.*
 
+### Voice notes
+
+A principal in the back of a car will not type. So the direct line takes
+recordings (`lib/voiceNotes.js`), captured with the browser's own
+`MediaRecorder` — one button, a running clock, and a listen-back before
+anything is sent, because the alternative to a preview is discovering you sent
+forty seconds of road noise to your Chief of Staff.
+
+Three things govern it, and each follows from a recording being *more*
+sensitive than the typed message it replaces, not less. People speak more
+freely than they type: a note that would have read *"push the 3pm"* arrives as
+*"push the 3pm, I'm still with the lawyer and I don't want it discussed."*
+
+- **It needs `ENCRYPTION_KEY` — the same key the vault needs.** Without one the
+  microphone is not offered and the endpoint refuses, saying why. Holding a
+  principal's voice in plaintext because a key was inconvenient to set is the
+  one outcome worth refusing outright.
+- **It expires.** Thirty days (`VOICE_RETENTION_DAYS`), swept on a timer, and
+  treated as gone the moment it lapses whether or not the sweep has reached it
+   — a deadline that depends on a timer having fired is not a deadline. The
+  message stays; only the audio goes.
+- **It is capped hard.** Two minutes, two megabytes. A direct line is for *"the
+  car is downstairs"*, not for dictating a memo.
+
+The audio is a row, not a file: Kairos has no object store, and a recording on
+a container's disk is gone at the next restart — the same reason the app
+refuses to call ephemeral storage durable. At roughly 90 KB a note there is
+room for years of ordinary use before that trade needs revisiting.
+
+A voice note is an **ordinary message that happens to carry a recording**, so
+the direct line, the unanswered badge and task-from-message keep working
+without knowing voice exists. Two consequences worth stating:
+
+- Its body is empty until somebody writes down what was said, so Today
+  describes it — *"Voice note · 0:12"* — rather than showing a blank line
+  beside a name, which reads as a bug.
+- It **cannot be promoted to a record.** A record is a frozen line of text that
+  people acknowledge and later cite; a recording with no transcript would file
+  an empty body and an acknowledgement of nothing. Refused with the remedy:
+  write out what was said and file that.
+
+One thing deliberately not used: the browser's built-in `SpeechRecognition`
+would give free transcription with no key, but Chrome's implementation ships
+the audio to Google's servers. For an app holding passport numbers that is the
+wrong trade at any price.
+
+**Body limits.** Every other endpoint is held to 100 KB of JSON, which is a
+deliberate guard. A recording does not fit in that, and a parser mounted on the
+route cannot help — the global one runs first and rejects the body before the
+route's own limit ever sees it, which surfaced as a 500 on any note longer than
+a few seconds. So the voice path skips the global parser and declares its own
+4 MB ceiling, and an oversized body now answers 413 with something a person can
+act on rather than *"something went wrong"*.
+
 ## Connections — peers across principals
 
 Two assistants running two different executives, trying to get those two

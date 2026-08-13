@@ -5,6 +5,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { resolveAccess } = require('../lib/spaceAccess');
 const { syncStageFromRecords } = require('../lib/stageStatus');
+const voice = require('../lib/voiceNotes');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -32,10 +33,13 @@ async function loadThread(req, res, next) {
   next();
 }
 
-function serializeMessage(m, acks) {
+function serializeMessage(m, acks, voiceByMessage) {
   return {
     id: m.id,
     body: m.body,
+    // Present only when there is a recording, and metadata only — the audio
+    // itself is fetched one message at a time.
+    voice: voiceByMessage?.get(m.id) || null,
     register: m.register,
     authorId: m.author_id,
     authorName: m.author_name,
@@ -79,6 +83,8 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
     `).get(req.thread.stage_id);
   }
 
+  const voiceByMessage = await voice.forThread(req.thread.id);
+
   res.json({
     thread: { id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id },
     stage: stage && {
@@ -87,7 +93,15 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
     },
     canWrite: req.access.canWrite,
     viewerId: req.user.id,
-    messages: rows.map((m) => serializeMessage(m, acks)),
+    // Said once, at the top, so the composer knows whether to offer a
+    // microphone or explain why it cannot.
+    voice: {
+      available: voice.isAvailable(),
+      unavailableReason: voice.isAvailable() ? null : voice.UNAVAILABLE,
+      maxSeconds: voice.MAX_SECONDS,
+      retentionDays: voice.RETENTION_DAYS,
+    },
+    messages: rows.map((m) => serializeMessage(m, acks, voiceByMessage)),
   });
 });
 
@@ -125,6 +139,71 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
   res.status(201).json({ id, stage });
 });
 
+// Voice notes get their own endpoint, and their own body limit.
+//
+// The global limit is 100 KB, which is a deliberate guard: an ordinary JSON
+// endpoint has no business accepting megabytes. Raising it everywhere to suit
+// one route would trade that guard away for the convenience of a shared
+// handler. So the larger ceiling lives here and nowhere else, and the audio
+// itself is still capped well below it by lib/voiceNotes.
+const audioBody = express.json({ limit: '4mb' });
+
+router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (!voice.isAvailable()) return res.status(503).json({ error: voice.UNAVAILABLE });
+
+  const { audio, mimeType, durationMs, body } = req.body || {};
+  if (!audio) return res.status(400).json({ error: 'Record something first.' });
+
+  // A voice note is an ordinary message that happens to carry a recording, so
+  // everything already built on messages — the direct line, unanswered counts,
+  // tasks from a message — keeps working without knowing voice exists. Any
+  // text the sender typed alongside becomes the body; an empty body is what a
+  // recording with no transcript honestly looks like until one arrives.
+  const messageId = crypto.randomUUID();
+  await db.prepare(`
+    INSERT INTO messages (id, thread_id, author_id, body, register, created_at)
+    VALUES (?, ?, ?, ?, 'note', ?)
+  `).run(messageId, req.thread.id, req.user.id, String(body || '').trim(), new Date().toISOString());
+
+  const result = await voice.attach({
+    messageId,
+    threadId: req.thread.id,
+    authorId: req.user.id,
+    base64: audio,
+    mimeType,
+    durationMs,
+  });
+
+  if (result.error) {
+    // The message only exists to hang the recording on. If the recording was
+    // refused, leaving the empty shell behind would put a blank bubble in
+    // somebody's direct line.
+    await db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+    return res.status(result.status || 400).json({ error: result.error });
+  }
+
+  res.status(201).json({ id: messageId, voice: result.voice });
+});
+
+// The recording itself. Same access rule as the thread it lives in: a stranger
+// gets "not found" rather than a refusal, and never learns a recording exists.
+router.get('/:threadId/messages/:messageId/audio', loadThread, async (req, res) => {
+  const owns = await db.prepare('SELECT id FROM messages WHERE id = ? AND thread_id = ?')
+    .get(req.params.messageId, req.thread.id);
+  if (!owns) return res.status(404).json({ error: 'Not found.' });
+
+  const found = await voice.open(req.params.messageId);
+  if (!found) return res.status(404).json({ error: 'That recording is no longer available.' });
+
+  res.set('Content-Type', found.mimeType);
+  res.set('Content-Length', String(found.buffer.length));
+  // Never cached by a shared proxy: this is somebody's voice, fetched with a
+  // session cookie, and it should not sit in an intermediary.
+  res.set('Cache-Control', 'private, no-store');
+  res.send(found.buffer);
+});
+
 // Promotion is clerical, not authoritative: anyone who can write may file a
 // record, and the record carries the ORIGINAL author, with the promoter noted
 // separately. A record's weight comes from whose words it captures — which is
@@ -137,6 +216,17 @@ router.post('/:threadId/messages/:messageId/promote', loadThread, async (req, re
     .get(req.params.messageId, req.thread.id);
   if (!note) return res.status(404).json({ error: 'Message not found.' });
   if (note.register !== 'note') return res.status(400).json({ error: 'That is already a record.' });
+
+  // A record is a frozen line of text that people acknowledge and later cite.
+  // A recording with no transcript cannot be that — promoting one would file
+  // an empty body and an acknowledgement of nothing. Refused plainly rather
+  // than filed as a record whose content nobody can read.
+  if (!String(note.body || '').trim()) {
+    return res.status(400).json({
+      error: 'A voice note can\'t be filed as a record until it has a transcript. '
+        + 'Write out what was said and file that instead.',
+    });
+  }
 
   const { recordType } = req.body || {};
   if (!RECORD_TYPES.has(recordType)) {

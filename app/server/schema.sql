@@ -707,3 +707,39 @@ CREATE TABLE IF NOT EXISTS access_codes (
   created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_access_codes_owner ON access_codes(owner_id, created_at);
+
+-- Voice notes on the direct line.
+--
+-- A principal in a car will not type. They will talk — and they talk more
+-- freely than they type: a note that would have read "push the 3pm" arrives as
+-- "push the 3pm, I'm still with the lawyer and I don't want it discussed."
+-- That is vault-grade content coming in through a chat box, which is why the
+-- recording is stored the same way a passport number is: encrypted with a key
+-- held outside the database, and never written to disk in the clear.
+--
+-- The audio is a row, not a file. Kairos has no object store, and a recording
+-- on a container's disk is gone at the next restart — the same reason the app
+-- refuses to call ephemeral storage durable. At ~90 KB a note there is room
+-- for years of ordinary use before that trade needs revisiting.
+--
+-- It expires, and that is deliberate. A voice note in a direct line is
+-- operational — "car's outside", "she is twenty minutes late" — and its useful
+-- life is hours. Audio kept forever is a liability that accrues in silence.
+-- When transcription arrives the text becomes the durable record and the
+-- recording still goes.
+CREATE TABLE IF NOT EXISTS voice_notes (
+  id           TEXT PRIMARY KEY,
+  message_id   TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  thread_id    TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  author_id    TEXT NOT NULL REFERENCES users(id),
+  mime_type    TEXT NOT NULL,
+  duration_ms  INTEGER NOT NULL DEFAULT 0,
+  byte_size    INTEGER NOT NULL DEFAULT 0,
+  -- Ciphertext only, in secretBox's v1:iv:tag:data form. A database dump that
+  -- leaks is a pile of unplayable base64 without the running server's key.
+  audio        TEXT NOT NULL,
+  expires_at   TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_voice_notes_message ON voice_notes(message_id);
+CREATE INDEX IF NOT EXISTS idx_voice_notes_expiry ON voice_notes(expires_at);

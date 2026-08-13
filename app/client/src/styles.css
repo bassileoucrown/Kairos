@@ -1109,3 +1109,25 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .join-more { margin-top: 22px; }
 .join-more summary { cursor: pointer; font-size: 0.86rem; color: var(--text-muted); }
 .join-more summary:hover { color: var(--accent); }
+
+/* ---- Voice notes ---- */
+.voice-recorder { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.voice-start { align-self: flex-start; }
+.voice-live { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.voice-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .voice-dot { animation: none; } }
+.voice-clock {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.05rem; font-weight: 600;
+}
+.voice-preview { display: flex; flex-direction: column; gap: 8px; }
+.voice-preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.voice-retention { margin: 0; }
+.voice-audio { width: 100%; max-width: 320px; height: 36px; }
+.voice-unavailable { margin-top: 12px; max-width: 60ch; }
+.msg-voice { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.msg-voice-hint { margin: 4px 0 0; }

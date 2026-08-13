@@ -113,8 +113,10 @@ async function directLineFor(principalId, viewerId) {
   if (!thread) return null;
 
   const last = await db.prepare(`
-    SELECT m.body, m.created_at, u.name AS author_name
-    FROM messages m JOIN users u ON u.id = m.author_id
+    SELECT m.id, m.body, m.created_at, u.name AS author_name, v.duration_ms
+    FROM messages m
+    JOIN users u ON u.id = m.author_id
+    LEFT JOIN voice_notes v ON v.message_id = m.id
     WHERE m.thread_id = ?
     ORDER BY m.created_at DESC LIMIT 1
   `).get(thread.id);
@@ -136,12 +138,26 @@ async function directLineFor(principalId, viewerId) {
     spaceId: space.id,
     threadId: thread.id,
     lastMessage: last ? {
-      body: last.body.length > 140 ? `${last.body.slice(0, 140)}…` : last.body,
+      body: preview(last),
+      isVoice: last.duration_ms !== null && last.duration_ms !== undefined,
       authorName: last.author_name,
       at: last.created_at,
     } : null,
     unanswered: since?.n || 0,
   };
+}
+
+/**
+ * What the glance at Today shows. A voice note carries no text until it is
+ * transcribed, and a blank line beside somebody's name reads as a bug rather
+ * than as a recording waiting to be played — so it is described instead.
+ */
+function preview(last) {
+  const body = String(last.body || '').trim();
+  if (body) return body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  if (last.duration_ms === null || last.duration_ms === undefined) return '';
+  const secs = Math.max(1, Math.round(Number(last.duration_ms) / 1000));
+  return `Voice note · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 }
 
 module.exports = { ensureDirectLine, directLineFor, findDirectSpace };

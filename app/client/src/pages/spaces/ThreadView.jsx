@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import AppShell from '../../components/AppShell.jsx';
+import VoiceRecorder from '../../components/VoiceRecorder.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 import TaskList from './TaskList.jsx';
 
@@ -66,16 +67,44 @@ function TaskMaker({ message, members, viewerId, onCreate, onCancel }) {
   );
 }
 
-function Note({ m, canWrite, members, viewerId, onPromote, onMakeTask }) {
+function clipLength(ms) {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// A recording is fetched only when someone chooses to play it — the audio
+// element loads on demand, so opening a thread full of voice notes costs
+// nothing until one is played.
+function VoiceBubble({ threadId, m }) {
+  return (
+    <div className="msg-voice">
+      <audio
+        className="voice-audio"
+        controls
+        preload="none"
+        src={`/api/threads/${threadId}/messages/${m.id}/audio`}
+      />
+      <span className="hint">Voice note · {clipLength(m.voice.durationMs)}</span>
+    </div>
+  );
+}
+
+function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask }) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
+  const hasText = !!String(m.body || '').trim();
   return (
     <div className="msg-note">
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
-        <div className="msg-bubble">{m.body}</div>
-        {canWrite && !picking && !tasking && (
+        {hasText && <div className="msg-bubble">{m.body}</div>}
+        {m.voice && <VoiceBubble threadId={threadId} m={m} />}
+        {/* Both actions turn a message into text somebody else will act on —
+            a frozen record, or a task with a title. A recording has neither
+            until it is transcribed, so they are not offered rather than
+            offered and then refused. */}
+        {canWrite && hasText && !picking && !tasking && (
           <div className="msg-actions-row">
             <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
               Promote to record
@@ -84,6 +113,11 @@ function Note({ m, canWrite, members, viewerId, onPromote, onMakeTask }) {
               Make a task
             </button>
           </div>
+        )}
+        {canWrite && !hasText && m.voice && (
+          <p className="hint msg-voice-hint">
+            Write out what was said to file it as a record or turn it into a task.
+          </p>
         )}
         {picking && (
           <div className="msg-promote-picker">
@@ -314,7 +348,7 @@ export default function ThreadView() {
             m.register === 'record'
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
                   onAck={ack} onStatus={setStatus} onSupersede={supersede} />
-              : <Note key={m.id} m={m} canWrite={data.canWrite} members={members}
+              : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
                   viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask} />
           ))}
           <div ref={endRef} />
@@ -362,6 +396,22 @@ export default function ThreadView() {
               {sending ? 'Sending…' : register === 'record' ? 'File record' : 'Send'}
             </button>
           </form>
+        )}
+
+        {/* Only alongside notes. A record is a frozen line of text that people
+            acknowledge and later cite, and a recording cannot be that until
+            somebody has written down what it says. */}
+        {data.canWrite && register === 'note' && (
+          data.voice?.available
+            ? (
+              <VoiceRecorder
+                threadId={threadId}
+                maxSeconds={data.voice.maxSeconds}
+                retentionDays={data.voice.retentionDays}
+                onSent={load}
+              />
+            )
+            : <p className="hint voice-unavailable">{data.voice?.unavailableReason}</p>
         )}
     </AppShell>
   );
