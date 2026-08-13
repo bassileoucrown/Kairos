@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import AccessCode from '../../components/AccessCode.jsx';
+import { useAuth } from '../../lib/AuthContext.jsx';
 
 export default function MembersTab() {
+  const { user } = useAuth();
   const [members, setMembers] = useState(null);
   // Fetched rather than hard-coded, so the titles offered here are exactly the
   // ones the server accepts and onboarding asked about — the two drifted apart
@@ -85,6 +88,8 @@ export default function MembersTab() {
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
+
+      <AccessCode handle={user?.slug} />
       {inviteLink && (
         <div className="alert alert-success">
           Invite sent — since email delivery isn't fully wired up in this environment, here's the link too: <code>{inviteLink}</code>

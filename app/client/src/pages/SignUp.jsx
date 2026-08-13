@@ -21,17 +21,6 @@ export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [accountCategory, setAccountCategory] = useState('principal');
-  // Asked for only when this deployment is closed. Someone arriving from an
-  // email invite is already vouched for and never sees this field.
-  const [accessCode, setAccessCode] = useState('');
-  const [needsCode, setNeedsCode] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/status')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setNeedsCode(!!d?.signupRequiresCode))
-      .catch(() => {});
-  }, []);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,7 +29,7 @@ export default function SignUp() {
     setError('');
     setSubmitting(true);
     try {
-      await signup({ name, email, password, timezone: detectTimezone(), accountCategory, accessCode });
+      await signup({ name, email, password, timezone: detectTimezone(), accountCategory });
       stashPostOnboardingRedirect(next);
       navigate('/onboarding/profile');
     } catch (err) {
@@ -94,20 +83,6 @@ export default function SignUp() {
             <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
             <p className="hint">At least 8 characters.</p>
           </div>
-          {needsCode && (
-            <div className="field">
-              <label htmlFor="access-code">Access code</label>
-              <input
-                id="access-code" type="text" value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                required autoComplete="off"
-              />
-              <p className="hint">
-                This {BRAND_SHORT} is invite-only. If you were invited by email, open that link
-                instead — you won't need a code.
-              </p>
-            </div>
-          )}
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
             {submitting ? 'Creating account…' : 'Create account'}
           </button>

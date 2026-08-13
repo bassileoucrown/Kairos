@@ -72,13 +72,15 @@ services:
       # app; leave unset to use the default `public` schema.
       - key: DATABASE_SCHEMA
         sync: false
-      # Optional. Set any phrase and account creation requires it, so the URL
-      # can be public without being open. People invited by email skip it —
-      # being invited is already the authorisation. Public booking pages stay
-      # open either way, since being bookable by people without accounts is
-      # the point of the product. Leave unset for open signup.
-      - key: SIGNUP_ACCESS_CODE
-        sync: false
+      # SIGNUP_ACCESS_CODE is gone. It guarded account creation, which turned
+      # out to be the wrong door: an account on its own reaches nothing —
+      # every screen is scoped to a principal, and a stranger who signs up
+      # finds no directory, no resolvable handle, no space and no membership.
+      # What needed guarding was the step where somebody gains access to a
+      # principal's account, and that now has its own gate: each principal
+      # sets a pairing code from their Team screen, chooses what it grants,
+      # and it is live only for the window they pick. Nothing to configure
+      # here.
       # Required before the app will hold identity details (passport numbers,
       # policy numbers) or enable two-factor. 32 bytes, as 64 hex characters:
       #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

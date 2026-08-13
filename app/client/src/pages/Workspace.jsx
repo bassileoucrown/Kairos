@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell, { setActivePrincipal } from '../components/AppShell.jsx';
 import { api } from '../lib/api.js';
+import JoinWithCode from '../components/JoinWithCode.jsx';
 
 // The assistant's own dashboard — not the principal's screen relabelled.
 //
@@ -89,13 +90,24 @@ export default function Workspace() {
       {!data && <p className="hint">Loading…</p>}
 
       {data && data.principals.length === 0 && (
-        <div className="empty-state">
-          <p>You aren't supporting anyone yet.</p>
-          <p className="hint">
-            A principal adds you from their Team screen. Once they do, they'll appear here and
-            everything you arrange for them runs through this page.
-          </p>
-        </div>
+        <>
+          <div className="empty-state">
+            <p>You aren't supporting anyone yet.</p>
+            <p className="hint">
+              A principal adds you by email from their Team screen, or gives you their handle and
+              an access code. Either way they appear here, and everything you arrange for them
+              runs through this page.
+            </p>
+          </div>
+          <JoinWithCode onJoined={() => window.location.reload()} />
+        </>
+      )}
+
+      {data && data.principals.length > 0 && (
+        <details className="join-more">
+          <summary>Join another principal with a code</summary>
+          <JoinWithCode onJoined={() => window.location.reload()} />
+        </details>
       )}
 
       {data && data.principals.length > 0 && (

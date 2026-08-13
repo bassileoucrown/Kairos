@@ -37,41 +37,19 @@ const ACCOUNT_CATEGORIES = new Set(['principal', 'pa', 'ea', 'chief_of_staff']);
 // The assistant titles that differ in name only. See routes/invites.js.
 const EQUAL_ACCESS_ROLES = new Set(['pa', 'ea', 'chief_of_staff']);
 
-// Closing signup without hiding the app.
+// Signup is open, and that is a deliberate position rather than an omission.
 //
-// A URL has to be public for a browser to reach it — that is what a web
-// service is. "Public" and "open to strangers" are different things, though,
-// and conflating them is how a working deployment ends up unreachable to its
-// own author. Everything in Kairos already sits behind a login; the one door
-// left open is account creation. Set SIGNUP_ACCESS_CODE and that door needs a
-// key too, so the link can exist without anyone else being able to walk in.
+// A deployment-wide code used to guard account creation. It is gone, because
+// it guarded the wrong thing: an account on its own reaches nothing. Every
+// screen in Kairos is scoped to a principal, and a stranger who signs up sees
+// their own empty calendar and no trace of anybody else — no directory, no
+// handle that resolves, no space, no membership. The compartments are the
+// security, not the front door.
 //
-// Booking pages stay open on purpose: being bookable by people without
-// accounts is the product.
-const SIGNUP_ACCESS_CODE = (process.env.SIGNUP_ACCESS_CODE || '').trim();
-
-/**
- * Someone the account holder has already vouched for by inviting them by
- * email doesn't need the code as well — being invited *is* the authorisation,
- * and making a principal pass a shared secret to their own PA is the kind of
- * friction that gets a code written down in a chat window.
- */
-async function hasPendingInvite(email) {
-  return !!(await db.prepare(
-    "SELECT 1 FROM memberships WHERE invited_email = ? AND status = 'invited'",
-  ).get(email));
-}
-
-function timingSafeEqual(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  // Compare a fixed-size digest so differing lengths don't leak via an early
-  // return, and the comparison itself stays constant-time.
-  return crypto.timingSafeEqual(
-    crypto.createHash('sha256').update(ba).digest(),
-    crypto.createHash('sha256').update(bb).digest(),
-  );
-}
+// What actually needs guarding is the step where somebody gains access to a
+// principal's account, and that now has its own gate: lib/accessCodes.js,
+// where the principal sets the code, decides what it grants, and it is live
+// only for the window they choose.
 
 function publicUser(u) {
   return {
@@ -115,15 +93,6 @@ router.post('/signup', async (req, res) => {
   const category = ACCOUNT_CATEGORIES.has(accountCategory) ? accountCategory : 'principal';
 
   const normalizedEmail = String(email).trim().toLowerCase();
-
-  if (SIGNUP_ACCESS_CODE && !(await hasPendingInvite(normalizedEmail))) {
-    const supplied = String(req.body?.accessCode || '');
-    if (!supplied || !timingSafeEqual(supplied, SIGNUP_ACCESS_CODE)) {
-      return res.status(403).json({
-        error: `This ${BRAND_SHORT} is invite-only. Enter the access code, or ask to be invited by email.`,
-      });
-    }
-  }
 
   const existing = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(normalizedEmail);
   if (existing) {
@@ -309,4 +278,4 @@ router.post('/reset-password/:token', async (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, publicUser, SIGNUP_ACCESS_CODE };
+module.exports = { router, publicUser };

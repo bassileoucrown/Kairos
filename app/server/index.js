@@ -2,7 +2,7 @@ const path = require('path');
 const express = require('express');
 const { attachUser } = require('./lib/auth');
 
-const { router: authRouter, SIGNUP_ACCESS_CODE } = require('./routes/auth');
+const { router: authRouter } = require('./routes/auth');
 const profileRouter = require('./routes/profile');
 const availabilityRouter = require('./routes/availability');
 const meetingTypesRouter = require('./routes/meetingTypes');
@@ -25,6 +25,7 @@ const { router: essentialsRouter } = require('./routes/essentials');
 const connectionsRouter = require('./routes/connections');
 const householdRouter = require('./routes/household');
 const announcementsRouter = require('./routes/announcements');
+const accessCodesRouter = require('./routes/accessCodes');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 
@@ -58,9 +59,6 @@ app.get('/api/status', (req, res) => {
     // password — this endpoint is public.
     databaseTarget: db.dialect === 'postgres' ? describeTarget() : 'local file',
     databaseError: dbState.error,
-    // Whether a code is needed, never the code itself. The signup form reads
-    // this so it can ask for one instead of failing the submission.
-    signupRequiresCode: !!SIGNUP_ACCESS_CODE,
   });
 });
 
@@ -101,6 +99,7 @@ app.use('/api/essentials', essentialsRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/household', householdRouter);
 app.use('/api/announcements', announcementsRouter);
+app.use('/api/access-codes', accessCodesRouter);
 
 // An unmatched API path is a mistake, and it should say so.
 //

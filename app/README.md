@@ -92,26 +92,46 @@ failed sign-in the login screen says storage is temporary rather than blaming th
 `GET /api/status` reports `storageDurable`, a property of the deployment and of no account, which
 is why it needs no authentication.
 
-### Keeping it to yourself
+### Bringing on an assistant
 
-Deploy it as a **Web Service**. A Render *private service* has no public URL —
-it is reachable only from inside your own Render network, so a browser cannot
-open it at all. That is not a privacy setting; it is an unreachable app.
+Two routes, and the second exists because the first depends on infrastructure
+the principal cannot see.
 
-If the worry is other people getting into your work, the app already answers
-it: everything except public booking pages sits behind a login. The one door
-left open is account creation, so set **`SIGNUP_ACCESS_CODE`** to any phrase
-and that door needs a key too. The URL can exist without anyone else being
-able to walk in.
+**By email.** Team → invite by address. They accept the link and they're in.
+The better path when email is actually delivering.
 
-- People invited by email skip the code — being invited *is* the
-  authorisation, and making a principal recite a shared secret to their own PA
-  is how codes end up pasted into group chats.
-- `GET /api/status` reports `signupRequiresCode` so the form knows to ask. It
-  never returns the code.
-- Public booking pages stay open regardless. Being bookable by people who have
-  no account is the product.
-- Leave it unset and signup is open, exactly as before.
+**By code.** The principal sets a pairing code on the same screen: they choose
+the phrase, choose what it grants (PA/EA/Chief of Staff, or Delegate), and
+choose how long it lives. They read the assistant their handle and the code
+over the phone, and the assistant enters both on their Workspace. No mailbox,
+no provider, nobody waiting on DNS.
+
+Four things make a bearer credential to an executive's calendar survivable:
+
+- **Handle *and* code.** Not the code alone. Two principals will eventually
+  choose the same phrase, and a bare global code would be guessable against
+  every account in the system at once. With the handle you must already know
+  who you are targeting, and the collision problem disappears rather than
+  being papered over with a uniqueness check that would itself leak which
+  codes are live.
+- **Armed, not standing.** Off by default, live for an hour, a day or a week,
+  spent after a set number of joins. A credential that exists only in the
+  window it is needed cannot leak six months later out of an old message. The
+  Team screen shows the countdown and the uses left, because a credential
+  whose expiry is invisible is one nobody ever turns off.
+- **One neutral failure.** A wrong code, an unknown handle, an expired code
+  and a spent one all answer identically. The differences between them are
+  exactly what a guesser needs.
+- **Throttled.** The principal picks the phrase, so it will sometimes be short
+  and memorable. Ten attempts an hour per account and per address is what
+  makes that survivable.
+
+**Signup itself is open, deliberately.** A deployment-wide code used to guard
+account creation; it guarded the wrong door. An account on its own reaches
+nothing — a stranger who signs up sees their own empty calendar and no trace
+of anybody else, and a known handle does not resolve for them. The compartments
+are the security, not the front door. A suite asserts exactly that, walking a
+stranger through every principal-scoped endpoint.
 
 ### When the database can't be reached
 

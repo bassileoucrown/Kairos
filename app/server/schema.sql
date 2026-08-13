@@ -672,3 +672,38 @@ CREATE INDEX IF NOT EXISTS idx_announcement_reads_user ON announcement_reads(use
 --                        the person standing next to a car.
 --   serves_id            This item exists to get them to that one. A car
 --                        serves a flight; a check-out serves the car.
+
+-- ============================================================
+-- Pairing codes — how a principal brings on an assistant
+-- ============================================================
+--
+-- An emailed invitation needs a working mailbox and a configured provider. A
+-- code a principal reads down the phone needs neither, which is the whole
+-- point: onboarding an assistant should not depend on infrastructure the
+-- principal has no view of.
+--
+-- Redeeming takes the principal's handle AND the code. Not the code alone —
+-- two principals will eventually choose the same phrase, and a bare global
+-- code is a bearer token guessable against every account in the system at
+-- once. With the handle you must already know who you are targeting, and the
+-- collision problem disappears entirely.
+--
+-- Armed rather than standing. Off by default, live for a window the principal
+-- sets, spent after a set number of joins. A credential to an executive's
+-- calendar that exists only in the hour it is needed cannot leak six months
+-- later out of an old message.
+CREATE TABLE IF NOT EXISTS access_codes (
+  id           TEXT PRIMARY KEY,
+  owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code         TEXT NOT NULL,
+  -- What redeeming it grants. The principal decides when they set it: a new
+  -- Chief of Staff and a stand-in driver should not arrive with the same
+  -- remit just because they arrived the same way.
+  role         TEXT NOT NULL DEFAULT 'pa',
+  expires_at   TEXT NOT NULL,
+  uses_allowed INTEGER NOT NULL DEFAULT 2,
+  uses_spent   INTEGER NOT NULL DEFAULT 0,
+  revoked_at   TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_codes_owner ON access_codes(owner_id, created_at);
