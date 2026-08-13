@@ -97,6 +97,13 @@ services:
       # to the people who could act on it, and to nobody else.
       - key: ANNOUNCEMENT_AUTHORS
         sync: false
+      # Who invitations and reminders appear to come from. Resend will only
+      # accept an address on a domain you have verified with them; leave this
+      # unset and it falls back to Resend's shared testing sender, which can
+      # only deliver to the address that owns the Resend account. Either way
+      # the Outbox records what happened, and says so when a send is refused.
+      - key: EMAIL_FROM
+        sync: false
       # server/lib/db.js also uses node:sqlite for local development, which
       # needs Node 22+.
       - key: NODE_VERSION

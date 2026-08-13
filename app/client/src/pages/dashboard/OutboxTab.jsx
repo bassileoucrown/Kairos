@@ -16,8 +16,9 @@ export default function OutboxTab() {
   return (
     <div>
       <p className="tz-note" style={{ marginBottom: 16 }}>
-        Every email {BRAND_SHORT} sends lands here too — useful since no real email provider is
-        configured in this environment. Set <code>RESEND_API_KEY</code> to also deliver for real.
+        Every email {BRAND_SHORT} sends is recorded here, whether or not it was delivered. With
+        no provider configured this is the only copy; with one, each message says whether it
+        actually left.
       </p>
       {error && <div className="alert alert-error">{error}</div>}
       {emails === null && <p className="hint">Loading…</p>}
@@ -29,8 +30,21 @@ export default function OutboxTab() {
               <div className="when">{e.subject}</div>
               <div className="meta">To {e.toEmail} · {CATEGORY_LABELS[e.category] || e.category}</div>
             </div>
-            <span className="pill">{new Date(e.createdAt).toLocaleString()}</span>
+            <div className="mail-state">
+              {e.deliveryStatus === 'failed' && <span className="pill is-off">Not delivered</span>}
+              {e.deliveryStatus === 'sent' && <span className="pill">Delivered</span>}
+              {e.deliveryStatus === 'outbox' && <span className="pill is-off">Outbox only</span>}
+              <span className="pill">{new Date(e.createdAt).toLocaleString()}</span>
+            </div>
           </div>
+          {/* The provider's own words. A message that silently went nowhere is
+              worse than one that failed loudly — whoever is waiting for it has
+              no idea they are waiting. */}
+          {e.deliveryStatus === 'failed' && e.deliveryError && (
+            <div className="alert alert-error" style={{ marginTop: 10, marginBottom: 0 }}>
+              The provider refused this: {e.deliveryError}
+            </div>
+          )}
           {expanded === e.id && (
             <pre style={{ whiteSpace: 'pre-wrap', marginTop: 12, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{e.body}</pre>
           )}

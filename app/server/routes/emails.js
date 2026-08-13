@@ -14,6 +14,10 @@ function serialize(e) {
     body: e.body,
     category: e.category,
     relatedBookingId: e.related_booking_id,
+    // outbox: no provider configured, so this is the only copy that exists.
+    // sent: the provider accepted it. failed: it refused, and said why.
+    deliveryStatus: e.delivery_status || 'outbox',
+    deliveryError: e.delivery_error || null,
     createdAt: e.created_at,
   };
 }

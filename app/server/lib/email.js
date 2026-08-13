@@ -16,8 +16,20 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
   `).run(id, ownerId, sentByUserId, toEmail, subject, body, category, relatedBookingId, new Date().toISOString());
 
   if (process.env.RESEND_API_KEY) {
+    // fetch does not throw on 4xx or 5xx. Without checking the status, a
+    // rejected message — the commonest being "you can only send to your own
+    // address until you verify a domain" — was recorded as sent, never
+    // arrived, and left nothing behind to explain why. An invitation that
+    // silently goes nowhere is worse than one that fails loudly: the person
+    // waiting for it has no idea they are waiting.
+    let status = 'sent';
+    let failure = null;
     try {
-      await fetch('https://api.resend.com/emails', {
+      // Overridable so the delivery-failure path can be exercised against a
+      // stand-in. There is no other way to test "the provider said no" without
+      // a provider, and that is the path most worth testing.
+      const endpoint = process.env.RESEND_ENDPOINT || 'https://api.resend.com/emails';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
@@ -30,9 +42,23 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
           text: body,
         }),
       });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        let message = detail;
+        try { message = JSON.parse(detail).message || detail; } catch { /* not JSON */ }
+        status = 'failed';
+        failure = `${res.status}: ${String(message).slice(0, 300)}`;
+      }
     } catch (err) {
-      console.error('Email provider send failed (outbox record still saved):', err.message);
+      status = 'failed';
+      failure = err.message;
     }
+
+    if (failure) {
+      console.error(`Email to ${toEmail} was NOT delivered — ${failure}`);
+    }
+    await db.prepare('UPDATE emails SET delivery_status = ?, delivery_error = ? WHERE id = ?')
+      .run(status, failure, id);
   } else {
     // No provider configured — the in-app Outbox (routes/emails.js) covers
     // this for a logged-in user checking their own mail, but that doesn't

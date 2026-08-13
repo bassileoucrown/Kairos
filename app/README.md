@@ -695,6 +695,30 @@ of who is here.
 
 Not sent by email, deliberately: notices are worth a badge, not an inbox.
 
+## Email — recorded either way
+
+Every message is written to the `emails` table before any provider is called,
+so the in-app Outbox is a complete record whether or not delivery is
+configured. With `RESEND_API_KEY` set, each one also carries what actually
+happened:
+
+- **Delivered** — the provider accepted it.
+- **Not delivered** — it refused, and the Outbox shows its exact words.
+- **Outbox only** — no provider configured; this is the only copy.
+
+That middle state is the one worth having. `fetch` does not throw on a 4xx, so
+a rejected message used to be recorded as sent, never arrive, and leave nothing
+behind to explain it — and the commonest rejection by far is *"you can only
+send testing emails to your own address"*, which is what Resend says until a
+domain is verified. An invitation that silently goes nowhere is worse than one
+that fails loudly: the person waiting for it has no idea they are waiting.
+
+`EMAIL_FROM` sets the sender. Unset, it falls back to Resend's shared testing
+address, which reaches only the account owner — enough to prove the wiring,
+not enough to invite anyone. `RESEND_ENDPOINT` exists so the failure path can
+be tested against a stand-in, since there is no other way to exercise "the
+provider said no".
+
 ## What an assistant can and cannot do
 
 Approving a Tier 3 booking while being unable to set the hours that produced the slot makes no
