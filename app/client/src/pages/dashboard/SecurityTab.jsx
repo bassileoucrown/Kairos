@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import EncryptionKeySetup from '../../components/EncryptionKeySetup.jsx';
+import TwoFactorSetup from '../../components/TwoFactorSetup.jsx';
 
 // Two-factor authentication, and who has looked at what.
 //
@@ -57,7 +58,9 @@ export default function SecurityTab() {
 
   return (
     <div>
-      {error && <div className="alert alert-error">{error}</div>}
+      {/* While the setup form is open it shows the error itself, next to the
+          box being typed into. */}
+      {error && !setup && <div className="alert alert-error">{error}</div>}
 
       {/* First on the screen when it is missing, because everything below
           depends on it and the old advice — run a command in a terminal —
@@ -105,21 +108,14 @@ export default function SecurityTab() {
         )}
 
         {setup && (
-          <form className="card" onSubmit={confirm}>
-            <p>Add this to your authenticator app, then enter the code it shows.</p>
-            <p className="hint">
-              Most apps scan a QR code; you can also type the key in by hand.
-            </p>
-            <div className="ess-secret"><code>{setup.secret}</code></div>
-            <div className="field">
-              <label htmlFor="totp-code">Code from the app</label>
-              <input
-                id="totp-code" type="text" inputMode="numeric" autoComplete="one-time-code"
-                value={code} onChange={(e) => setCode(e.target.value)} required
-              />
-            </div>
-            <button className="btn btn-primary" type="submit">Confirm</button>
-          </form>
+          <TwoFactorSetup
+            setup={setup}
+            code={code}
+            onCode={setCode}
+            onSubmit={confirm}
+            error={error}
+            onCancel={() => { setSetup(null); setCode(''); setError(''); }}
+          />
         )}
 
         {codes && (

@@ -220,9 +220,24 @@ field with a copy button rather than a folder with a file in it.
 Holding identity documents makes this a custodian, so the machinery around it
 matters more than the feature:
 
-- **Two-factor authentication** (`lib/totp.js`, RFC 6238, no dependency) and
-  **login rate limiting** (`lib/rateLimit.js`). Everything else is downstream
-  of an attacker simply signing in, so these come first.
+- **Two-factor authentication** (`lib/totp.js`, RFC 6238, no dependency,
+  checked against the specification's published test vectors) and **login rate
+  limiting** (`lib/rateLimit.js`). Everything else is downstream of an attacker
+  simply signing in, so these come first.
+
+  The setup screen assumes no prior knowledge, because the first version
+  assumed all of it: it printed a 32-character base32 secret under the words
+  *"most apps scan a QR code"*, drew no QR code, named no app, and left the
+  reader to discover that the six digits come from a program they had not
+  installed — while the server had been sending an `otpauth://` URI the whole
+  time that nothing used. It now names four authenticators by name, draws the
+  QR code (encoded in the browser, so the secret reaches no third party), shows
+  the key in groups of four for typing by hand, offers a one-tap `otpauth://`
+  link that adds the account directly on a phone, says the number changes every
+  30 seconds, and — for the failure that looks like a bug and isn't — says to
+  check the phone's clock. The suite computes a real code from the secret the
+  page displays and confirms with it, so "the screen works" means the loop
+  closes rather than that the boxes rendered.
 - **Encryption at rest** (`lib/secretBox.js`, AES-256-GCM) with the key in
   `ENCRYPTION_KEY`, outside the database. **Lose the key and the data is
   gone** — there is no recovery path, by design, because a recovery path is

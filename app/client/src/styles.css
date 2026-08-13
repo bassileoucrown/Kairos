@@ -1151,3 +1151,34 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--accent-soft); padding: 1px 5px; border-radius: 4px;
 }
+
+/* ---- Two-factor setup ---- */
+.totp-setup { display: flex; flex-direction: column; gap: 14px; }
+.totp-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 16px; }
+.totp-steps > li { line-height: 1.6; }
+.totp-steps .hint { display: block; margin: 4px 0 0; }
+.totp-apps { line-height: 1.7; }
+.totp-add { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; }
+.totp-qr {
+  flex: 0 0 auto; padding: 10px; border-radius: var(--radius);
+  background: #fff; border: 1px solid var(--border); line-height: 0;
+}
+.totp-qr svg { display: block; width: 180px; height: 180px; }
+.totp-manual { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.totp-secret {
+  padding: 10px 12px; border-radius: var(--radius);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+}
+.totp-secret code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem; letter-spacing: 0.08em; color: var(--accent-hover);
+  word-break: break-all; user-select: all;
+}
+.totp-open { text-decoration: none; display: inline-flex; align-items: center; }
+.totp-code-field { max-width: 200px; margin-top: 8px; }
+.totp-code-field input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.3rem; letter-spacing: 0.28em; text-align: center;
+}
+
+.totp-error { margin: 0; }
