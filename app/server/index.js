@@ -193,6 +193,31 @@ function reportFailure(err) {
   console.error(`\nCould not prepare the database: ${err.message}\n`);
   // When the value itself is malformed we already know exactly what is wrong,
   // and a list of other things it might have been only buries the answer.
+  // Advice worth reading is advice about the host you actually have. The
+  // generic list used to tell a Supabase user about Render's internal URLs,
+  // which is worse than saying nothing — it sends someone hunting for a
+  // setting their provider does not have.
+  function hostSpecificAdvice() {
+    let host = '';
+    try { host = new URL(process.env.DATABASE_URL || '').hostname; } catch { /* unparseable */ }
+
+    if (/supabase/.test(host)) {
+      return [
+        '  - On Supabase, the "Direct connection" host (db.<ref>.supabase.co) is',
+        '    IPv6-only and most platforms cannot reach it. Use the Session pooler',
+        '    string instead: username postgres.<ref>, host ...pooler.supabase.com,',
+        '    port 5432.',
+      ];
+    }
+    if (/render\.com/.test(host)) {
+      return [
+        '  - On Render, a service in the same region wants the Internal Database',
+        '    URL. The External one is for connecting from outside Render.',
+      ];
+    }
+    return [];
+  }
+
   if (/not a Postgres connection string/.test(err.message)) {
     console.error('Fix DATABASE_URL on this service and it will connect on the next check.');
     return;
@@ -205,12 +230,14 @@ function reportFailure(err) {
       `  host:  ${describeTarget()}`,
       '',
       'Common causes, in the order worth checking:',
-      '  - The URL points at a database that no longer exists (deleted, or expired',
-      '    off the free plan). Confirm it in the dashboard, then re-copy the URL.',
-      '  - The external URL was used where the internal one is needed, or vice',
-      '    versa. On Render, a service in the same region wants the Internal URL.',
-      '  - The password contains characters that must be percent-encoded in a URL',
-      '    (@ : / ? # are the usual culprits). Re-copy rather than retype it.',
+      '  - The password contains a character that breaks a URL. An @ is the worst',
+      '    one: everything after it is read as the hostname, so the connection goes',
+      '    looking for a server that does not exist and times out exactly like this.',
+      '    : / ? # % & also need percent-encoding. The quickest fix is to reset the',
+      '    password to letters and digits only and make it longer instead.',
+      ...hostSpecificAdvice(),
+      '  - The database no longer exists — deleted, or expired off a free plan.',
+      '    Confirm it is listed and healthy in the dashboard, then re-copy the URL.',
       '  - The database is still starting. The server already retried',
       `    ${process.env.DATABASE_CONNECT_ATTEMPTS || 5} times with backoff before giving up here.`,
       '',
