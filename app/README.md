@@ -261,19 +261,26 @@ details saved beforehand still read, messages and armed access codes are
 untouched, and what was refused before (identity fields, two-factor, voice
 notes) starts working on the next load.
 
-Generate the key yourself and put it straight into the environment. It should
-not pass through a chat window, an email, or a ticket:
+**The app makes the key.** Sign in, go to **Dashboard → Security**, and while
+no key is set the first card offers one: press *Generate a key* and 64 hex
+characters appear, produced by the browser's own CSPRNG
+(`components/EncryptionKeySetup.jsx`). Copy it, save it, and paste it into
+Render as `ENCRYPTION_KEY` — the card lists the dashboard steps. The service
+restarts on the same database and the card disappears.
+
+This exists because the documented way to produce the key used to be a shell
+command, which assumes a developer. The person standing up a deployment often
+is not one, so the single most important security setting sat behind a tool
+they did not have and stayed unset — the worst outcome available. A suite
+checks the generated value is well-formed, differs every time, is what lands on
+the clipboard, and — inspecting every request body the page sends — **never
+reaches the server**. A key the server has seen is a key the server could keep.
+
+For anyone who does have a terminal, this is the same thing:
 
 ```
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-# or, with no Node to hand:
 openssl rand -hex 32
 ```
-
-On Render: **Environment → Add Environment Variable**, key `ENCRYPTION_KEY`,
-value the 64 hex characters, save. The service restarts on the same database.
-Confirm with `GET /api/status`, then by opening the vault — the identity
-categories are selectable.
 
 **Back the key up somewhere that is not this application, before anything is
 stored under it.** A password manager, or written down and kept where the

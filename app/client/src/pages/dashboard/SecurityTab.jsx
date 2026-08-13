@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import EncryptionKeySetup from '../../components/EncryptionKeySetup.jsx';
 
 // Two-factor authentication, and who has looked at what.
 //
@@ -57,6 +58,11 @@ export default function SecurityTab() {
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
+
+      {/* First on the screen when it is missing, because everything below
+          depends on it and the old advice — run a command in a terminal —
+          assumed a developer the person setting this up may not be. */}
+      {!state.encryptionConfigured && <EncryptionKeySetup />}
 
       <section className="ess-group">
         <h3 className="ess-heading">Two-factor authentication</h3>

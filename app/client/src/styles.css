@@ -1131,3 +1131,23 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .voice-unavailable { margin-top: 12px; max-width: 60ch; }
 .msg-voice { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
 .msg-voice-hint { margin: 4px 0 0; }
+
+/* ---- Encryption key setup ---- */
+.key-setup .card { display: flex; flex-direction: column; gap: 10px; }
+.key-unlocks { margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 0.9rem; }
+.key-unlocks li { margin: 2px 0; }
+.key-value {
+  padding: 12px 14px; border-radius: var(--radius);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+}
+.key-value code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92rem; letter-spacing: 0.02em; color: var(--accent-hover);
+  word-break: break-all; user-select: all;
+}
+.key-warning { margin: 0; }
+.key-steps { margin: 0; padding-left: 20px; font-size: 0.92rem; line-height: 1.7; }
+.key-steps code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--accent-soft); padding: 1px 5px; border-radius: 4px;
+}

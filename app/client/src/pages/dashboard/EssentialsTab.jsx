@@ -114,6 +114,8 @@ export default function EssentialsTab({ ownerId }) {
           and national IDs need an encryption key, and this deployment has none — so rather than
           hold them in the clear, Kairos won't hold them at all. Everything else works normally:
           preferences, allergies, loyalty numbers, sizes, policy numbers.
+          {' '}Setting a key takes a couple of minutes and needs no technical knowledge:{' '}
+          <a href="/dashboard?tab=security">Security</a> will make one for you.
         </div>
       )}
 
