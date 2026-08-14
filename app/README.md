@@ -1030,6 +1030,44 @@ retained not at all.
 Re-arming clears any handshake with the phrase and the address, so a new driver
 is never told he has already been recognised.
 
+### Building one, from the screen that shows it
+
+Everything above existed on the server from the moment trips were built, and
+the Trips screen drew all of it faithfully — for journeys that could not be
+created. **"The journey" was read-only.** The endpoint that fills it
+(`POST /itinerary/:ownerId/trips`) had no button anywhere in the app, and a
+single itinerary item added from the Itinerary screen was never attached to a
+trip. So a trip was a name, two dates and an empty list, and every feature
+underneath it was invisible — not missing, but never reaching the condition
+that renders it.
+
+Two ways in now, from the trip itself:
+
+- **Add a flight** builds the whole chain in one form — the flight with its
+  terminal, seat and reference; the car to the airport; the hotel check-out
+  before it; the transfer at the far end; and the meeting phrase armed on
+  arrival, with the driver's card address offered once, right there. Entering
+  those five legs separately is five forms at the moment somebody has already
+  finished the interesting part, which is how they end up not entered at all.
+- **Add something else** puts one thing on the trip — a dinner, a hotel, a car
+  with no flight attached.
+
+The destination and both timezones are carried over from the trip rather than
+retyped, and choosing "hired car" or "hotel transfer" asks for the company and
+the number before it will save, since the server refuses those without one.
+
+**Times are read in the zone the leg happens in.** A date input and a time
+input give `2027-03-04` and `09:00` and no zone at all; `new Date(...)` then
+reads them in the *browser's* zone, which is correct only when the person
+filling the form is sitting in the same country as the event. This app exists
+for the case where they are not. The Itinerary form had the same bug with a
+comment above it already claiming otherwise — a PA in London entering a 09:00
+Lagos departure stored 09:00 London, an hour out, with the form's own timezone
+field sitting right beside it. `zonedToUtc` in `client/src/lib/timezones.js`
+mirrors `server/lib/timezone.js` line for line so the two cannot drift, and the
+suite fills the form from a browser deliberately set to Los Angeles so a
+zone-of-the-browser bug cannot pass by coincidence.
+
 ### The rest of a trip
 
 Travellers (a spouse's passport was already storable — `essentials` takes a

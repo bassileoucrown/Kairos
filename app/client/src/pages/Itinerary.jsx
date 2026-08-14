@@ -6,6 +6,7 @@ import BuildTrip from '../components/BuildTrip.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
+import { zonedToUtc } from '../lib/timezones.js';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -69,11 +70,15 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
       await api.post(`/itinerary/${ownerId}/items`, {
         kind,
         title,
-        // Interpreted against the principal's own zone, which is what the
-        // planner is looking at.
-        startAt: new Date(`${toLocalInput(date, startTime)}:00`).toISOString(),
+        // Read in the principal's own zone, which is what the planner is
+        // looking at — and NOT the browser's, which is only the same thing
+        // when the person filling the form is sitting in the same country.
+        // An assistant in London arranging a 09:00 Lagos departure used to
+        // store 09:00 London, an hour out, with this form's own timezone
+        // field sitting right beside it saying otherwise.
+        startAt: zonedToUtc(date, startTime, timezone),
         endAt: endTime
-          ? new Date(`${toLocalInput(endDateFor(date, startTime, endTime), endTime)}:00`).toISOString()
+          ? zonedToUtc(endDateFor(date, startTime, endTime), endTime, timezone)
           : undefined,
         startTimezone: timezone,
         endTimezone: isTravel && endTimezone ? endTimezone : undefined,

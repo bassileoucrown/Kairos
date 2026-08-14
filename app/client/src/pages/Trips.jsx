@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import SignalPanel from '../components/SignalPanel.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
+import { FlightChainForm, SingleLegForm } from '../components/JourneyForms.jsx';
 import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
@@ -128,10 +129,11 @@ function Pickup({ ownerId, item, freshCard, onArm, onDisarm }) {
   );
 }
 
-function TripDetail({ ownerId, tripId, arrangements, onBack, onChanged }) {
+function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [cards, setCards] = useState({});
+  const [adding, setAdding] = useState(null);
 
   function load() {
     return api.get(`/trips/${ownerId}/${tripId}`).then(setData).catch((e) => setError(e.message));
@@ -212,7 +214,53 @@ function TripDetail({ ownerId, tripId, arrangements, onBack, onChanged }) {
       )}
 
       <h3 className="ess-heading">The journey</h3>
-      {items.length === 0 && <div className="empty-state">Nothing added to this trip yet.</div>}
+
+      {/* This section was read-only, so a trip stayed an empty list and
+          everything the screen can draw about a leg — the arrangement, the
+          number to ring, the meeting phrase, the signal — never appeared,
+          because nothing ever reached the condition that renders it. */}
+      {adding === 'flight' && (
+        <FlightChainForm
+          ownerId={ownerId} trip={trip} homeTimezone={homeTimezone}
+          arrangements={arrangements}
+          onCancel={() => setAdding(null)}
+          onDone={(d) => {
+            setAdding(null);
+            // The arrival pickup is armed as part of building the chain, and
+            // its card address is returned exactly once. Hold it the same way
+            // arming by hand does, so it can be sent to the driver now.
+            if (d?.arrivalPickup?.itemId) {
+              setCards((c) => ({ ...c, [d.arrivalPickup.itemId]: d.arrivalPickup.cardPath }));
+            }
+            load(); onChanged?.();
+          }}
+        />
+      )}
+      {adding === 'one' && (
+        <SingleLegForm
+          ownerId={ownerId} trip={trip} homeTimezone={homeTimezone}
+          arrangements={arrangements}
+          onCancel={() => setAdding(null)}
+          onDone={() => { setAdding(null); load(); onChanged?.(); }}
+        />
+      )}
+      {!adding && (
+        <div className="code-actions">
+          <button className="btn btn-primary btn-sm" type="button" onClick={() => setAdding('flight')}>
+            Add a flight
+          </button>
+          <button className="btn btn-sm" type="button" onClick={() => setAdding('one')}>
+            Add something else
+          </button>
+        </div>
+      )}
+
+      {items.length === 0 && !adding && (
+        <div className="empty-state">
+          Nothing in this trip yet. Adding the flight also builds the car to the airport,
+          the transfer at the far end, and the phrase that meets you there.
+        </div>
+      )}
       {items.map((i) => (
         <div className="card trip-item" key={i.id}>
           <div className="trip-item-head">
@@ -369,6 +417,7 @@ export default function Trips() {
           ownerId={ownerId}
           tripId={openId}
           arrangements={data.arrangements || []}
+          homeTimezone={user?.timezone || 'UTC'}
           onBack={() => { setOpenId(null); load(); }}
           onChanged={load}
         />
