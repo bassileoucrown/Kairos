@@ -25,6 +25,34 @@ const CATEGORIES = [
       { id: 'known_traveller_number', label: 'Known Traveller / Global Entry', expires: true },
       { id: 'national_id', label: 'National ID', expires: true },
       { id: 'driving_licence', label: 'Driving licence', expires: true },
+      // Required at Nigerian ports of entry and exit, and asked for by name
+      // rather than as "a vaccination certificate" — which is why it is its own
+      // field with its own expiry rather than a note on the generic one.
+      { id: 'yellow_fever_card', label: 'Yellow fever card', expires: true },
+    ],
+  },
+  {
+    // Nigeria issues several identity numbers, and they are not
+    // interchangeable: a bank wants the BVN, a telco wants the NIN, an invoice
+    // wants the TIN, and a PA is asked for two of them in the same phone call.
+    // One generic "National ID" field forces a choice between them, which is
+    // why they are listed separately here.
+    //
+    // Sensitivity is decided per field rather than per category, which is the
+    // whole reason this is a separate group. A BVN is a key to somebody's
+    // banking and a delegate has no business seeing it; an RC number is printed
+    // on the company letterhead and withholding it would be theatre.
+    id: 'identity_numbers',
+    label: 'Identity and registration numbers',
+    hint: 'The numbers institutions ask for by name.',
+    sensitivity: 'sensitive',
+    fields: [
+      { id: 'bvn', label: 'BVN (Bank Verification Number)', expires: false },
+      { id: 'nin', label: 'NIN (National Identification Number)', expires: false },
+      { id: 'voters_card', label: "Voter's card (PVC)", expires: false },
+      { id: 'social_security', label: 'Social security / equivalent', expires: false },
+      { id: 'tin', label: 'TIN (Tax Identification Number)', expires: false, sensitivity: 'ordinary' },
+      { id: 'rc_number', label: 'RC number (CAC registration)', expires: false, sensitivity: 'ordinary' },
     ],
   },
   {
@@ -73,10 +101,52 @@ const CATEGORIES = [
     fields: [
       { id: 'travel_insurance', label: 'Travel insurance policy', expires: true },
       { id: 'health_insurance', label: 'Health insurance policy', expires: true },
+      { id: 'hmo_provider', label: 'HMO provider and plan number', expires: true },
       { id: 'emergency_contact', label: 'Emergency contact', expires: false },
       { id: 'next_of_kin', label: 'Next of kin', expires: false },
       { id: 'blood_type', label: 'Blood type', expires: false },
-      { id: 'vaccination', label: 'Vaccination certificate', expires: true },
+      // Asked on essentially every Nigerian hospital admission form, and not
+      // derivable from blood type — they are different tests answering
+      // different questions.
+      { id: 'genotype', label: 'Genotype', expires: false },
+      { id: 'medications', label: 'Regular medications', expires: false },
+      { id: 'doctor', label: 'Doctor or preferred hospital', expires: false },
+      { id: 'vaccination', label: 'Other vaccination certificate', expires: true },
+    ],
+  },
+  {
+    // Asked constantly and answered from memory badly: the plate the gate needs,
+    // the address a courier needs. Ordinary, because a delegate arranging a car
+    // or a delivery cannot do the job without them.
+    //
+    // Home address is deliberately NOT here. For a principal in this market it
+    // is the single most dangerous field the app could hold, and it should not
+    // arrive under the same tier that lets a scheduling delegate read a seat
+    // preference. See the note under canSee.
+    id: 'logistics',
+    label: 'Vehicles and addresses',
+    hint: 'What a gate, a courier or a car park asks for.',
+    sensitivity: 'ordinary',
+    fields: [
+      { id: 'vehicle_plate', label: 'Vehicle plate number', expires: false },
+      { id: 'vehicle_description', label: 'Vehicle make and colour', expires: false },
+      { id: 'office_address', label: 'Office address', expires: false },
+      { id: 'delivery_address', label: 'Delivery address', expires: false },
+    ],
+  },
+  {
+    // Who to call when something has gone wrong and the principal cannot be
+    // asked. Sensitive: knowing who holds somebody's power of attorney is a
+    // map of how to reach their affairs.
+    id: 'advisers',
+    label: 'Advisers',
+    hint: 'Who to call, when it is not a scheduling question.',
+    sensitivity: 'sensitive',
+    fields: [
+      { id: 'lawyer', label: 'Lawyer', expires: false },
+      { id: 'accountant', label: 'Accountant', expires: false },
+      { id: 'company_secretary', label: 'Company secretary', expires: false },
+      { id: 'bank_relationship_manager', label: 'Bank relationship manager', expires: false },
     ],
   },
   {
@@ -90,18 +160,32 @@ const CATEGORIES = [
       { id: 'job_title', label: 'Job title', expires: false },
       { id: 'company_boilerplate', label: 'Company boilerplate', expires: false },
       { id: 'av_requirements', label: 'AV and speaking requirements', expires: false },
+      { id: 'social_handles', label: 'Social handles', expires: false },
     ],
   },
 ];
 
 const BY_CATEGORY = new Map(CATEGORIES.map((c) => [c.id, c]));
 
+/**
+ * A field's own sensitivity, falling back to its category's.
+ *
+ * Most categories are uniform and say so once. Identity numbers are not: a BVN
+ * is a key to somebody's banking, an RC number is printed on the letterhead,
+ * and they sit together because that is where a person looks for them — not
+ * because they deserve the same protection. Marking the whole group sensitive
+ * would be easier and would teach assistants that the marking means nothing.
+ */
+function sensitivityOf(category, field) {
+  return field?.sensitivity || category.sensitivity;
+}
+
 function findField(categoryId, fieldId) {
   const category = BY_CATEGORY.get(categoryId);
   if (!category) return null;
   const field = category.fields.find((f) => f.id === fieldId);
   if (!field) return null;
-  return { category, field, sensitivity: category.sensitivity };
+  return { category, field, sensitivity: sensitivityOf(category, field) };
 }
 
 /**
@@ -139,5 +223,6 @@ function expiryState(dateStr, now = Date.now()) {
 }
 
 module.exports = {
-  CATEGORIES, BY_CATEGORY, findField, canSee, daysUntil, expiryState, EXPIRY_WARN_DAYS,
+  CATEGORIES, BY_CATEGORY, findField, sensitivityOf, canSee,
+  daysUntil, expiryState, EXPIRY_WARN_DAYS,
 };

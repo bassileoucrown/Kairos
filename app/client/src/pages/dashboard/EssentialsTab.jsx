@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
+// Mirrors sensitivityOf in server/lib/essentials.js: a field may override its
+// category. Most do not, and the category answers for them.
+function sensitivityOf(category, field) {
+  return field?.sensitivity || category?.sensitivity;
+}
+
 // The things people are asked for and cannot recall.
 //
 // Sensitive values arrive masked and stay that way until someone deliberately
@@ -150,7 +156,12 @@ export default function EssentialsTab({ ownerId }) {
                   number has been typed into a box that was never going to
                   keep it. */}
               {catalogue.map((c) => {
-                const locked = c.sensitivity === 'sensitive' && !data.encryptionConfigured;
+                // Locked only when EVERY field in it is sensitive. Identity
+                // numbers mixes both — a TIN is printed on invoices and an RC
+                // number is on the letterhead — and disabling the whole group
+                // for want of a key would hide two fields that never needed one.
+                const locked = !data.encryptionConfigured
+                  && c.fields.every((f) => sensitivityOf(c, f) === 'sensitive');
                 return (
                   <option key={c.id} value={c.id} disabled={locked}>
                     {c.label}{locked ? ' — not available yet' : ''}
@@ -167,7 +178,14 @@ export default function EssentialsTab({ ownerId }) {
               onChange={(e) => setForm({ ...form, field: e.target.value })}
             >
               <option value="">Choose…</option>
-              {(chosen?.fields || []).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+              {(chosen?.fields || []).map((f) => {
+                const locked = sensitivityOf(chosen, f) === 'sensitive' && !data.encryptionConfigured;
+                return (
+                  <option key={f.id} value={f.id} disabled={locked}>
+                    {f.label}{locked ? ' — not available yet' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="field">
@@ -176,7 +194,7 @@ export default function EssentialsTab({ ownerId }) {
               id="ess-value" type="text" value={form.value} required
               onChange={(e) => setForm({ ...form, value: e.target.value })}
             />
-            {chosen?.sensitivity === 'sensitive' && (
+            {chosen && chosenField && sensitivityOf(chosen, chosenField) === 'sensitive' && (
               <p className="hint">Stored encrypted. Hidden by default, and every reveal is logged.</p>
             )}
           </div>

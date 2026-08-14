@@ -250,6 +250,21 @@ matters more than the feature:
   a `delegate` engaged for scheduling sees dietary requirements and never an
   identity document. Withheld fields are **absent** from the response rather
   than refused — same 404-not-403 reasoning as spaces.
+
+  A field may override its category (`sensitivityOf`), and one group relies on
+  it. **Identity and registration numbers** holds a BVN next to a TIN because
+  that is where a person looks for both — but a BVN is a key to somebody's
+  banking and a TIN is printed on every invoice the company issues. Marking the
+  whole group sensitive would have been easier and would have taught assistants
+  that the marking means nothing, so BVN, NIN and voter's card are sensitive
+  while TIN and RC number are not.
+
+  This matters most for **Nigeria, where the numbers are not interchangeable**:
+  a bank wants the BVN, a telco wants the NIN, an invoice wants the TIN, and an
+  assistant is asked for two of them in the same phone call. A single generic
+  "National ID" field forced a choice between them. Health carries the same
+  point — **genotype** (AA/AS/SS) is asked on essentially every Nigerian
+  hospital admission form and is not derivable from blood type.
 - **`verified_at`.** Data entered once and never rechecked looks authoritative
   while quietly going out of date; the number may be from the previous
   passport. An assistant confirms *"I held the document"*, with the date.
