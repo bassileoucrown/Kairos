@@ -12,6 +12,7 @@ const { isHouseholdStaff } = require('../lib/household');
 const { handleProblem } = require('../lib/handles');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
 const totp = require('../lib/totp');
+const { isConfigured: emailConfigured } = require('../lib/emailProviders');
 const { decrypt } = require('../lib/secretBox');
 const { sendEmail } = require('../lib/email');
 
@@ -248,7 +249,7 @@ router.post('/forgot-password', async (req, res) => {
   // server, not of any account, so reporting it leaks nothing — and without it
   // the page cheerfully tells people to check an inbox that will never receive
   // anything.
-  res.json({ ok: true, emailDeliveryConfigured: !!process.env.RESEND_API_KEY });
+  res.json({ ok: true, emailDeliveryConfigured: emailConfigured() });
 });
 
 router.get('/reset-password/:token', async (req, res) => {

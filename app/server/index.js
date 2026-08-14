@@ -29,6 +29,7 @@ const accessCodesRouter = require('./routes/accessCodes');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 const { startVoiceExpiry } = require('./lib/voiceNotes');
+const { isConfigured: emailConfigured } = require('./lib/emailProviders');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -67,7 +68,7 @@ const dbState = { ready: false, error: null };
 app.get('/api/status', (req, res) => {
   res.json({
     storageDurable: db.dialect !== 'sqlite' || process.env.NODE_ENV !== 'production',
-    emailDeliveryConfigured: !!process.env.RESEND_API_KEY,
+    emailDeliveryConfigured: emailConfigured(),
     databaseReady: dbState.ready,
     databaseBackend: db.dialect,
     // Named so a human can compare it against their dashboard. Never the

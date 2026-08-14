@@ -1,10 +1,12 @@
 const crypto = require('crypto');
 const db = require('./db');
 const { emailFrom } = require('./brand');
+const { activeProvider } = require('./emailProviders');
 
 // Swappable email delivery. Every email is always recorded in the `emails`
 // table — that's the dev-mode outbox (see routes/emails.js) and doubles as
-// the Communications Engine's history. If RESEND_API_KEY is set, we also
+// the Communications Engine's history. If a provider is configured (see
+// lib/emailProviders.js — SendGrid or Resend, whichever key is set) we also
 // attempt a real send; otherwise this is a no-op and the outbox is the only
 // record, which is enough to develop and test every flow that sends mail
 // without a real provider.
@@ -15,7 +17,18 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, ownerId, sentByUserId, toEmail, subject, body, category, relatedBookingId, new Date().toISOString());
 
-  if (process.env.RESEND_API_KEY) {
+  let provider = null;
+  try { provider = activeProvider(); }
+  catch (err) {
+    // A misconfigured EMAIL_PROVIDER must not swallow the message. It is
+    // already recorded above, and saying why out loud beats failing silently.
+    console.error(`Email not sent — ${err.message}`);
+    await db.prepare('UPDATE emails SET delivery_status = ?, delivery_error = ? WHERE id = ?')
+      .run('failed', err.message, id);
+    return { id };
+  }
+
+  if (provider) {
     // fetch does not throw on 4xx or 5xx. Without checking the status, a
     // rejected message — the commonest being "you can only send to your own
     // address until you verify a domain" — was recorded as sent, never
@@ -25,29 +38,20 @@ async function sendEmail({ ownerId = null, sentByUserId = null, toEmail, subject
     let status = 'sent';
     let failure = null;
     try {
-      // Overridable so the delivery-failure path can be exercised against a
-      // stand-in. There is no other way to test "the provider said no" without
-      // a provider, and that is the path most worth testing.
-      const endpoint = process.env.RESEND_ENDPOINT || 'https://api.resend.com/emails';
-      const res = await fetch(endpoint, {
+      // The endpoint is overridable per provider so the delivery-failure path
+      // can be exercised against a stand-in. There is no other way to test
+      // "the provider said no" without a provider, and that is the path most
+      // worth testing.
+      const res = await fetch(provider.endpoint(), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: emailFrom(),
-          to: toEmail,
-          subject,
-          text: body,
-        }),
+        headers: provider.headers(provider.key),
+        body: provider.body({ from: emailFrom(), to: toEmail, subject, text: body }),
       });
-      if (!res.ok) {
+      if (!provider.accepts(res.status)) {
         const detail = await res.text().catch(() => '');
-        let message = detail;
-        try { message = JSON.parse(detail).message || detail; } catch { /* not JSON */ }
+        const message = provider.errorMessage(detail);
         status = 'failed';
-        failure = `${res.status}: ${String(message).slice(0, 300)}`;
+        failure = `${provider.label} ${res.status}: ${String(message).slice(0, 300)}`;
       }
     } catch (err) {
       status = 'failed';

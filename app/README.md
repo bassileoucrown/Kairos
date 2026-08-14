@@ -449,7 +449,8 @@ Revoking an assistant's access stays the principal's alone.
   is logged to an `emails` table and viewable in the dashboard's Outbox tab — useful since no real
   provider is configured by default — and also printed to the server console, which matters for
   flows like password reset where the recipient is, by definition, locked out of their own Outbox.
-  Set `RESEND_API_KEY` (and optionally `EMAIL_FROM`) to also deliver for real.
+  Set `SENDGRID_API_KEY` or `RESEND_API_KEY` (and optionally `EMAIL_FROM`) to also deliver
+  for real.
 - **Members & Delegates** — invite a PA or delegate by email; they accept via a link (going through
   their own signup/onboarding first if needed) and get access to your account.
 - **Calendar sync / WhatsApp — stubbed, not faked.** Real architecture (`server/lib/calendarSync.js`,
@@ -905,12 +906,37 @@ Not sent by email, deliberately: notices are worth a badge, not an inbox.
 
 Every message is written to the `emails` table before any provider is called,
 so the in-app Outbox is a complete record whether or not delivery is
-configured. With `RESEND_API_KEY` set, each one also carries what actually
-happened:
+configured. With a provider set, each one also carries what actually happened:
 
 - **Delivered** — the provider accepted it.
 - **Not delivered** — it refused, and the Outbox shows its exact words.
 - **Outbox only** — no provider configured; this is the only copy.
+
+### Two providers, one path
+
+**SendGrid** and **Resend** both work (`lib/emailProviders.js`). Set
+`SENDGRID_API_KEY` or `RESEND_API_KEY` and the one whose key is present is
+used; set `EMAIL_PROVIDER` only when both are and you need to say which. The
+choice belongs to whoever stands the deployment up — they may already have an
+account somewhere, or find one easier to verify a domain with — and it should
+never mean editing code.
+
+The differences are small and all in the places that break quietly. SendGrid
+answers **202 with an empty body** where Resend answers 200 with JSON, wants
+`from` as an **object** rather than a string, and reports refusals as
+`{ errors: [{ message }] }` rather than `{ message }`. Reading the wrong one
+turns a legible refusal — *"the from address does not match a verified Sender
+Identity"* — into an empty string in the Outbox, which is precisely the failure
+this section exists to prevent. Both shapes are exercised against a stand-in
+provider, accepting and refusing.
+
+A misconfigured `EMAIL_PROVIDER` fails **loudly**: status stops claiming
+delivery is configured, and the message is recorded as failed with the reason,
+rather than being quietly dropped.
+
+**Verifying a sender is the real work**, and it is the same on either. Until a
+domain is verified you can only send to your own address — which is not a
+Kairos limitation and cannot be worked around in code.
 
 That middle state is the one worth having. `fetch` does not throw on a 4xx, so
 a rejected message used to be recorded as sent, never arrive, and leave nothing
