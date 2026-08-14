@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
@@ -74,6 +74,36 @@ export async function resolveActivePrincipal(user) {
   } catch {
     return stored || user?.id || null;
   }
+}
+
+/**
+ * Back, meaning the screen you were just on.
+ *
+ * The rail says where everything is; it does not say where you came from. A
+ * PA who opens an approval from Today, deals with it and wants Today again has
+ * to work out which of eighteen entries they started from — and gets it wrong,
+ * because the answer depends on a route they took a minute ago and are no
+ * longer looking at. The browser knows. This is the browser's own back, put
+ * where a thumb can reach it, since on a phone there is no visible one.
+ *
+ * It appears only when there is somewhere inside Kairos to go back TO. React
+ * Router stamps each history entry with an index; at index zero this is the
+ * first screen of the session, and "back" would mean leaving the app entirely
+ * — a button that signs you out of your own tab is worse than no button.
+ */
+function BackButton() {
+  const navigate = useNavigate();
+  // Read per render rather than once: useLocation is what re-renders this on
+  // every navigation, and the index it should report is the current one.
+  useLocation();
+  const canGoBack = (window.history.state?.idx ?? 0) > 0;
+  if (!canGoBack) return null;
+  return (
+    <button className="app-back" type="button" aria-label="Back" onClick={() => navigate(-1)}>
+      <span aria-hidden="true">←</span>
+      <span className="app-back-word">Back</span>
+    </button>
+  );
 }
 
 function initials(name) {
@@ -279,6 +309,7 @@ export default function AppShell({ children, title, actions, active }) {
           >
             ☰
           </button>
+          <BackButton />
           <div className="app-header-title">
             <h1>{title}</h1>
             {actingForSomeoneElse && (

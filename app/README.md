@@ -517,6 +517,40 @@ Intelligence:
   — only for sections still empty, so it never clobbers what a PA already wrote. Talking points and
   desired outcome are left for the PA, since those need actual judgment about the meeting.
 
+### Saying it instead of typing it
+
+Both AI Assist boxes have a microphone (`components/Dictate.jsx`). Dictation
+fills the same field the fingers would and the existing parser reads it
+unchanged — which is why speaking to the assistant needed no new understanding
+on the server, and why what it can and cannot do is exactly the same as before.
+Speech is appended, so a second sentence extends the first and a correction
+typed by hand is not wiped out by pressing the button again.
+
+**Where the audio goes is the part that matters here.** This uses the browser's
+own speech recognition. In Chrome and Edge that is *not* on-device: the audio
+goes to the browser vendor's servers and comes back as text. Safari on current
+Apple platforms recognises on-device. Firefox does not implement it at all. For
+most products that is a footnote; for this one it is the whole question,
+because the sentence being dictated names a principal, a counterparty and a
+time. So:
+
+- **Nothing listens until the microphone is pressed**, and it stops at the end
+  of a sentence rather than holding an open mic in a shared office.
+- **The screen says so before it is used** — in the browsers where it is true —
+  and says to type it instead if the wording is sensitive.
+- **It is offered on the assistant's instruction boxes and nowhere else.** The
+  direct line already takes voice, encrypted at rest with a key only this
+  server holds (`lib/voiceNotes.js`); routing that through a third party for a
+  transcript would quietly undo the property that made it worth building.
+- A browser with no speech support shows **no microphone at all**, rather than
+  a button that does nothing.
+
+`lib/speech.js` is written so the component does not know what is underneath
+it, which is what makes the private path a swap rather than a rewrite:
+transcription on our own server behind a provider key, or a small on-device
+model. Neither is built — the honest reason is the same one as everywhere else
+in this file, that it needs a credential nobody has configured yet.
+
 ## Phase 3A — Spaces and the two registers (complete)
 
 The collaboration layer from `docs/collaboration-spec.html`. Its point is one mechanic: the formal
@@ -643,6 +677,21 @@ straight to a view and any view can be bookmarked or sent to someone.
 people look for it, and where it stays reachable at phone width. It previously sat at the foot of
 the sidebar, which is both the last place anyone checks and, on mobile, hidden behind the menu
 toggle. The menu closes on Escape or an outside click, and also offers Settings.
+
+**Back** sits beside the title, and means the screen you were just on. The rail
+says where everything *is*; it never said where you came *from* — so a PA who
+opens an approval from Today, deals with it, and wants Today again has to work
+out which of eighteen entries they started from, and gets it wrong, because the
+answer depends on a route they took a minute ago and are no longer looking at.
+The browser knows. This is the browser's own back, put where a thumb can reach
+it, since at phone width there is no visible one.
+
+It appears **only when there is somewhere inside Kairos to go back to**. Each
+history entry carries an index; at index zero this is the first screen of the
+session, and back would mean leaving the app — a button that signs you out of
+your own tab is worse than no button. Reloading is deliberately not that case:
+a refresh keeps the browser's history, the entries behind you really are still
+there, and back stays.
 
 ### Today
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import Dictate from '../../components/Dictate.jsx';
 
 const EXAMPLES = [
   'Book a call with Jane next Tuesday afternoon',
@@ -14,6 +15,11 @@ const DRAFT_EXAMPLES = [
   'Follow up thank-you after today\'s call with the board member',
   'Confirm tomorrow\'s meeting',
 ];
+
+/** Appends dictated words to what is already in the box. */
+function appendSpoken(setter) {
+  return (text) => setter((current) => (current.trim() ? `${current.trim()} ${text}` : text));
+}
 
 function DraftMessageTab({ ownerId }) {
   const [instruction, setInstruction] = useState('');
@@ -93,6 +99,7 @@ function DraftMessageTab({ ownerId }) {
             required
             style={{ minHeight: 60 }}
           />
+          <Dictate onText={appendSpoken(setInstruction)} label="Say it" />
           <p className="hint">Try: "{DRAFT_EXAMPLES.join('" · "')}"</p>
         </div>
 
@@ -260,6 +267,7 @@ function ScheduleTab({
             required
             style={{ minHeight: 60 }}
           />
+          <Dictate onText={appendSpoken(setMessage)} label="Say it" />
           <p className="hint">Try: "{EXAMPLES.join('" · "')}"</p>
         </div>
         <button className="btn btn-primary" type="submit" disabled={parsing}>

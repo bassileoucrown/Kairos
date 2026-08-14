@@ -676,6 +676,24 @@ textarea { resize: vertical; min-height: 70px; }
 .app-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .app-body { padding: 22px 28px 60px; max-width: 1100px; width: 100%; }
 
+/* Back to the screen you were just on. Only rendered when there is one. */
+.app-back {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 6px 12px 6px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); font-size: 0.85rem; cursor: pointer;
+}
+.app-back:hover { border-color: var(--accent); color: var(--accent); }
+
+/* --- Speaking to the assistant ---------------------------------------- */
+
+.dictate { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.dictate-btn.is-live {
+  background: var(--danger-soft); border-color: var(--danger); color: var(--danger);
+}
+.dictate-heard { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+.dictate-error { font-size: 0.8rem; color: var(--danger); }
+.dictate-note { font-size: 0.74rem; color: var(--text-muted); flex: 1 1 240px; }
+
 @media (max-width: 860px) {
   .app-nav {
     position: fixed; z-index: 40; left: 0; top: 0; bottom: 0;
@@ -818,7 +836,8 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 
 /* ---- Print: a clean day sheet to hand over ---- */
 @media print {
-  .app-nav, .nav-scrim, .app-header-actions, .no-print, .nav-toggle { display: none !important; }
+  .app-nav, .nav-scrim, .app-header-actions, .no-print, .nav-toggle,
+  .app-back, .dictate { display: none !important; }
   .app { display: block; }
   .app-header { border: none; padding: 0 0 10px; }
   .app-body { padding: 0; max-width: none; }
