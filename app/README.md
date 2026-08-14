@@ -1141,6 +1141,45 @@ to what their browser reports) and renders every slot in it, while showing the o
 alongside for clarity — this was an explicit Phase-1 gap in the blueprint (Section 3.6, Gap 2) and
 is handled from the start here rather than retrofitted.
 
+### Picking one by knowing where you are going
+
+The list was never missing. `Intl.supportedValuesOf('timeZone')` has had all
+four hundred-odd zones the whole time, updated with the platform's own tzdata
+rather than a copy of it going stale in this repo. What was wrong was every way
+we *asked* for one.
+
+An alphabetical dropdown of four hundred entries is a list you scroll, and
+`Europe/London` sorts between Lisbon and Luxembourg — nowhere near where anybody
+looks. The trip form was worse: free text, with `Europe/London` for a
+placeholder, which is a spelling test. Type "London", or "GMT", or "UK" and the
+server correctly refuses all three, having been given no way to say what the
+right answer would have looked like.
+
+`components/TimezonePicker.jsx` replaces all four (onboarding, the public
+booking page, the itinerary's arrival zone, and the trip). Type where you are
+going. The search covers the city, the region, the zone's own name, its current
+offset, and a short alias list — so **Abuja finds Lagos time**, "Nigeria" and
+"United Kingdom" both work, and nobody needs to know that their city's zone is
+named after a different one. Every row shows the time it is there right now,
+which is the fact the choice is usually really about.
+
+Two details that are less obvious than they look:
+
+- **Empty is not the alphabet.** Before anything is typed it offers the
+  browser's detected zone first, then the places this market actually flies. An
+  empty search box that answers with four hundred rows is the dropdown again.
+- **Likely before obscure.** There is no population figure in the platform's
+  list, so a naive prefix match falls back on alphabetical order — and
+  alphabetically, "lon" is *Longyearbyen*, an Arctic settlement of about two
+  thousand, before it is London. Matches are banded: the city typed in full,
+  then city-prefix matches with somewhere likely first, then everything else.
+  The proxy for "likely" is honest about what it is — the zones this product
+  has had a reason to name are the zones its users mean.
+
+The alias list is a search aid and no part of what gets stored; the value saved
+is always the IANA name, which is what the server validates against `Intl` and
+what every stored instant is resolved through.
+
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling

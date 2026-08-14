@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import SignalPanel from '../components/SignalPanel.jsx';
+import TimezonePicker from '../components/TimezonePicker.jsx';
 import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
@@ -392,10 +393,15 @@ export default function Trips() {
                 </div>
                 <div className="field">
                   <label htmlFor="trip-tz">Timezone there</label>
-                  <input
-                    id="trip-tz" type="text" placeholder="Europe/London"
+                  {/* This used to be free text with "Europe/London" for a
+                      placeholder, which is a spelling test: type "London" and
+                      the server correctly refuses, having no way to say what
+                      the right answer would have looked like. */}
+                  <TimezonePicker
+                    id="trip-tz"
                     value={form.destinationTimezone}
-                    onChange={(e) => setForm({ ...form, destinationTimezone: e.target.value })}
+                    onChange={(tz) => setForm({ ...form, destinationTimezone: tz })}
+                    emptyLabel="Same as home"
                   />
                   <p className="hint">
                     Once the trip is confirmed, your days in this range are drawn in this zone

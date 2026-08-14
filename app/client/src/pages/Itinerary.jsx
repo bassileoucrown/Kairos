@@ -5,7 +5,7 @@ import RunningLate from '../components/RunningLate.jsx';
 import BuildTrip from '../components/BuildTrip.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
-import { listTimezones } from '../lib/timezones.js';
+import TimezonePicker from '../components/TimezonePicker.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -21,7 +21,6 @@ const KINDS = [
 // Only these genuinely land somewhere else, so only these ask about a second
 // timezone — everything else would just be a field to ignore.
 const TRAVEL_KINDS = new Set(['flight', 'train', 'car']);
-const timezones = listTimezones();
 
 function shiftDate(key, days) {
   const d = new Date(`${key}T12:00:00Z`);
@@ -159,10 +158,10 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
       {isTravel && (
         <div className="field">
           <label htmlFor="itin-endtz">Arrival timezone</label>
-          <select id="itin-endtz" value={endTimezone} onChange={(e) => setEndTimezone(e.target.value)}>
-            <option value="">Same as departure ({timezone})</option>
-            {timezones.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-          </select>
+          <TimezonePicker
+            id="itin-endtz" value={endTimezone} onChange={setEndTimezone}
+            emptyLabel={`Same as departure (${timezone})`}
+          />
           <p className="hint">
             Set this and the arrival time is shown in local time at the other end, so nobody
             does the arithmetic in their head at 3am.

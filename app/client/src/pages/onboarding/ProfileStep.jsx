@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { api } from '../../lib/api.js';
-import { listTimezones } from '../../lib/timezones.js';
+import TimezonePicker from '../../components/TimezonePicker.jsx';
 import OnboardingLayout from './OnboardingLayout.jsx';
 import { BRAND_SHORT } from '../../lib/brand.js';
-
-const timezones = listTimezones();
 
 export default function ProfileStep() {
   const { user, updateUser } = useAuth();
@@ -67,11 +65,7 @@ export default function ProfileStep() {
         </div>
         <div className="field">
           <label htmlFor="timezone">Timezone</label>
-          <select id="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-            {timezones.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
+          <TimezonePicker id="timezone" value={timezone} onChange={setTimezone} />
         </div>
 
         <div className="onboarding-actions">

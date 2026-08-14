@@ -1238,6 +1238,42 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-size: 0.78rem; word-break: break-all; user-select: all;
   padding: 6px 8px; border-radius: var(--radius); background: var(--bg-subtle, var(--accent-soft));
 }
+/* --- Choosing a timezone by typing where you are going ------------------ */
+
+.tz-picker { position: relative; }
+.tz-current {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); font-size: 0.94rem;
+  cursor: pointer; text-align: left;
+}
+.tz-current:hover { border-color: var(--accent); }
+.tz-current-name { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tz-current-zone { font-size: 0.72rem; color: var(--text-muted); }
+.tz-current-meta { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.tz-search-icon { font-size: 0.9rem; opacity: 0.7; }
+
+.tz-panel {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 8px; max-height: 320px; display: flex; flex-direction: column;
+}
+.tz-search input { font-size: 0.9rem; }
+.tz-panel-hint { font-size: 0.76rem; color: var(--text-muted); margin: 8px 4px 4px; }
+.tz-list { list-style: none; margin: 6px 0 0; padding: 0; overflow-y: auto; }
+.tz-option {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  padding: 7px 8px; border: none; border-radius: var(--radius);
+  background: transparent; color: var(--text); cursor: pointer; text-align: left;
+  font-size: 0.88rem;
+}
+.tz-option.is-cursor { background: var(--accent-soft); }
+.tz-option.is-current { font-weight: 700; }
+.tz-option-city { flex: 1; min-width: 0; }
+.tz-option-zone { font-size: 0.74rem; color: var(--text-muted); }
+.tz-option-time { font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; }
+
 /* --- The signal both people match ------------------------------------- */
 /* One panel, two screens. See lib/pickupSignal.js. */
 

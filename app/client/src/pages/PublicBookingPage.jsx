@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
-import { detectTimezone, listTimezones, dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
+import { detectTimezone, dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
+import TimezonePicker from '../components/TimezonePicker.jsx';
 import { useOpenSlots } from '../lib/useOpenSlots.js';
 import SlotGrid from '../components/SlotGrid.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
 
 const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
-const timezones = listTimezones();
 
 function MeetingList({ owner, meetingTypes, slug }) {
   return (
@@ -113,9 +113,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
 
           <div className="field" style={{ maxWidth: 320 }}>
             <label htmlFor="tz">Your timezone</label>
-            <select id="tz" value={bookerTimezone} onChange={(e) => setBookerTimezone(e.target.value)}>
-              {timezones.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
+            <TimezonePicker id="tz" value={bookerTimezone} onChange={setBookerTimezone} />
             <p className="tz-note">Times shown below are in your local timezone. {owner.name} is in {ownerTimezone}.</p>
           </div>
 
