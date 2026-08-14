@@ -676,6 +676,25 @@ textarea { resize: vertical; min-height: 70px; }
 .app-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .app-body { padding: 22px 28px 60px; max-width: 1100px; width: 100%; }
 
+/* --- Declared, but not open yet ---------------------------------------- */
+/* Marked in the rail as well as on the page: somebody deciding whether to
+   rely on a thing should learn it is not open before they click. */
+
+.nav-soon {
+  margin-left: auto; font-size: 0.62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--warn-soft); color: var(--warn);
+}
+.soon-banner { border-left: 3px solid var(--warn); }
+.soon-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.soon-head h2 { margin: 0; font-size: 1.05rem; }
+.soon-service {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.soon-service .name { font-weight: 600; }
+
 /* Back to the screen you were just on. Only rendered when there is one. */
 .app-back {
   display: inline-flex; align-items: center; gap: 6px; flex: none;

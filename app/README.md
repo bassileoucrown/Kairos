@@ -1267,6 +1267,51 @@ The alias list is a search aid and no part of what gets stored; the value saved
 is always the IANA name, which is what the server validates against `Intl` and
 what every stored instant is resolved through.
 
+## The concierge desk — declared, and shut
+
+Built visibly and marked plainly, the same way calendar sync and WhatsApp are.
+A principal deciding whether Kairos is the place their life goes should be able
+to see the shape of what is coming, and should never be unable to tell which
+parts work today. It has a nav entry carrying a **Soon** tag — so the rail says
+it before you click, not after — and the screen leads with a banner saying it
+is not open.
+
+**What makes it unavailable is not a credential, and the copy says so.**
+Calendar sync is gated on an OAuth client ID: somebody sets an environment
+variable and it goes live. A concierge is people — a vetted fulfilment network
+under contract, with agreed liability, who answer at 2am in the city the
+principal is actually in. There is no key that turns that on. So the gate in
+`lib/concierge.js` names a partner rather than a token, and **nothing anywhere
+on the screen offers to "connect"**, because connecting is not the missing
+thing. The suite asserts the absence of that word.
+
+**There is no request box, deliberately.** The obvious placeholder is a form
+that takes a request and returns a friendly message. That form would be a lie:
+somebody would eventually type *"table for four at 8, my wife's birthday"* into
+it, and nobody would be on the other end — a promise broken at the exact moment
+they were relying on us. `POST /concierge/:ownerId/requests` exists so the shape
+is settled and the refusal is a documented 501 with a reason rather than a 404
+that looks like a bug, and it refuses.
+
+**The one thing it accepts is real.** Marking a service as wanted writes a row
+(`concierge_interest`), survives a reload, can be taken back, and the screen
+states in plain words that it records a want for Exousia and does not raise a
+request. Marking the same thing twice is not a second want.
+
+The service list is named specifically — dining and venues, travel desk,
+private aviation, events and access, gifting, household and staffing, medical,
+security and logistics — rather than as "lifestyle management", because the
+list *is* the product decision: a principal reading it can tell at a glance
+whether it covers the things they currently ring three different people about.
+Several of them lean on what Kairos already holds: gifting off the relationship
+calendar that knows whose anniversary falls on Thursday, the travel desk acting
+on a trip that is already an object.
+
+Setting `CONCIERGE_PARTNER` flips `available` to true and the reason to null —
+the switch is a real switch, not decoration, and the suite proves it by booting
+a second server with the variable set. Requests still refuse, with a *different*
+message, because a partner existing is not the same as the handoff being built.
+
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling

@@ -801,3 +801,17 @@ CREATE TABLE IF NOT EXISTS trip_contacts (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_trip_contacts ON trip_contacts(trip_id);
+
+-- The concierge desk, declared before it opens. See lib/concierge.js: what is
+-- missing is a contracted network of people, not a credential, so the only
+-- thing this table holds is somebody saying they want it — which is a real
+-- fact, really recorded, and says so on the screen that collects it.
+CREATE TABLE IF NOT EXISTS concierge_interest (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  service     TEXT NOT NULL,
+  note        TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_concierge_interest ON concierge_interest(owner_id);

@@ -20,6 +20,9 @@ const NAV = [
   { to: '/today', label: 'Today', icon: '◉', principalScoped: true },
   { to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
   { to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
+  // Marked in the rail rather than only on the page: somebody deciding whether
+  // to rely on this should learn it is not open before they click, not after.
+  { to: '/concierge', label: 'Concierge', icon: '☏', principalScoped: true, soon: true },
   { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
   { to: '/tasks', label: 'Tasks', icon: '✓' },
   { to: '/spaces', label: 'Spaces', icon: '❑' },
@@ -287,6 +290,7 @@ export default function AppShell({ children, title, actions, active }) {
                 <span className="nav-icon" aria-hidden="true">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
                 {count > 0 && <span className="nav-badge">{count}</span>}
+                {item.soon && <span className="nav-soon">Soon</span>}
               </NavLink>
             );
           })}

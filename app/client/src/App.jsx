@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
 import ManageBooking from './pages/ManageBooking.jsx';
 import DriverCard from './pages/DriverCard.jsx';
+import Concierge from './pages/Concierge.jsx';
 import AcceptInvite from './pages/AcceptInvite.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
@@ -131,6 +132,7 @@ export default function App() {
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />
+      <Route path="/concierge" element={<RequireAuth><Concierge /></RequireAuth>} />
       <Route path="/workspace" element={<RequireAuth><Workspace /></RequireAuth>} />
       <Route path="/connections" element={<RequireAuth><Connections /></RequireAuth>} />
       <Route path="/household" element={<RequireAuth><Household /></RequireAuth>} />
