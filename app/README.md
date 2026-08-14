@@ -932,6 +932,55 @@ answer both to "the driver changed" and to "that link was forwarded". A wrong
 address and an expired one answer identically. The suite checks all of this
 from the wrong side: what a stranger holding the link actually gets.
 
+### Finding the driver, rather than being found by him
+
+The phrase solves half an arrivals hall. It works once two people are already
+facing each other — and the half left open is the one the principal actually
+experiences: they walk out of customs into forty strangers holding forty
+boards, with nothing to look for. Somebody still has to close the distance, and
+it was the principal, guessing.
+
+So both screens show the same thing at the same second (`lib/pickupSignal.js`):
+a colour and a shape. The driver holds his phone up, screen outward. The
+principal is looking for **orange with a triangle**, not for their own name in
+a stranger's hands. It is a name board with the name taken out, which is the
+only part of a name board that was ever a problem.
+
+- **It says nothing to the room.** A coloured square identifies nobody.
+- **It rotates,** every minute, derived from the card's own address the way an
+  authenticator code is derived from a secret. A photograph of the driver's
+  screen is worthless before it can be forwarded and used.
+- **It is sayable** — two plain words. On the phone, before either can see the
+  other, the principal can ask what the driver is showing and get an answer
+  that cannot be guessed from outside. The palette is small and plainly named
+  for exactly this, and deliberately not enlarged for entropy it does not need:
+  forty-eight combinations is a *finder*, and the phrase is still what proves
+  anything.
+- **Colour is never the only channel.** The shape carries the same information
+  for a colour-blind principal, a screen at minimum brightness, and a hall lit
+  amber by sodium lamps.
+- **It closes.** The principal taps once; the driver's screen changes in his
+  hand, untouched, and tells him to stay where he is. The signal then *freezes*
+  — otherwise it would rotate while they are still walking over, and the thing
+  they identified would stop being true halfway across the hall.
+
+Both sides read the signal from the server, so neither phone's clock is trusted
+and the two cannot drift apart; both also refetch at the instant the server
+names as the change, rather than whenever their own polling happens to come
+round. The driver's phone is never given the address the signal is derived
+from, only this minute's answer, and the page holds a screen wake-lock where
+the browser has one — a phone held out at arm's length goes to sleep in thirty
+seconds otherwise.
+
+**What this is not: a tracker.** Nothing here reports where anybody is. A live
+position for a principal is the most dangerous row this database could hold,
+and the feature does its whole job without one. Location sharing, if it is ever
+built, would be one-way — the driver to the principal, never the reverse — and
+retained not at all.
+
+Re-arming clears any handshake with the phrase and the address, so a new driver
+is never told he has already been recognised.
+
 ### The rest of a trip
 
 Travellers (a spouse's passport was already storable — `essentials` takes a

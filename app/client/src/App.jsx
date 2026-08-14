@@ -7,6 +7,7 @@ import MeetingTypeStep from './pages/onboarding/MeetingTypeStep.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
 import ManageBooking from './pages/ManageBooking.jsx';
+import DriverCard from './pages/DriverCard.jsx';
 import AcceptInvite from './pages/AcceptInvite.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
@@ -136,6 +137,9 @@ export default function App() {
       <Route path="/instructions" element={<RequireAuth><MyInstructions /></RequireAuth>} />
       <Route path="/notices" element={<RequireAuth><Announcements /></RequireAuth>} />
       <Route path="/threads/:threadId" element={<RequireAuth><ThreadView /></RequireAuth>} />
+
+      {/* No session, deliberately: the driver has no account. See lib/pickup.js. */}
+      <Route path="/pickup/:token" element={<DriverCard />} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />

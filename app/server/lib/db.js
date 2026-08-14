@@ -370,6 +370,8 @@ function ready() {
       // Meeting without a name board. See lib/pickup.js.
       await ensureColumn('itinerary_items', 'pickup_code', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn('itinerary_items', 'pickup_token', 'TEXT');
+      // The moment the principal picked this driver out. See lib/pickupSignal.js.
+      await ensureColumn('itinerary_items', 'pickup_found_at', 'TEXT');
       await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
       await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');

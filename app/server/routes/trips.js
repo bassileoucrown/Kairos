@@ -5,6 +5,8 @@ const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const trips = require('../lib/trips');
 const pickup = require('../lib/pickup');
+const pickupSignal = require('../lib/pickupSignal');
+const { limit, clientIp } = require('../lib/rateLimit');
 
 const router = asyncRouter();
 
@@ -40,6 +42,27 @@ router.get('/pickup/:token', async (req, res) => {
       assistantPhone: item.contact_phone || '',
     }),
   });
+});
+
+// What the driver holds up, and whether he has been spotted yet.
+//
+// Polled from a phone in an arrivals hall, by both sides, for as long as
+// somebody is standing there. The limit is generous because that is normal
+// use — several devices behind one airport network is ordinary, and a driver
+// whose screen stops updating is a driver holding up the wrong colour.
+const signalLimiter = limit({
+  limit: 240,
+  windowMs: 60 * 1000,
+  keys: (req) => [`signal-ip:${clientIp(req)}`, `signal:${req.params.token}`],
+  message: 'Too many requests. Wait a moment.',
+});
+
+router.get('/pickup/:token/signal', signalLimiter, async (req, res) => {
+  const item = await pickup.byToken(req.params.token);
+  if (!item) return res.status(404).json({ error: 'This pickup is not available.' });
+  // Colour and shape only. The address that produced them stays on the server;
+  // a driver's phone never holds the seed, only this minute's answer.
+  res.json({ signal: await pickupSignal.currentFor(item) });
 });
 
 router.use(requireAuth);

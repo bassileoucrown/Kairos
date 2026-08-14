@@ -96,19 +96,29 @@ function driverCard(item, { flight, principalFirstName, assistantPhone } = {}) {
   };
 }
 
-/** Arms a pickup: a fresh phrase and a fresh card address. */
+/**
+ * Arms a pickup: a fresh phrase and a fresh card address.
+ *
+ * Any earlier "found" is cleared with them. Re-arming means the driver
+ * changed or the last link was forwarded, and carrying a handshake across
+ * that boundary would tell a new driver he had already been recognised.
+ */
 async function arm(itemId) {
   const code = generateCode();
   const token = generateToken();
-  await db.prepare('UPDATE itinerary_items SET pickup_code = ?, pickup_token = ? WHERE id = ?')
-    .run(code, token, itemId);
+  await db.prepare(`
+    UPDATE itinerary_items SET pickup_code = ?, pickup_token = ?, pickup_found_at = NULL
+    WHERE id = ?
+  `).run(code, token, itemId);
   return { code, token };
 }
 
 /** Takes the card down early — the driver changed, or the trip did. */
 async function disarm(itemId) {
-  await db.prepare("UPDATE itinerary_items SET pickup_code = '', pickup_token = NULL WHERE id = ?")
-    .run(itemId);
+  await db.prepare(`
+    UPDATE itinerary_items SET pickup_code = '', pickup_token = NULL, pickup_found_at = NULL
+    WHERE id = ?
+  `).run(itemId);
 }
 
 /** Resolves a card address, or null. Nothing distinguishes wrong from expired. */

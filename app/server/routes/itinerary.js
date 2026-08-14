@@ -6,6 +6,7 @@ const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const { arrangementProblem } = require('../lib/trips');
 const pickup = require('../lib/pickup');
+const pickupSignal = require('../lib/pickupSignal');
 const { isValidTimeZone } = require('../lib/timezone');
 const { planDelay } = require('../lib/cascade');
 const { sendEmail } = require('../lib/email');
@@ -306,6 +307,44 @@ router.delete('/:ownerId/items/:itemId/pickup', requirePaAccess, async (req, res
   if (!item) return res.status(404).json({ error: 'Not found.' });
   await pickup.disarm(item.id);
   res.status(204).end();
+});
+
+// --- The other half of the hall -----------------------------------------
+//
+// See lib/pickupSignal.js. The phrase works once two people are face to face;
+// this is what gets them there.
+
+async function armedItem(req) {
+  const item = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, req.principal.id);
+  if (!item || !item.pickup_token) return null;
+  return item;
+}
+
+router.get('/:ownerId/items/:itemId/signal', requirePaAccess, async (req, res) => {
+  const item = await armedItem(req);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  res.json({ signal: await pickupSignal.currentFor(item) });
+});
+
+// "That is them." The driver's screen changes in his hands, and the signal
+// stops rotating so it is still true by the time the principal reaches him.
+router.post('/:ownerId/items/:itemId/signal/found', requirePaAccess, async (req, res) => {
+  const item = await armedItem(req);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  if (!item.pickup_found_at) await pickupSignal.markFound(item.id);
+  const fresh = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(item.id);
+  res.json({ signal: await pickupSignal.currentFor(fresh) });
+});
+
+// Wrong phone, wrong hand. Undoing it starts the rotation again, which also
+// means the driver who was wrongly confirmed goes back to an ordinary panel.
+router.delete('/:ownerId/items/:itemId/signal/found', requirePaAccess, async (req, res) => {
+  const item = await armedItem(req);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pickupSignal.clearFound(item.id);
+  const fresh = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(item.id);
+  res.json({ signal: await pickupSignal.currentFor(fresh) });
 });
 
 // --- The draft → proposed → confirmed path ------------------------------

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import SignalPanel from '../components/SignalPanel.jsx';
+import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
 // Trips.
@@ -24,6 +26,64 @@ function StatusPill({ status }) {
 }
 
 /**
+ * What to look for in the hall, and the tap that ends the search.
+ *
+ * The phrase below proves who somebody is once two people are face to face.
+ * This is the part that gets them face to face: the same colour and shape the
+ * driver is holding up, refreshed from the server so both screens change
+ * together. See lib/pickupSignal.js.
+ */
+function Finder({ ownerId, item }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const path = `/itinerary/${ownerId}/items/${item.id}/signal`;
+  // Slowly: this screen is often open days before the journey, and the tap
+  // that matters is made here rather than learned from elsewhere. The rotation
+  // still lands on time — that is scheduled, not polled.
+  const { signal, setSignal } = useSignal(path, {
+    enabled: !!item.pickupArmed, heartbeatMs: 20000,
+  });
+
+  async function found(yes) {
+    setBusy(true); setError('');
+    try {
+      const d = yes ? await api.post(`${path}/found`) : await api.del(`${path}/found`);
+      setSignal(d.signal);
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
+
+  if (!signal) return null;
+
+  return (
+    <div className="trip-finder">
+      <span className="hint">Look for</span>
+      <SignalPanel signal={signal} muted={signal.found} />
+      {error && <p className="hint is-error">{error}</p>}
+      {signal.found ? (
+        <>
+          <p className="hint">
+            Confirmed — their screen has changed and they will stay put.
+          </p>
+          <button className="btn btn-sm" type="button" disabled={busy} onClick={() => found(false)}>
+            Not them
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="hint">
+            This changes every minute, and so does theirs. Nobody else in the
+            hall learns anything from it.
+          </p>
+          <button className="btn btn-sm" type="button" disabled={busy} onClick={() => found(true)}>
+            That&apos;s them
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * The phrase, and the card address alongside it exactly once.
  *
  * The address is returned by the server only when a pickup is armed and is
@@ -31,7 +91,7 @@ function StatusPill({ status }) {
  * long as this screen is open, and is gone on reload. That is deliberate: it
  * is a credential for a driver, not a property of the journey.
  */
-function Pickup({ item, freshCard, onArm, onDisarm }) {
+function Pickup({ ownerId, item, freshCard, onArm, onDisarm }) {
   if (!item.pickupArmed && !item.pickupCode) {
     return (
       <button className="btn btn-sm" type="button" onClick={() => onArm(item.id)}>
@@ -48,6 +108,7 @@ function Pickup({ item, freshCard, onArm, onDisarm }) {
       <p className="hint">
         Nobody holds up a name. Whoever speaks first, the other answers.
       </p>
+      {item.pickupArmed && <Finder ownerId={ownerId} item={item} />}
       {freshCard && (
         <div className="trip-card-link">
           <span className="hint">Send this to the driver — shown once:</span>
@@ -180,7 +241,7 @@ function TripDetail({ ownerId, tripId, arrangements, onBack, onChanged }) {
                 </div>
               )}
               {i.arrangement !== 'own_way' && (
-                <Pickup item={i} freshCard={cards[i.id]} onArm={arm} onDisarm={disarm} />
+                <Pickup ownerId={ownerId} item={i} freshCard={cards[i.id]} onArm={arm} onDisarm={disarm} />
               )}
             </div>
           )}
