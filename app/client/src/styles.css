@@ -1182,3 +1182,10 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 
 .totp-error { margin: 0; }
+
+.needs-flag {
+  margin-left: 6px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: 999px;
+  background: var(--danger-soft, var(--warn-soft)); color: var(--danger);
+}
+.needs-card.is-warn { border-left: 3px solid var(--warn); }

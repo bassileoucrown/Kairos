@@ -556,6 +556,36 @@ shows you the conversation that explains why it exists.
   the existing email service, so with no provider configured these are still visible in the Outbox
   tab and the server log. Set `REMINDER_SWEEP_MS` to change the interval (default 15 minutes).
 
+## Deadlines arrive before they pass
+
+"What needs you" on Today used to list a task only once it was already
+**overdue** — so the first time a principal saw it, the deadline had gone and
+the only available action was an apology. The vault had warned six months ahead
+of a passport expiry since the beginning, on exactly the reasoning that
+*"expired" is far too late to start worrying*; tasks were the one place that
+rule was not applied.
+
+They are now surfaced while there is still time to act, and how much time
+depends on what missing it costs:
+
+| Priority | Warning |
+|---|---|
+| High | 3 days |
+| Normal | 24 hours |
+| Low | 8 hours |
+
+Priority is the proxy because it is already on the task, already set by whoever
+assigned it — the person who knows whether this is a signature that has to
+reach a registry or a call that takes five minutes. A single 24-hour window
+treated those identically.
+
+One definition of "close" (`dueBand` in `lib/reminders.js`) drives both the
+screen and the reminder emails, so they can never disagree about what is
+urgent. The card distinguishes the two states, because they call for different
+things: *"due in 6 hours"* is a warning you can still act on, *"overdue since
+Tuesday"* is a report of a failure. A task already listed in "what needs you"
+is not repeated in the day's task list.
+
 ## Today and the Itinerary
 
 The two screens the job actually runs on.

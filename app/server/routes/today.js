@@ -9,6 +9,7 @@ const { buildDay } = require('./itinerary');
 const { canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { directLineFor } = require('../lib/directLine');
 const { serializeInstruction } = require('../lib/household');
+const { dueBand } = require('../lib/reminders');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -63,7 +64,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     }));
   }
 
-  // --- My tasks: overdue and due today, across every context ---
+  // --- My tasks: close to due, past due, and due today, across every context ---
   const taskRows = await db.prepare(`
     SELECT t.*, s.name AS space_name, s.context AS space_context, p.name AS project_name
     FROM tasks t
@@ -79,8 +80,30 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     spaceId: t.space_id, spaceName: t.space_name, spaceContext: t.space_context,
     projectId: t.project_id, projectName: t.project_name,
   });
-  const overdueTasks = taskRows.filter((t) => visible.has(t.space_id) && t.due_at <= nowIso).map(mapTask);
-  const todayTasks = taskRows.filter((t) => visible.has(t.space_id) && t.due_at > nowIso
+
+  // A deadline is worth surfacing BEFORE it passes.
+  //
+  // This used to list only tasks already overdue, which meant the first time a
+  // principal saw one in "what needs you" it was too late to do anything but
+  // apologise. The vault has warned six months ahead of a passport expiry from
+  // the beginning, on exactly this reasoning; a task that costs something to
+  // miss deserves the same courtesy.
+  //
+  // How far ahead depends on what missing it costs, via lib/reminders — three
+  // days for a high priority, a day for an ordinary one, eight hours for a low
+  // one — so the same definition of "close" drives the screen and the emails.
+  const nowMs = now.getTime();
+  const dueTasks = taskRows
+    .filter((t) => visible.has(t.space_id))
+    .map((t) => ({ t, band: dueBand(t.due_at, nowMs, t.priority) }))
+    .filter(({ band }) => band === 'due_soon' || band === 'overdue')
+    .map(({ t, band }) => ({ ...mapTask(t), band }));
+
+  const alreadyListed = new Set(dueTasks.map((t) => t.id));
+  // Anything already sitting in "what needs you" is not repeated in the
+  // day's task list — one screen showing the same task twice is noise.
+  const todayTasks = taskRows.filter((t) => visible.has(t.space_id) && !alreadyListed.has(t.id)
+    && t.due_at > nowIso
     && new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(t.due_at)) === todayKey).map(mapTask);
 
   // --- Stages blocked or overdue on this principal's work ---
@@ -174,7 +197,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     LIMIT 10
   `).all(req.principal.id)).map((i) => serializeInstruction(i)) : [];
 
-  const needsYouCount = approvals.length + recordsAwaiting.length + overdueTasks.length
+  const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
     + unconfirmedInstructions.length;
 
@@ -190,7 +213,10 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     schedule,
     nextUp,
     needsYou: {
-      approvals, recordsAwaiting, overdueTasks, blockedStages, itineraryRequests,
+      approvals, recordsAwaiting, dueTasks, blockedStages, itineraryRequests,
+      // Kept under the old name so an older client still shows something
+      // sensible rather than an empty section during a rolling deploy.
+      overdueTasks: dueTasks.filter((t) => t.band === 'overdue'),
       expiring, unconfirmedInstructions,
       count: needsYouCount,
     },

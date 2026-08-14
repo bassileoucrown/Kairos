@@ -15,6 +15,18 @@ const KIND_LABEL = {
 };
 const TIER_LABEL = { 1: 'Public', 2: 'Standard', 3: 'Priority', 4: 'Inner Circle' };
 
+// "in 5 hours" beats a bare date when the whole point is that it has not
+// happened yet and there is still time to act on it.
+function dueLabel(iso) {
+  const ms = new Date(iso) - Date.now();
+  if (ms <= 0) return `overdue since ${new Date(iso).toLocaleDateString()}`;
+  const hours = Math.round(ms / 3600000);
+  if (hours < 1) return 'due within the hour';
+  if (hours < 24) return `due in ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `due in ${days} day${days === 1 ? '' : 's'}`;
+}
+
 function friendlyDate(key) {
   const d = new Date(`${key}T12:00:00Z`);
   return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
@@ -279,12 +291,22 @@ export default function Today() {
             </Link>
           ))}
 
-          {needsYou.overdueTasks.map((t) => (
-            <Link className="needs-card is-overdue" key={t.id} to="/tasks">
-              <div className="needs-kind">Overdue task</div>
+          {/* Both bands, and the difference is the point: one is a warning
+              you can still act on, the other is a report of a deadline that
+              has already gone. */}
+          {(needsYou.dueTasks || needsYou.overdueTasks || []).map((t) => (
+            <Link
+              className={'needs-card ' + (t.band === 'due_soon' ? 'is-warn' : 'is-overdue')}
+              key={t.id}
+              to="/tasks"
+            >
+              <div className="needs-kind">
+                {t.band === 'due_soon' ? 'Task coming up' : 'Overdue task'}
+                {t.priority === 'high' && <span className="needs-flag">High</span>}
+              </div>
               <div className="needs-title">{t.title}</div>
               <div className="needs-meta">
-                {t.spaceName}{t.projectName ? ` · ${t.projectName}` : ''} · due {new Date(t.dueAt).toLocaleDateString()}
+                {t.spaceName}{t.projectName ? ` · ${t.projectName}` : ''} · {dueLabel(t.dueAt)}
               </div>
             </Link>
           ))}
