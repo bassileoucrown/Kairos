@@ -10,6 +10,7 @@ const { canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { directLineFor } = require('../lib/directLine');
 const { serializeInstruction } = require('../lib/household');
 const { dueBand } = require('../lib/reminders');
+const { timezoneOn: tripTimezoneOn, tripOn } = require('../lib/trips');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -18,10 +19,26 @@ router.use(requireAuth);
 // client would mean five round-trips and five loading states for a screen
 // whose whole job is answering "what needs me right now" at a glance.
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
-  const tz = req.principal.timezone || 'UTC';
+  const homeTz = req.principal.timezone || 'UTC';
   const now = new Date();
+
+  // Which day it is depends on where they are standing.
+  //
+  // This used to be the timezone on the principal's profile, always — so a
+  // week in London was drawn in Lagos time: the day began and ended at the
+  // wrong moment, a 09:00 meeting showed as 08:00, and the delay cascade
+  // reasoned about gaps against the wrong wall clock. A confirmed trip moves
+  // it. Nothing else does: a draft is an assistant's working copy and must not
+  // silently redraw the principal's week.
+  //
+  // Deliberately resolved twice — the home day first, because "which local
+  // date is it" is itself a question that needs a zone to answer, and only a
+  // trip covering that date changes it.
+  const homeKey = new Intl.DateTimeFormat('en-CA', { timeZone: homeTz }).format(now);
+  const tz = await tripTimezoneOn(req.principal.id, homeKey, homeTz);
   const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
   const nowIso = now.toISOString();
+  const awayTrip = tz !== homeTz ? await tripOn(req.principal.id, todayKey) : null;
 
   // --- The day itself: itinerary + bookings, merged ---
   const viewerIsPrincipal = req.paRole === 'owner';
@@ -207,6 +224,11 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     date: todayKey,
     directLine,
     timezone: tz,
+    homeTimezone: homeTz,
+    // Set only when the two differ, so the screen can say "you are on
+    // London time" rather than leaving somebody to wonder why their day
+    // starts at an odd hour.
+    away: awayTrip && { tripId: awayTrip.id, name: awayTrip.name, destination: awayTrip.destination },
     principal: { id: req.principal.id, name: req.principal.name },
     isSelf: req.principal.id === req.user.id,
     viewerIsPrincipal,

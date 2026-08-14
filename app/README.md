@@ -855,6 +855,89 @@ lands in the direct line naming what moved and what couldn't. External
 attendees are **flagged, never messaged automatically** — how you word running
 late is a judgement call, not a template.
 
+## Trips — a journey as an object
+
+Before this, "the London trip" was a handful of itinerary items that happened
+to sit near each other. Nothing could be asked of it. A `trips` row now carries
+the destination, the dates, and — the load-bearing part — **the timezone the
+principal is actually in while they are there**.
+
+### The day is drawn where you are standing
+
+`/api/today` computed the whole day in the timezone on the principal's profile,
+always. A week in London was therefore rendered in Lagos time: the day began
+and ended at the wrong moment, a 09:00 meeting showed as 08:00, and the delay
+cascade reasoned about gaps against the wrong wall clock. The itinerary row
+could always express a leg that crosses zones — `start_timezone` and
+`end_timezone` have been there from the beginning — but nothing read them,
+because nothing knew where the principal *was* on a given date.
+
+Only a **confirmed** trip moves the clock. A draft is an assistant's working
+copy and must not silently redraw somebody's week; a proposal is a question,
+and answering it by shifting their day would be deciding it for them. The
+response still reports `homeTimezone` alongside, so the screen can say *"you
+are on London time"* rather than leaving a person to wonder why their day
+starts at an odd hour. Confirming a trip is the principal's to do, for the same
+reason.
+
+### Away from home there is no household driver
+
+An itinerary item could name exactly one person — `household_member_id`, the
+driver or the cook. That is a *household* relation and by definition only
+exists at home. Land in London and the arrival transfer had a person-shaped
+hole, which the trip builder papered over with a title and nobody attached.
+
+A leg now records **how it is arranged**: own driver, hired car, hotel
+transfer, host is sending someone, or making their own way. The middle three
+are refused without a name or a number, because a hired car with nobody to ring
+is not an arrangement, it is a hope — and the moment it matters is a flight
+landing ninety minutes late.
+
+### Met by a phrase, not a name board
+
+The ordinary way an executive is met is a stranger holding a placard with their
+name on it. That board announces, to everyone standing in an arrivals hall,
+that this named person has just landed and is about to get into a car. For a
+principal in this market that is not an indignity, it is a targeting notice.
+
+So neither side displays anything (`lib/pickup.js`). Both hold the same two
+words, agreed in advance: the principal knows the car and the phrase, the
+driver knows the flight and the phrase, and whoever speaks first the other
+answers. No name is said aloud.
+
+The driver gets a **card** — a link with no password on it, because they have
+no Kairos account and never will. What protects it is what it does *not*
+carry:
+
+| On the card | Deliberately absent |
+|---|---|
+| Flight number, meeting point, time | The principal's surname |
+| The phrase | Their phone number or email |
+| A first name, to greet with | Where they go afterwards |
+| A number to call if delayed | Anyone else travelling, anything from the vault |
+
+The address is 24 random bytes, it stops working a day after the pickup, and
+re-arming issues a fresh phrase *and* a fresh address — which is the correct
+answer both to "the driver changed" and to "that link was forwarded". A wrong
+address and an expired one answer identically. The suite checks all of this
+from the wrong side: what a stranger holding the link actually gets.
+
+### The rest of a trip
+
+Travellers (a spouse's passport was already storable — `essentials` takes a
+`subject_contact_id` — with nothing until now to tie them to a journey), local
+contacts at the far end, terminal and seat on the flight, and **document
+warnings checked against the trip's own dates rather than today**: a passport
+with four months left is "in date" this morning and still turns somebody away
+at check-in, because much of the world wants six months' validity beyond
+arrival.
+
+**Not built, and honestly so:** live flight status (the cascade engine is ready
+to absorb a delay and has no source of truth telling it one happened) and
+visa-requirement lookup by destination (needs a rules dataset; expiry-versus-
+trip-dates is checked without one). Both are external-data problems rather than
+missing code.
+
 ## Trips — a flight is never just a flight
 
 It's a check-out, a car, the flight, and something at the other end. Those get

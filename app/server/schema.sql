@@ -743,3 +743,61 @@ CREATE TABLE IF NOT EXISTS voice_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_voice_notes_message ON voice_notes(message_id);
 CREATE INDEX IF NOT EXISTS idx_voice_notes_expiry ON voice_notes(expires_at);
+
+-- A trip, as one thing.
+--
+-- Before this, "the London trip" was a handful of itinerary items that
+-- happened to sit near each other. Nothing could be asked of it: which hotel,
+-- who else is coming, what timezone the principal is actually in on Thursday,
+-- cancel the whole thing. Every one of those questions needs the journey to
+-- exist as an object rather than as a coincidence of dates.
+CREATE TABLE IF NOT EXISTS trips (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by    TEXT NOT NULL REFERENCES users(id),
+  name          TEXT NOT NULL,
+  destination   TEXT NOT NULL DEFAULT '',
+  -- The zone the principal is actually in while they are there. This is what
+  -- makes their day render in local time instead of the one on their profile,
+  -- which is the difference between a travel feature and a calendar with
+  -- flights in it.
+  destination_timezone TEXT,
+  -- Local dates at the destination, inclusive. Deliberately dates and not
+  -- instants: "am I away on the 14th" is a question about a calendar, not a
+  -- clock.
+  starts_on     TEXT NOT NULL,
+  ends_on       TEXT NOT NULL,
+  -- Mirrors itinerary_items: an assistant needs somewhere to build a trip the
+  -- principal must not see yet.
+  status        TEXT NOT NULL DEFAULT 'draft',  -- draft | proposed | confirmed | cancelled
+  notes         TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trips_owner ON trips(owner_id, starts_on);
+
+-- Who else is going. A principal rarely travels alone, and the passport
+-- details of a spouse or an aide are already storable — essentials takes a
+-- subject_contact_id — with nothing until now to tie them to a journey.
+CREATE TABLE IF NOT EXISTS trip_travellers (
+  id          TEXT PRIMARY KEY,
+  trip_id     TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  contact_id  TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+  name        TEXT NOT NULL,
+  role        TEXT NOT NULL DEFAULT '',   -- spouse, aide, security, colleague
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trip_travellers ON trip_travellers(trip_id);
+
+-- Who to call at the far end. The office there, the host, the fixer, the
+-- doctor somebody recommended. Not contacts in the CRM sense — these are
+-- specific to one journey and should leave with it.
+CREATE TABLE IF NOT EXISTS trip_contacts (
+  id          TEXT PRIMARY KEY,
+  trip_id     TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  role        TEXT NOT NULL DEFAULT '',
+  phone       TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trip_contacts ON trip_contacts(trip_id);

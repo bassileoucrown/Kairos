@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
+const { arrangementProblem } = require('../lib/trips');
+const pickup = require('../lib/pickup');
 const { isValidTimeZone } = require('../lib/timezone');
 const { planDelay } = require('../lib/cascade');
 const { sendEmail } = require('../lib/email');
@@ -79,6 +81,19 @@ function serializeItem(i, ownerTz) {
     decidedAt: i.decided_at || null,
     createdBy: i.created_by,
     createdByName: i.created_by_name || null,
+    tripId: i.trip_id || null,
+    // Who is meeting the principal, and how. Away from home there is no
+    // household driver — see lib/trips.js.
+    arrangement: i.arrangement || '',
+    provider: i.provider || '',
+    contactName: i.contact_name || '',
+    contactPhone: i.contact_phone || '',
+    terminal: i.terminal || '',
+    seat: i.seat || '',
+    // The phrase, never a name board. The card's address is deliberately NOT
+    // serialized here — it is handed to a driver, not published on a day sheet.
+    pickupCode: i.pickup_code || '',
+    pickupArmed: !!i.pickup_token,
   };
 }
 
@@ -196,7 +211,8 @@ router.get('/:ownerId/upcoming', requirePaAccess, async (req, res) => {
 
 router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   const { kind, title, startAt, endAt, startTimezone, endTimezone,
-    location, destination, reference, notes } = req.body || {};
+    location, destination, reference, notes,
+    tripId, arrangement, provider, contactName, contactPhone, terminal, seat } = req.body || {};
 
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'Give it a title.' });
   if (!KINDS.has(kind)) return res.status(400).json({ error: 'Pick what kind of item this is.' });
@@ -209,6 +225,16 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   }
   for (const [label, tz] of [['start', startTimezone], ['end', endTimezone]]) {
     if (tz && !isValidTimeZone(tz)) return res.status(400).json({ error: `Unrecognized ${label} timezone.` });
+  }
+
+  // A hired car with nobody to call is not an arrangement, it is a hope.
+  const badArrangement = arrangementProblem({ arrangement, contactName, contactPhone });
+  if (badArrangement) return res.status(400).json({ error: badArrangement });
+
+  if (tripId) {
+    const trip = await db.prepare('SELECT id FROM trips WHERE id = ? AND owner_id = ?')
+      .get(tripId, req.principal.id);
+    if (!trip) return res.status(404).json({ error: 'That trip does not exist.' });
   }
 
   // A principal entering their own plan means it — it is live at once. An
@@ -234,16 +260,52 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   await db.prepare(`
     INSERT INTO itinerary_items
       (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
-       location, destination, reference, notes, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       location, destination, reference, notes, status, created_at,
+       trip_id, arrangement, provider, contact_name, contact_phone, terminal, seat)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, req.principal.id, req.user.id, kind, String(title).trim(),
     start.toISOString(), endAt ? new Date(endAt).toISOString() : null,
     startTimezone || null, endTimezone || null,
     String(location || '').trim(), String(destination || '').trim(),
-    String(reference || '').trim(), String(notes || '').trim(), status, new Date().toISOString());
+    String(reference || '').trim(), String(notes || '').trim(), status, new Date().toISOString(),
+    tripId || null, arrangement || '', String(provider || '').trim(),
+    String(contactName || '').trim(), String(contactPhone || '').trim(),
+    String(terminal || '').trim(), String(seat || '').trim());
 
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
   res.status(201).json({ item: serializeItem(row, req.principal.timezone || 'UTC') });
+});
+
+// --- Meeting a car without a name board ---------------------------------
+//
+// See lib/pickup.js for why this exists rather than a placard.
+
+router.post('/:ownerId/items/:itemId/pickup', requirePaAccess, async (req, res) => {
+  const item = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, req.principal.id);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  if (item.kind !== 'car') {
+    return res.status(400).json({ error: 'Only a car leg is met at an airport.' });
+  }
+
+  // Arming again issues a fresh phrase and a fresh address, which is the
+  // correct response to "the driver changed" and to "that link was forwarded".
+  const { code, token } = await pickup.arm(item.id);
+  res.status(201).json({
+    pickupCode: code,
+    // The only place this is ever returned. It goes to the driver and to
+    // nobody else, and it is not on the day sheet.
+    cardPath: `/pickup/${token}`,
+    expiresHours: Math.round(pickup.CARD_TTL_MS / 3600000),
+  });
+});
+
+router.delete('/:ownerId/items/:itemId/pickup', requirePaAccess, async (req, res) => {
+  const item = await db.prepare('SELECT id FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, req.principal.id);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pickup.disarm(item.id);
+  res.status(204).end();
 });
 
 // --- The draft → proposed → confirmed path ------------------------------
@@ -578,6 +640,20 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
     if (tz && !isValidTimeZone(tz)) return res.status(400).json({ error: 'Unrecognized timezone.' });
   }
 
+  // Away from home there is no household driver, so each car leg says how it
+  // is actually being handled and who is callable when the flight lands late.
+  for (const [label, leg] of [['departure', b.pickup], ['arrival', b.arrival]]) {
+    const problem = arrangementProblem(leg || {});
+    if (problem) return res.status(400).json({ error: `${label}: ${problem}` });
+  }
+
+  let tripId = b.tripId || null;
+  if (tripId) {
+    const trip = await db.prepare('SELECT id FROM trips WHERE id = ? AND owner_id = ?')
+      .get(tripId, req.principal.id);
+    if (!trip) return res.status(404).json({ error: 'That trip does not exist.' });
+  }
+
   const kind = KINDS.has(b.kind) ? b.kind : 'flight';
   const now = new Date().toISOString();
   // An assistant's trip starts as a draft, exactly as a single item does —
@@ -591,8 +667,9 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
       INSERT INTO itinerary_items
         (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
          location, destination, reference, notes, status, is_anchor, travel_minutes,
-         household_member_id, serves_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         household_member_id, serves_id, created_at,
+         trip_id, arrangement, provider, contact_name, contact_phone, terminal, seat)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, req.principal.id, req.user.id, fields.kind, fields.title,
       fields.startAt, fields.endAt || null,
@@ -600,12 +677,16 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
       fields.location || '', fields.destination || '', fields.reference || '', fields.notes || '',
       status, fields.isAnchor ? 1 : 0, fields.travelMinutes || 0,
       fields.householdMemberId || null, fields.servesId || null, now,
+      tripId, fields.arrangement || '', fields.provider || '',
+      fields.contactName || '', fields.contactPhone || '',
+      fields.terminal || '', fields.seat || '',
     );
     created.push(id);
     return id;
   }
 
   const ms = (m) => m * 60000;
+  let arrivalPickup = null;
   const flightId = await add({
     kind,
     title,
@@ -614,6 +695,7 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
     startTimezone: b.startTimezone, endTimezone: b.endTimezone,
     location: b.from || '', destination: b.to || '', reference: b.reference || '',
     notes: b.notes || '',
+    terminal: b.terminal || '', seat: b.seat || '',
     // The whole point. Everything else in the chain bends; this does not.
     isAnchor: true,
   });
@@ -632,6 +714,12 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
       householdMemberId: b.driverId || null,
       servesId: flightId,
       notes: b.pickupNotes || '',
+      // At home this is usually the household driver; it still says so
+      // explicitly rather than leaving it to be inferred from a null.
+      arrangement: b.pickup?.arrangement || (b.driverId ? 'own_driver' : ''),
+      provider: b.pickup?.provider || '',
+      contactName: b.pickup?.contactName || '',
+      contactPhone: b.pickup?.contactPhone || '',
     });
   }
 
@@ -649,19 +737,41 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
     });
   }
 
+  // The leg that used to assume your own driver.
+  //
+  // At the far end there is no household — the car is a hired service with a
+  // dispatcher, a hotel transfer that needs your flight number, a host sending
+  // somebody, or a deliberate decision to make your own way. Each has a
+  // different thing that goes wrong and a different number to ring at 2am, so
+  // the leg records which one and who is callable.
+  let arrivalId = null;
   if (arriveAt && Number(b.arrivalTransferMinutes ?? 0) > 0) {
     const gap = Number(b.arrivalTransferMinutes);
-    await add({
+    const arrangement = b.arrival?.arrangement || (b.arrivalDriverId ? 'own_driver' : '');
+    arrivalId = await add({
       kind: 'car',
       title: b.arrivalTitle || `Car from ${b.to || 'the airport'}`,
       startAt: new Date(arriveAt.getTime() + ms(gap)).toISOString(),
       startTimezone: b.endTimezone,
-      location: b.to || '', destination: b.arrivalTo || '',
+      location: b.arrivalMeetingPoint || b.to || '', destination: b.arrivalTo || '',
+      // Kept for the case where it genuinely is your own driver at the far end.
       householdMemberId: b.arrivalDriverId || null,
+      servesId: flightId,
       // Bags and immigration are the reason this is not "arrival time".
       travelMinutes: gap,
       notes: b.arrivalNotes || '',
+      arrangement,
+      provider: b.arrival?.provider || '',
+      contactName: b.arrival?.contactName || '',
+      contactPhone: b.arrival?.contactPhone || '',
     });
+
+    // Met by a phrase, not a name board. See lib/pickup.js — a placard in an
+    // arrivals hall announces to the room that this named person has landed.
+    if (arrangement && arrangement !== 'own_way') {
+      const armed = await pickup.arm(arrivalId);
+      arrivalPickup = { itemId: arrivalId, code: armed.code, cardPath: `/pickup/${armed.token}` };
+    }
   }
 
   // Everybody driving something is told once, here, rather than remembering to
@@ -703,6 +813,10 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
   res.status(201).json({
     items: rows.map((i) => serializeItem(i, req.principal.timezone || 'UTC')),
     instructionsSent: legs.length,
+    // The card address is returned here and nowhere else. It goes to the
+    // driver over whatever channel the assistant uses, and it is deliberately
+    // absent from the day sheet and from every later read of the item.
+    arrivalPickup,
   });
 });
 

@@ -351,6 +351,23 @@ function ready() {
       // When this browser last proved a second factor, for step-up on the
       // vault. See lib/stepUp.js.
       await ensureColumn('sessions', 'stepped_up_at', 'TEXT');
+
+      // Trips. An itinerary item belongs to a journey, and a travel leg needs
+      // to say who is meeting the principal and how — see lib/trips.js.
+      await ensureColumn('itinerary_items', 'trip_id', 'TEXT');
+      // How this leg is being handled. Away from home there is no household
+      // driver, and pretending otherwise leaves somebody in an arrivals hall.
+      await ensureColumn('itinerary_items', 'arrangement', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'provider', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'contact_name', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'contact_phone', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'terminal', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'seat', "TEXT NOT NULL DEFAULT ''");
+      // Meeting without a name board. See lib/pickup.js.
+      await ensureColumn('itinerary_items', 'pickup_code', "TEXT NOT NULL DEFAULT ''");
+      await ensureColumn('itinerary_items', 'pickup_token', 'TEXT');
+      await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
+      await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
       await ensureIndex('idx_threads_stage', 'threads(stage_id)');
     })(), READY_TIMEOUT_MS);
