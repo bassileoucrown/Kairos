@@ -1201,3 +1201,43 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   text-decoration: underline; text-underline-offset: 2px;
 }
 .link-button:hover { color: var(--accent-hover); }
+
+.totp-scope { max-width: 340px; margin-top: 4px; }
+
+/* ---- Trips ---- */
+.trip-detail { display: flex; flex-direction: column; gap: 12px; }
+.trip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.trip-head h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.trip-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  width: 100%; text-align: left; cursor: pointer; font: inherit; margin-bottom: 8px;
+}
+.trip-row:hover { border-color: var(--accent); }
+.trip-form { display: flex; flex-direction: column; gap: 2px; }
+.trip-item { display: flex; flex-direction: column; gap: 4px; }
+.trip-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trip-kind {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-hover);
+}
+.trip-arrangement {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.trip-pickup { display: flex; flex-direction: column; gap: 6px; }
+.trip-phrase { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.trip-phrase code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1rem; font-weight: 600; letter-spacing: 0.08em; color: var(--accent-hover);
+  padding: 4px 10px; border-radius: var(--radius);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+}
+.trip-card-link { display: flex; flex-direction: column; gap: 4px; }
+.trip-card-link code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem; word-break: break-all; user-select: all;
+  padding: 6px 8px; border-radius: var(--radius); background: var(--bg-subtle, var(--accent-soft));
+}
+.trip-warnings { margin: 6px 0 0; padding-left: 20px; }
+.trip-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.trip-add input { flex: 1 1 140px; min-width: 0; }

@@ -18,6 +18,7 @@ import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
 import Itinerary from './pages/Itinerary.jsx';
+import Trips from './pages/Trips.jsx';
 import Workspace from './pages/Workspace.jsx';
 import Connections from './pages/Connections.jsx';
 import Household from './pages/Household.jsx';
@@ -128,6 +129,7 @@ export default function App() {
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
+      <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />
       <Route path="/workspace" element={<RequireAuth><Workspace /></RequireAuth>} />
       <Route path="/connections" element={<RequireAuth><Connections /></RequireAuth>} />
       <Route path="/household" element={<RequireAuth><Household /></RequireAuth>} />

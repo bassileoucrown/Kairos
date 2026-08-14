@@ -44,6 +44,24 @@ export default function SecurityTab() {
     } catch (err) { setError(err.message); }
   }
 
+  // Moving where the code is demanded is itself a security decision, so the
+  // server charges one for it — otherwise somebody holding a live session could
+  // quietly weaken the front door.
+  async function changeScope(scope) {
+    setError('');
+    try {
+      await api.post('/security/2fa/scope', { scope });
+      load();
+      return;
+    } catch (err) {
+      if (err.status !== 401) { setError(err.message); return; }
+    }
+    const code = window.prompt('Enter a code from your authenticator app to change this.');
+    if (!code) return;
+    try { await api.post('/security/2fa/scope', { scope, code: code.trim() }); load(); }
+    catch (err) { setError(err.message); }
+  }
+
   async function disable() {
     const password = window.prompt('Enter your password');
     if (!password) return;
@@ -80,8 +98,30 @@ export default function SecurityTab() {
           <div className="card">
             <p>
               <span className="pill">On</span>{' '}
-              Signing in needs a code from your authenticator app.
+              {state.twoFactor.scope === 'login_and_vault'
+                ? 'A code is needed to sign in, and again to reveal anything sensitive.'
+                : 'Your password signs you in. A code is needed to reveal anything sensitive.'}
             </p>
+
+            {/* Where the code is spent. A code at the front door protects
+                everything but is paid on every login, and that friction is what
+                makes people turn two-factor off — an account with it off
+                protects nothing at all. */}
+            <div className="field totp-scope">
+              <label htmlFor="totp-scope">Ask for a code</label>
+              <select
+                id="totp-scope"
+                value={state.twoFactor.scope}
+                onChange={(e) => changeScope(e.target.value)}
+              >
+                {(state.twoFactor.scopes || []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <p className="hint">
+                {(state.twoFactor.scopes || []).find((s) => s.id === state.twoFactor.scope)?.hint}
+              </p>
+            </div>
             <p className="hint">
               {state.twoFactor.recoveryCodesRemaining} recovery code
               {state.twoFactor.recoveryCodesRemaining === 1 ? '' : 's'} left.

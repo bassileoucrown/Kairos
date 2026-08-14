@@ -163,10 +163,20 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(401).json({ error: 'Incorrect email or password.' });
   }
 
-  // Second factor, if this account has one confirmed. An enrolment that was
-  // never confirmed is not protection and is not treated as such.
-  const second = await db.prepare('SELECT * FROM user_totp WHERE user_id = ? AND confirmed_at IS NOT NULL')
-    .get(user.id);
+  // Second factor at sign-in, only if this account asks for it there.
+  //
+  // The default is not to. A code at the front door protects everything but is
+  // paid on every login, and that friction is what makes people turn two-factor
+  // off — an account with it off protects nothing. Spending the code on the
+  // vault instead puts the cost where the value is: a stolen password reaches a
+  // calendar and still cannot read a passport number. A principal who wants it
+  // at both sets scope to login_and_vault. See lib/stepUp.js.
+  //
+  // An enrolment that was never confirmed is not protection and is not treated
+  // as such.
+  const second = await db.prepare(`
+    SELECT * FROM user_totp WHERE user_id = ? AND confirmed_at IS NOT NULL AND scope = 'login_and_vault'
+  `).get(user.id);
   if (second) {
     if (!code) {
       // Deliberately after the password check: this only tells someone who

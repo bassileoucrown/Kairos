@@ -19,6 +19,7 @@ const NAV = [
   { to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
   { to: '/today', label: 'Today', icon: '◉', principalScoped: true },
   { to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
+  { to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
   { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
   { to: '/tasks', label: 'Tasks', icon: '✓' },
   { to: '/spaces', label: 'Spaces', icon: '❑' },

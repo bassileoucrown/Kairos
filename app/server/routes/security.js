@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth, verifyPassword } = require('../lib/auth');
 const { encrypt, decrypt, isConfigured } = require('../lib/secretBox');
+const { SCOPES, verifyStepUp } = require('../lib/stepUp');
 const totp = require('../lib/totp');
 const { BRAND_FULL } = require('../lib/brand');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
@@ -41,6 +42,10 @@ router.get('/', async (req, res) => {
       enabled: !!row?.confirmed_at,
       pending: !!row && !row.confirmed_at,
       recoveryCodesRemaining: remaining?.n || 0,
+      // Where the code is demanded. The default spends it on the vault rather
+      // than the front door — see lib/stepUp.js.
+      scope: row?.scope || 'vault',
+      scopes: Object.entries(SCOPES).map(([id, s2]) => ({ id, label: s2.label, hint: s2.hint })),
     },
     // A deployment with no key cannot hold sensitive fields at all, and says
     // so rather than accepting them and storing them in the clear.
@@ -101,6 +106,24 @@ router.post('/2fa/confirm', codeLimiter, async (req, res) => {
     recoveryCodes: codes,
     note: 'Save these now. Each works once, and they are not shown again.',
   });
+});
+
+// Moving where the code is demanded is itself a security decision, so it costs
+// one. Otherwise somebody who has taken a live session could quietly weaken the
+// account's front door and the owner would never be asked.
+router.post('/2fa/scope', codeLimiter, async (req, res) => {
+  const row = await totpRow(req.user.id);
+  if (!row?.confirmed_at) return res.status(404).json({ error: 'Two-factor is not on.' });
+
+  const { scope } = req.body || {};
+  if (!Object.prototype.hasOwnProperty.call(SCOPES, scope)) {
+    return res.status(400).json({ error: 'Unknown setting.' });
+  }
+  const step = await verifyStepUp(req, { code: req.body?.code, password: req.body?.password });
+  if (!step.ok) return res.status(step.status).json({ error: step.error, needs: step.needs });
+
+  await db.prepare('UPDATE user_totp SET scope = ? WHERE user_id = ?').run(scope, req.user.id);
+  res.json({ scope });
 });
 
 // Turning it off is a security decision, so it costs a password and a code —

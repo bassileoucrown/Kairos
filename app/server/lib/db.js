@@ -351,6 +351,10 @@ function ready() {
       // When this browser last proved a second factor, for step-up on the
       // vault. See lib/stepUp.js.
       await ensureColumn('sessions', 'stepped_up_at', 'TEXT');
+      // Where the second factor is demanded. Defaults to the vault alone:
+      // signing in costs the password, and the code is spent on the things
+      // worth spending it on. See lib/stepUp.js.
+      await ensureColumn('user_totp', 'scope', "TEXT NOT NULL DEFAULT 'vault'");
 
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.

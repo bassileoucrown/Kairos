@@ -19,6 +19,14 @@ const { decrypt } = require('./secretBox');
 //
 // Where two-factor is NOT enrolled there is no second factor to ask for, so
 // the password stands. The gate never gets weaker than it was.
+//
+// WHERE the code is demanded is the principal's choice, and the default is
+// here rather than at sign-in. A code at the front door protects everything
+// but is paid on every login, which is the friction that makes people turn
+// two-factor off — and an account with two-factor off protects nothing at all.
+// Spending it on the vault instead puts the cost where the value is: a
+// stranger with the password reaches a calendar, and still cannot read a
+// passport number. A principal who wants it at both is one switch away.
 
 // One step-up covers a few minutes of work.
 //
@@ -112,4 +120,24 @@ async function verifyStepUp(req, { code, password } = {}) {
   return { ok: true };
 }
 
-module.exports = { verifyStepUp, factorFor, GRACE_MS };
+/** Where this account's second factor is demanded. */
+const SCOPES = {
+  vault: {
+    label: 'Only for identity details',
+    hint: 'Signing in costs your password. The code is asked for when something '
+      + 'sensitive is revealed — which is the moment it is worth asking.',
+  },
+  login_and_vault: {
+    label: 'At sign-in as well',
+    hint: 'A code every time you sign in, and again to reveal anything sensitive. '
+      + 'Strongest, and the most to type.',
+  },
+};
+
+/** Whether sign-in should demand a code for this account. */
+async function loginNeedsCode(userId) {
+  const row = await twoFactorRow(userId);
+  return !!row && row.scope === 'login_and_vault';
+}
+
+module.exports = { verifyStepUp, factorFor, twoFactorRow, loginNeedsCode, SCOPES, GRACE_MS };

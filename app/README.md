@@ -225,6 +225,16 @@ matters more than the feature:
   limiting** (`lib/rateLimit.js`). Everything else is downstream of an attacker
   simply signing in, so these come first.
 
+  **Where the code is demanded is a choice, and the default is the vault
+  rather than the front door.** A code at sign-in protects everything but is
+  paid on every login, and that friction is what makes people turn two-factor
+  off — an account with it off protects nothing at all. Spending it on the
+  vault puts the cost where the value is: a stranger with the password reaches
+  a calendar, and still cannot read a passport number. A principal who wants it
+  at both sets `scope` to `login_and_vault` on the Security screen, and moving
+  it costs a step-up of its own, so somebody holding a live session cannot
+  quietly weaken the front door.
+
   **Signing back in** asks for the code and gives you somewhere to type it —
   which sounds too obvious to state, and is stated because it was missing. The
   setup screen shipped working into a login screen that rendered email and
