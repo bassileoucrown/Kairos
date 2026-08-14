@@ -1189,3 +1189,15 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   background: var(--danger-soft, var(--warn-soft)); color: var(--danger);
 }
 .needs-card.is-warn { border-left: 3px solid var(--warn); }
+
+/* ---- Two-factor at sign-in ---- */
+.totp-login input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.15rem; letter-spacing: 0.22em; text-align: center;
+}
+.link-button {
+  background: none; border: 0; padding: 0; margin-top: 4px;
+  font: inherit; font-size: 0.82rem; color: var(--accent); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.link-button:hover { color: var(--accent-hover); }

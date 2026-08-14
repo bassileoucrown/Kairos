@@ -225,6 +225,16 @@ matters more than the feature:
   limiting** (`lib/rateLimit.js`). Everything else is downstream of an attacker
   simply signing in, so these come first.
 
+  **Signing back in** asks for the code and gives you somewhere to type it —
+  which sounds too obvious to state, and is stated because it was missing. The
+  setup screen shipped working into a login screen that rendered email and
+  password only and ignored the server's `needsCode` entirely, so turning
+  two-factor on locked you out of your own account. The suite that was supposed
+  to catch this checked the endpoint with `fetch` and never drove the page:
+  testing the endpoint is not testing the door. `bsignin` now walks the whole
+  return journey in a browser, including a recovery code for the phone in the
+  river.
+
   The setup screen assumes no prior knowledge, because the first version
   assumed all of it: it printed a 32-character base32 secret under the words
   *"most apps scan a QR code"*, drew no QR code, named no app, and left the

@@ -13,6 +13,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [storageWarning, setStorageWarning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Two-factor. The server answers needsCode once the password is right, and
+  // until this existed there was no box to type the code into — an account
+  // with two-factor on could not sign in at all.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState('');
+  const [usingRecovery, setUsingRecovery] = useState(false);
 
   // Only asked after a failure, and only to explain one specific case: a
   // deployment storing accounts on a disk that gets wiped on restart. Saying
@@ -34,11 +40,21 @@ export default function Login() {
     setError('');
     setSubmitting(true);
     try {
-      await login({ email, password });
+      await login({ email, password, code: needsCode ? code.trim() : undefined });
       navigate(next || '/');
     } catch (err) {
-      setError(err.message);
-      checkStorage();
+      if (err.data?.needsCode) {
+        // The password was right. Ask for the second factor rather than
+        // reporting a failure the person cannot act on.
+        setNeedsCode(true);
+        setCode('');
+        // On the first ask there is nothing to apologise for; the prompt
+        // itself is the message.
+        setError(needsCode ? err.message : '');
+      } else {
+        setError(err.message);
+        checkStorage();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -72,8 +88,39 @@ export default function Login() {
             </div>
             <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
           </div>
+          {needsCode && (
+            <div className="field totp-login">
+              <label htmlFor="login-code">
+                {usingRecovery ? 'Recovery code' : 'Code from your authenticator app'}
+              </label>
+              <input
+                id="login-code"
+                type="text"
+                inputMode={usingRecovery ? 'text' : 'numeric'}
+                autoComplete="one-time-code"
+                autoFocus
+                placeholder={usingRecovery ? 'abcde-12345' : '000000'}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
+              <p className="hint">
+                {usingRecovery
+                  ? 'One of the codes you saved when you turned two-factor on. Each works once.'
+                  : 'The six digits showing right now in Google Authenticator, 1Password, or whichever app you set up. They change every 30 seconds.'}
+              </p>
+              <button
+                className="link-button"
+                type="button"
+                onClick={() => { setUsingRecovery((v) => !v); setCode(''); setError(''); }}
+              >
+                {usingRecovery ? 'Use a code from the app instead' : "Lost the phone? Use a recovery code"}
+              </button>
+            </div>
+          )}
+
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
-            {submitting ? 'Logging in…' : 'Log in'}
+            {submitting ? 'Logging in…' : needsCode ? 'Verify and log in' : 'Log in'}
           </button>
         </form>
 

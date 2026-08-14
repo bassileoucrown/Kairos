@@ -11,15 +11,20 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     const message = data?.error || `Request failed (${res.status})`;
-    throw new ApiError(message, res.status);
+    // The body travels with the error. A refusal often carries the thing the
+    // caller needs in order to recover — login answering "needsCode" is the
+    // case that matters, and reading it out of the message text would be
+    // guesswork.
+    throw new ApiError(message, res.status, data);
   }
   return data;
 }
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, data) {
     super(message);
     this.status = status;
+    this.data = data || null;
   }
 }
 
