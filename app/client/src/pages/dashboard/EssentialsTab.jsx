@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
+// What the second gate asks for. A code where two-factor is on, because the
+// attacker this vault has to survive already knows the password.
+function stepUpPrompt(factor, what = 'reveal this') {
+  return factor === 'code'
+    ? `Enter the code from your authenticator app to ${what}. The principal can see that you did.`
+    : `Enter your password to ${what}. The principal can see that you did.`;
+}
+
+function stepUpBody(factor, answer) {
+  return factor === 'code' ? { code: answer.trim() } : { password: answer };
+}
+
 // Mirrors sensitivityOf in server/lib/essentials.js: a field may override its
 // category. Most do not, and the category answers for them.
 function sensitivityOf(category, field) {
@@ -53,12 +65,24 @@ export default function EssentialsTab({ ownerId }) {
     api.get('/essentials/catalogue').then((d) => setCatalogue(d.categories)).catch(() => {});
   }, [ownerId]);
 
+  // Asks for whatever the server says this account's second gate costs — a
+  // code where two-factor is on, the password where it is not. The grace
+  // window means a run of reveals at a check-in desk asks once, not five
+  // times, so the first attempt is made without credentials and only prompts
+  // if the server says it needs them.
   async function reveal(id) {
-    const password = window.prompt('Enter your password to reveal this. The principal can see that you did.');
-    if (!password) return;
     setError('');
     try {
-      const d = await api.post(`/essentials/${ownerId}/${id}/reveal`, { password });
+      const d = await api.post(`/essentials/${ownerId}/${id}/reveal`, {});
+      setRevealed((r) => ({ ...r, [id]: d.essential.value }));
+      return;
+    } catch (err) {
+      if (err.status !== 401) { setError(err.message); return; }
+    }
+    const answer = window.prompt(stepUpPrompt(data?.stepUpFactor));
+    if (!answer) return;
+    try {
+      const d = await api.post(`/essentials/${ownerId}/${id}/reveal`, stepUpBody(data?.stepUpFactor, answer));
       setRevealed((r) => ({ ...r, [id]: d.essential.value }));
     } catch (err) { setError(err.message); }
   }
@@ -79,14 +103,20 @@ export default function EssentialsTab({ ownerId }) {
   }
 
   async function copyTravelBlock() {
-    const password = window.prompt('Enter your password to assemble the travel details.');
-    if (!password) return;
     setError('');
+    let d = null;
     try {
-      const d = await api.post(`/essentials/${ownerId}/travel-block`, { password });
-      await navigator.clipboard?.writeText(d.text);
-      setNotice(`Copied ${d.lineCount} details — paste into the booking.`);
-    } catch (err) { setError(err.message); }
+      d = await api.post(`/essentials/${ownerId}/travel-block`, {});
+    } catch (err) {
+      if (err.status !== 401) { setError(err.message); return; }
+      const answer = window.prompt(stepUpPrompt(data?.stepUpFactor, 'assemble the travel details'));
+      if (!answer) return;
+      try {
+        d = await api.post(`/essentials/${ownerId}/travel-block`, stepUpBody(data?.stepUpFactor, answer));
+      } catch (err2) { setError(err2.message); return; }
+    }
+    await navigator.clipboard?.writeText(d.text);
+    setNotice(`Copied ${d.lineCount} details — paste into the booking.`);
   }
 
   async function submit(e) {

@@ -69,6 +69,10 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Not signed in.' });
   }
   req.user = user;
+  // The session's own id, so a step-up can be remembered against this browser
+  // for a few minutes rather than against the account everywhere. See
+  // lib/stepUp.js.
+  req.sessionId = cookies[SESSION_COOKIE];
   next();
 }
 

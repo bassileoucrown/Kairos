@@ -7,6 +7,7 @@ const { requirePaAccess } = require('../lib/paAccess');
 const { encrypt, decrypt, mask, isConfigured } = require('../lib/secretBox');
 const { CATEGORIES, findField, canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { limit, clientIp } = require('../lib/rateLimit');
+const { verifyStepUp, factorFor } = require('../lib/stepUp');
 
 // The essentials of a person: passport, preferences, policies, sizes.
 //
@@ -96,6 +97,9 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     principal: { id: req.principal.id, name: req.principal.name },
     canSeeSensitive: canSee('sensitive', ctx),
     encryptionConfigured: isConfigured(),
+    // What a reveal will cost, so the screen asks for the right thing rather
+    // than prompting for a password and then discovering it wanted a code.
+    stepUpFactor: await factorFor(req.user.id),
     essentials: visible.map((r) => serialize(r)),
   });
 });
@@ -204,9 +208,12 @@ router.patch('/:ownerId/:id', requirePaAccess, async (req, res) => {
 
 // Seeing the actual number is an act, not a page load.
 //
-// It costs a password, it is rate limited, and it is written to the log the
-// principal can read. Nothing else in this file matters as much as this
+// It costs a second factor, it is rate limited, and it is written to the log
+// the principal can read. Nothing else in this file matters as much as this
 // handler doing all three.
+//
+// The second factor, rather than the password, because the attacker this vault
+// has to survive is the one who already knows the password. See lib/stepUp.js.
 router.post('/:ownerId/:id/reveal', requirePaAccess, revealLimiter, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
@@ -217,9 +224,12 @@ router.post('/:ownerId/:id/reveal', requirePaAccess, revealLimiter, async (req, 
     return res.status(400).json({ error: 'That value is not hidden.' });
   }
 
-  const me = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  if (!req.body?.password || !verifyPassword(String(req.body.password), me.password_hash)) {
-    return res.status(401).json({ error: 'Enter your password to reveal this.' });
+  const step = await verifyStepUp(req, {
+    code: req.body?.code,
+    password: req.body?.password,
+  });
+  if (!step.ok) {
+    return res.status(step.status).json({ error: step.error, needs: step.needs });
   }
 
   const plain = decrypt(row.value_enc);
@@ -245,9 +255,14 @@ router.post('/:ownerId/:id/reveal', requirePaAccess, revealLimiter, async (req, 
 // IS a reveal, so it costs a password and is logged the same way.
 router.post('/:ownerId/travel-block', requirePaAccess, revealLimiter, async (req, res) => {
   const ctx = viewerContext(req);
-  const me = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  if (!req.body?.password || !verifyPassword(String(req.body.password), me.password_hash)) {
-    return res.status(401).json({ error: 'Enter your password to assemble travel details.' });
+  // Assembling this hands over everything an airline asks for in one paste, so
+  // it is a reveal in every sense and is gated identically.
+  const step = await verifyStepUp(req, {
+    code: req.body?.code,
+    password: req.body?.password,
+  });
+  if (!step.ok) {
+    return res.status(step.status).json({ error: step.error, needs: step.needs });
   }
 
   const subjectContactId = req.body?.subjectContactId || null;

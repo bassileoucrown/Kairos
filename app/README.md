@@ -253,7 +253,25 @@ matters more than the feature:
   gone** — there is no recovery path, by design, because a recovery path is
   just a second key kept worse.
 - **Masked by default.** A sensitive value goes out as `•••• 4821`. Seeing it
-  is an action: it costs a password, it is rate limited, and it is logged.
+  is an action: it costs a **second factor**, it is rate limited, and it is
+  logged.
+
+  The second factor rather than the password, because the attacker this vault
+  has to survive is the one who already knows the password — phished, reused,
+  leaked. A gate made of the same password opens for them on the first try, so
+  it defends against a borrowed laptop and against nothing else. Where
+  two-factor is enrolled, revealing a passport or a BVN asks for the code from
+  the phone; somebody who has taken the account still cannot read it. Where
+  two-factor is not enrolled there is nothing else to ask for, so the password
+  stands and the gate is never weaker than it was (`lib/stepUp.js`).
+
+  One step-up covers five minutes of that browser's work
+  (`STEP_UP_GRACE_MS`). Without it a Chief of Staff at a check-in desk reads a
+  passport, then a visa, then a known-traveller number and types three codes
+  from an app that rotates every thirty seconds — friction that heavy does not
+  make people careful, it makes them turn two-factor off, which costs far more
+  than it saves. Every reveal inside the window is still logged individually.
+  A recovery code works here too, for the same reason it works at sign-in.
 - **An access log the principal reads.** *"Your Chief of Staff viewed your
   passport on 3 August."* A trust feature more than a compliance one.
 - **Sensitivity, not a boolean.** `lib/essentials.js` marks each category, and

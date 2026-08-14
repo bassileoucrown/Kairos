@@ -348,6 +348,9 @@ function ready() {
       // Whether a message actually left the building. See lib/email.js.
       await ensureColumn('emails', 'delivery_status', "TEXT NOT NULL DEFAULT 'outbox'");
       await ensureColumn('emails', 'delivery_error', 'TEXT');
+      // When this browser last proved a second factor, for step-up on the
+      // vault. See lib/stepUp.js.
+      await ensureColumn('sessions', 'stepped_up_at', 'TEXT');
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
       await ensureIndex('idx_threads_stage', 'threads(stage_id)');
     })(), READY_TIMEOUT_MS);
