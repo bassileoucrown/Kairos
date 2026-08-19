@@ -1,0 +1,900 @@
+<title>Building on Kairos</title>
+
+<style>
+:root {
+  --ground: #F6F4EE; --sheet: #FFFDF8; --ink: #191D22; --muted: #6A6558;
+  --rule: #DFDACD; --accent: #3E6357; --warn: #8A6A24; --stop: #A63F34;
+  --accent-wash: rgba(62, 99, 87, 0.09);
+  --warn-wash: rgba(138, 106, 36, 0.11);
+  --stop-wash: rgba(166, 63, 52, 0.10);
+  --code-bg: rgba(25, 29, 34, 0.045);
+  --shadow: 0 1px 2px rgba(25, 29, 34, 0.05);
+  --book: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --machine: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+    --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+    --accent-wash: rgba(123, 170, 152, 0.13);
+    --warn-wash: rgba(199, 164, 92, 0.14);
+    --stop-wash: rgba(217, 121, 107, 0.14);
+    --code-bg: rgba(236, 233, 224, 0.05);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+  --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+  --accent-wash: rgba(123, 170, 152, 0.13);
+  --warn-wash: rgba(199, 164, 92, 0.14);
+  --stop-wash: rgba(217, 121, 107, 0.14);
+  --code-bg: rgba(236, 233, 224, 0.05);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font-family: var(--book); font-size: 17px; line-height: 1.62;
+  margin: 0; padding: 0 24px 120px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1020px; margin: 0 auto; }
+
+.leaf {
+  display: grid; grid-template-columns: 168px minmax(0, 1fr);
+  gap: 0 40px; padding: 48px 0; border-top: 1px solid var(--rule); align-items: start;
+}
+.leaf:first-of-type { border-top: none; }
+.rail {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); line-height: 1.55;
+  padding-top: 9px; position: sticky; top: 24px;
+}
+.rail b { display: block; color: var(--accent); font-weight: 400; }
+.col { max-width: 62ch; }
+.col.wide { max-width: none; }
+
+@media (max-width: 860px) {
+  .leaf { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 36px 0; }
+  .rail { position: static; padding-top: 0; }
+  .rail b { display: inline; }
+  body { font-size: 16px; padding: 0 18px 90px; }
+}
+
+h1, h2, h3, h4 { text-wrap: balance; font-weight: 400; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5.6vw, 3.2rem); line-height: 1.09; letter-spacing: -0.015em; }
+h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); line-height: 1.2; margin-bottom: 14px; }
+h3 { font-size: 1.12rem; margin: 30px 0 8px; color: var(--accent); }
+h4 { font-size: 1rem; margin: 20px 0 4px; }
+p { margin: 0 0 15px; }
+p.lead { font-size: 1.2rem; line-height: 1.5; }
+.dim { color: var(--muted); }
+.small { font-size: 0.95rem; }
+.eyebrow {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 10px;
+}
+.pull {
+  font-size: clamp(1.2rem, 2.4vw, 1.45rem); line-height: 1.36;
+  border-left: 2px solid var(--accent); padding-left: 20px; margin: 24px 0;
+}
+ul, ol { margin: 0 0 15px; padding-left: 22px; }
+li { margin-bottom: 8px; }
+code {
+  font-family: var(--machine); font-size: 0.85em;
+  background: var(--accent-wash); padding: 1px 5px; border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+pre {
+  font-family: var(--machine); font-size: 12.5px; line-height: 1.6;
+  background: var(--code-bg); border: 1px solid var(--rule); border-radius: 3px;
+  padding: 14px 16px; overflow-x: auto; margin: 16px 0;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.title-leaf { padding: 80px 0 56px; }
+.title-leaf .col { max-width: 24ch; }
+.stamp {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin-top: 26px; line-height: 2;
+}
+
+.toc { columns: 2; column-gap: 36px; margin: 8px 0 0; padding: 0; list-style: none; }
+.toc li { break-inside: avoid; margin-bottom: 5px; font-size: 0.97rem; }
+.toc .n {
+  font-family: var(--machine); font-size: 10.5px; letter-spacing: 0.1em;
+  color: var(--muted); margin-right: 9px;
+}
+@media (max-width: 640px) { .toc { columns: 1; } }
+
+.tablewrap { overflow-x: auto; margin: 18px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.94rem; }
+th, td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font-family: var(--machine); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); font-weight: 400; white-space: nowrap;
+}
+td.k { font-family: var(--machine); font-size: 0.86em; white-space: nowrap; }
+td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+
+.tag {
+  font-family: var(--machine); font-size: 9.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 2px;
+  white-space: nowrap; display: inline-block; vertical-align: 1px;
+}
+.tag.on { background: var(--accent-wash); color: var(--accent); }
+.tag.soon { background: var(--warn-wash); color: var(--warn); }
+.tag.no { background: var(--stop-wash); color: var(--stop); }
+
+.why {
+  border-left: 2px solid var(--warn); background: var(--warn-wash);
+  padding: 12px 16px; margin: 16px 0; font-size: 0.96rem;
+}
+.why b {
+  font-family: var(--machine); font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--warn); display: block; margin-bottom: 4px; font-weight: 400;
+}
+.stopblock {
+  border-left: 2px solid var(--stop); background: var(--stop-wash);
+  padding: 12px 16px; margin: 16px 0; font-size: 0.96rem;
+}
+.stopblock b {
+  font-family: var(--machine); font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--stop); display: block; margin-bottom: 4px; font-weight: 400;
+}
+
+.rules { list-style: none; padding: 0; margin: 20px 0; }
+.rules li { border-left: 2px solid var(--rule); padding-left: 18px; margin-bottom: 16px; }
+.rules li b { display: block; font-weight: 400; font-size: 1.05rem; }
+.rules li span { color: var(--muted); font-size: 0.95rem; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 20px 0; }
+.stat { border-top: 2px solid var(--accent); padding-top: 10px; }
+.stat .n {
+  font-family: var(--machine); font-size: 1.5rem; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; display: block; line-height: 1.1;
+}
+.stat .k {
+  font-family: var(--machine); font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-top: 5px;
+}
+
+.end {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); text-align: center;
+  padding: 54px 0 0; border-top: 1px solid var(--rule); line-height: 2;
+}
+</style>
+
+<div class="wrap">
+
+<section class="leaf title-leaf">
+  <div class="rail"><b>Kairos</b>by Exousia<br>Developer handover</div>
+  <div class="col">
+    <span class="eyebrow">Everything you need to change this codebase safely</span>
+    <h1>Building on Kairos</h1>
+    <p class="lead dim" style="margin-top:20px;">
+      Architecture, the invariants that must survive your change, how the suites are run, and
+      the outstanding work written as tasks rather than aspirations. Read sections 01–05
+      before your first commit; the rest is reference.
+    </p>
+    <div class="stamp">19 August 2026 · counted from the repository on the day it was written</div>
+  </div>
+</section>
+
+<section class="leaf">
+  <div class="rail"><b>00</b>Contents</div>
+  <div class="col wide">
+    <ol class="toc">
+      <li><span class="n">01</span><a href="#shape">Shape of the system</a></li>
+      <li><span class="n">02</span><a href="#db">The database adapter</a></li>
+      <li><span class="n">03</span><a href="#migrations">Migration discipline</a></li>
+      <li><span class="n">04</span><a href="#access">The access model</a></li>
+      <li><span class="n">05</span><a href="#invariants">Invariants</a></li>
+      <li><span class="n">06</span><a href="#map">Map of the codebase</a></li>
+      <li><span class="n">07</span><a href="#client">The client</a></li>
+      <li><span class="n">08</span><a href="#adapters">Provider adapters</a></li>
+      <li><span class="n">09</span><a href="#capabilities">The capability registry</a></li>
+      <li><span class="n">10</span><a href="#plans">The plan layer</a></li>
+      <li><span class="n">11</span><a href="#tests">Tests: how and against what</a></li>
+      <li><span class="n">12</span><a href="#status">Current test status</a></li>
+      <li><span class="n">13</span><a href="#work">Outstanding work</a></li>
+      <li><span class="n">14</span><a href="#traps">Traps we have already fallen into</a></li>
+      <li><span class="n">15</span><a href="#start">Getting started</a></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 01 -->
+<section class="leaf" id="shape">
+  <div class="rail"><b>01</b>Shape</div>
+  <div class="col">
+    <h2>One process, two halves, no framework surprises</h2>
+    <div class="stats">
+      <div class="stat"><span class="n">183</span><span class="k">API endpoints</span></div>
+      <div class="stat"><span class="n">30</span><span class="k">Route modules</span></div>
+      <div class="stat"><span class="n">42</span><span class="k">Tables</span></div>
+      <div class="stat"><span class="n">31</span><span class="k">Client routes</span></div>
+      <div class="stat"><span class="n">51</span><span class="k">Browser suites</span></div>
+      <div class="stat"><span class="n">~23k</span><span class="k">Lines of app code</span></div>
+    </div>
+    <p>
+      <strong>Server:</strong> Express 4, plain CommonJS, no ORM, no build step. Sessions are
+      cookies; passwords are scrypt. <strong>Client:</strong> React 18 + Vite +
+      <code>react-router-dom</code> v7, no UI framework — a hand-rolled design system in one
+      stylesheet. In production the server serves the built client and hands unknown paths back
+      to <code>index.html</code>.
+    </p>
+    <pre><code>app/
+  server/
+    index.js        mounting, the 503 gate, /api/status, the SPA fallback
+    schema.sql      runs on every boot; CREATE TABLE IF NOT EXISTS only
+    lib/            40 modules — the decisions live here, not in routes
+    routes/         30 routers — validation, authorisation, and shape
+  client/
+    src/pages/      screens, incl. dashboard/ pa/ spaces/ onboarding/
+    src/components/ AppShell, SoonButton, TimezonePicker, forms
+    src/lib/        api client, auth context, timezone helpers</code></pre>
+
+    <h3>Listen first, then be ready</h3>
+    <p>
+      <code>index.js</code> binds the port immediately and only then brings the database up.
+      Every <code>/api</code> route is held at 503 until the schema is ready;
+      <code>/api/status</code> answers throughout and names the problem. The page itself always
+      loads.
+    </p>
+    <div class="why">
+      <b>Why this order</b>
+      The old order made a database problem look like a deploy problem: nothing listened, so the
+      platform showed a successful build followed by a deploy spinning forever with no
+      explanation, and the only way to learn anything was to read a log that stayed silent.
+      Coming up and saying what is wrong is strictly more useful than dying quietly.
+      Never move database work in front of <code>listen()</code>.
+    </div>
+
+    <h3>Async routers</h3>
+    <p>
+      Express 4 does not catch a rejected promise from a handler — the rejection becomes an
+      unhandled rejection and the request hangs until the client gives up. Since every route
+      awaits the database, that would be the normal failure mode. So routers are created through
+      <code>lib/asyncRouter.js</code>, which wraps each handler and forwards rejections to
+      <code>next()</code>, preserving the four-argument shape for error middleware.
+    </p>
+    <p class="small dim">
+      Use <code>asyncRouter()</code> for any new router. A bare <code>express.Router()</code>
+      will look fine in review and hang in production.
+    </p>
+
+    <h3>Body limits</h3>
+    <p>
+      100 KB globally, with one carve-out: the voice endpoint skips the global parser and
+      declares its own ceiling. A parser mounted on the route cannot help — the global one runs
+      first and rejects the body before the route's limit is ever consulted, which showed up as a
+      500 on any note longer than a few seconds.
+    </p>
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="leaf" id="db">
+  <div class="rail"><b>02</b>The adapter</div>
+  <div class="col">
+    <h2>One interface, two backends</h2>
+    <p>
+      <code>lib/db.js</code> is the only file that knows which database is in use.
+      <code>DATABASE_URL</code> set means Postgres via <code>pg</code>; unset means a local
+      SQLite file via Node 22's built-in <code>node:sqlite</code>, so local development needs no
+      database installed.
+    </p>
+    <pre><code>const row  = await db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+const rows = await db.prepare('SELECT * FROM trips WHERE owner_id = ?').all(id);
+await db.prepare('INSERT INTO trips (...) VALUES (?, ?, ?)').run(a, b, c);</code></pre>
+    <p>
+      Same shape both ways, always awaited. Route code never learns which backend it is talking
+      to, and the SQL stays in the portable subset both dialects accept. Placeholders are
+      <code>?</code> everywhere; the Postgres implementation rewrites them.
+    </p>
+
+    <h3>Things the adapter absorbs</h3>
+    <ul>
+      <li><code>PRAGMA</code> and <code>INSERT OR IGNORE</code> are translated.</li>
+      <li>Transactions go through the adapter, not raw <code>BEGIN</code>/<code>COMMIT</code>.</li>
+      <li>Column-existence checks are scoped to <code>current_schema()</code> — without that, a
+        foreign <code>public.users</code> would make the migrations think our columns already
+        existed and skip them.</li>
+      <li>A malformed <code>DATABASE_URL</code> is diagnosed by shape before anything tries to
+        connect, and reported as a database failure rather than thrown at require time — throwing
+        there would kill the process before it binds a port.</li>
+      <li>Connection is retried on transient errors only (<code>ECONNREFUSED</code>,
+        <code>ETIMEDOUT</code> and friends). Bad credentials or a syntax error in our own schema
+        fail immediately, because retrying will not fix them.</li>
+    </ul>
+
+    <h3>DATABASE_SCHEMA</h3>
+    <p>
+      Optional, Postgres only. Keeps every table in a named schema instead of <code>public</code>,
+      so Kairos can share one free Postgres instance with another app without its
+      <code>users</code> table colliding. The value must be a plain lowercase identifier — it
+      reaches the server as a connection startup option and as <code>CREATE SCHEMA</code>, neither
+      of which takes a bind parameter, so anything else is refused at boot rather than escaped.
+    </p>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="leaf" id="migrations">
+  <div class="rail"><b>03</b>Migrations</div>
+  <div class="col">
+    <h2>Additive, idempotent, and in two different places</h2>
+    <p>This is the rule people get wrong most often, so learn it before you touch the schema.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>What you are adding</th><th>Where it goes</th></tr></thead>
+        <tbody>
+          <tr><td>A new <strong>table</strong></td><td><code>schema.sql</code>, as <code>CREATE TABLE IF NOT EXISTS</code></td></tr>
+          <tr><td>A new <strong>column on an existing table</strong></td><td><code>lib/db.js</code>, in <code>ready()</code>, via <code>ensureColumn()</code></td></tr>
+          <tr><td>An index on a <strong>new</strong> table</td><td><code>schema.sql</code></td></tr>
+          <tr><td>An index on a <strong>retrofitted</strong> column</td><td><code>lib/db.js</code>, via <code>ensureIndex()</code>, after the <code>ensureColumn</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stopblock">
+      <b>Why a column cannot go in schema.sql</b>
+      <code>schema.sql</code> runs on every boot. For a table that already exists,
+      <code>CREATE TABLE IF NOT EXISTS</code> is a no-op — so a column added inside that statement
+      appears on a fresh database and silently never appears on an existing one. Every deployment
+      that has ever run is an existing database. There are currently 36 retrofitted columns and 5
+      retrofitted indexes; add yours the same way.
+    </div>
+    <pre><code>// in ready(), after the schema has run
+await ensureColumn('itinerary_items', 'pickup_token', 'TEXT');
+await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></pre>
+    <p>
+      There is no migration table and no down-migration. Everything is additive and idempotent, so
+      booting an old database and a new one converge on the same shape. If you ever need a
+      destructive change, that is a conversation before it is a commit.
+    </p>
+    <p class="small dim">
+      <code>bupgrade</code> proves an existing database is upgraded in place losing nothing, and
+      <code>bschema</code> proves schema isolation. Both must stay green.
+    </p>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="leaf" id="access">
+  <div class="rail"><b>04</b>Access</div>
+  <div class="col">
+    <h2>Four separate systems, deliberately not one</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Question</th><th>Answered in</th><th>Failure code</th></tr></thead>
+        <tbody>
+          <tr><td>May this user act for this principal?</td><td><code>lib/paAccess.js</code></td><td class="k">403</td></tr>
+          <tr><td>May this user see this space or thread?</td><td><code>lib/spaceAccess.js</code></td><td class="k">404</td></tr>
+          <tr><td>May this user see this <em>field</em>?</td><td><code>lib/essentials.js</code> + <code>lib/stepUp.js</code></td><td class="k">403 / step-up</td></tr>
+          <tr><td>Is this account entitled to this feature?</td><td><code>lib/plans.js</code></td><td class="k">402-ish, and off</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stopblock">
+      <b>403 versus 404 is not a style choice</b>
+      <code>requirePaAccess</code> returns <strong>403</strong> — app-wide convention, and correct:
+      the principal's existence is not a secret, the URL contains their id, and they were named to
+      you by somebody. <code>spaceAccess</code> returns <strong>nothing</strong>, so the route
+      answers <strong>404</strong> — the existence of a private space <em>is</em> the secret. Do not
+      "harmonise" these. Each is right where it is.
+    </div>
+
+    <h3>The structural preference</h3>
+    <p>
+      Where a door can be made not to exist rather than merely locked, make it not exist.
+    </p>
+    <ul>
+      <li>A private space short-circuits <em>before</em> consulting <code>space_members</code>, so
+        a stray row from a future migration cannot open it.</li>
+      <li>Household staff live in <code>household_members</code>, not <code>memberships</code> —
+        because <code>requirePaAccess</code> grants on any active membership whatever the role, and
+        five other queries do the same. A household role on that table would have handed a cook the
+        approval queue, contacts, briefs and the vault at six call sites at once, none of which
+        would have looked wrong in review.</li>
+      <li>Peer connections live in <code>connections</code>, so no query can mistake a peer for a
+        delegate.</li>
+    </ul>
+    <p class="small dim">
+      When you add a relationship type, ask first whether it belongs in an existing table. The
+      answer is usually no, and the reason is always the same: existing queries.
+    </p>
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="leaf" id="invariants">
+  <div class="rail"><b>05</b>Invariants</div>
+  <div class="col">
+    <h2>Things your change must not undo</h2>
+    <p>
+      Each of these is enforced by at least one suite. If your change makes one of them false, the
+      change is wrong — not the test.
+    </p>
+    <ul class="rules">
+      <li><b>The server binds its port before it touches the database.</b><span>And answers
+        <code>/api/status</code> throughout. <code>bup</code>, <code>bheal</code>,
+        <code>bfail</code>.</span></li>
+      <li><b>A space you cannot see is indistinguishable from one that does not exist.</b><span>
+        And a private space has no readable members at all. <code>brooms</code>.</span></li>
+      <li><b>A record is immutable once filed.</b><span>Notes are editable; promoting a note to a
+        record is a one-way act. <code>bmulti</code>, <code>bdone</code>.</span></li>
+      <li><b>An anchor never moves.</b><span>And nothing after it moves either.
+        <code>blate</code>.</span></li>
+      <li><b>Nothing is sent on somebody's behalf automatically.</b><span>The cascade returns
+        people-to-tell; a human sends. AI Assist returns candidates; a human books.</span></li>
+      <li><b>Sensitive fields are refused without a key, and revealed only after a step-up.</b>
+        <span>Where two-factor is enrolled, the step-up asks for the <em>code</em>, not the
+        password. <code>bnokey</code>, <code>bstepup</code>, <code>bvault</code>,
+        <code>bscope</code>.</span></li>
+      <li><b>Two-factor is not demanded at sign-in by default.</b><span>It is spent on the vault.
+        Changing this without the principal asking locks people out of their own accounts —
+        we did it once. <code>bsignin</code>, <code>bmfa</code>.</span></li>
+      <li><b>Entitlement never gates reading, and fails open.</b><span><code>bplan</code>.</span></li>
+      <li><b>Every unbuilt capability is visible, named, inert, and removes itself when it
+        works.</b><span><code>bsoon</code>.</span></li>
+      <li><b>Nobody's name is displayed in an arrivals hall.</b><span>The driver card shows the
+        flight, the meeting point, the phrase and the signal — never the principal.
+        <code>bsignal</code>, <code>btrip</code>.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="leaf" id="map">
+  <div class="rail"><b>06</b>The map</div>
+  <div class="col wide">
+    <h2>Where the load-bearing decisions live</h2>
+    <p style="max-width:62ch;">
+      Routes validate and authorise; <code>lib/</code> decides. If you find yourself putting a rule
+      in a route, check whether the same rule already exists in a lib and is about to be duplicated
+      — that is how the two paths for scheduling (principal and assistant) diverged the first time.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Module</th><th>Owns</th></tr></thead>
+        <tbody>
+          <tr><td class="k">db.js</td><td>The only file that knows the backend. Migrations, retries, schema isolation.</td></tr>
+          <tr><td class="k">cascade.js</td><td>The delay engine. Gap-absorbs and anchor-never-moves.</td></tr>
+          <tr><td class="k">spaceAccess.js</td><td>Every read and write of a space, thread or message. No second path.</td></tr>
+          <tr><td class="k">paAccess.js</td><td>Assistant reach, and the separately revocable scheduling remit.</td></tr>
+          <tr><td class="k">essentials.js</td><td>The field catalogue and sensitivity. Add a field here, once.</td></tr>
+          <tr><td class="k">secretBox.js</td><td>AES-256-GCM. Key from the environment, never the database.</td></tr>
+          <tr><td class="k">stepUp.js</td><td>Which factor to demand, and the short grace window.</td></tr>
+          <tr><td class="k">totp.js</td><td>RFC 6238, written out. No dependency in the auth path.</td></tr>
+          <tr><td class="k">household.js</td><td>Staff, structurally separate from assistants.</td></tr>
+          <tr><td class="k">trips.js</td><td>Journeys, per-leg zones, arrangements.</td></tr>
+          <tr><td class="k">pickup.js · pickupSignal.js</td><td>The phrase, and the HMAC'd colour-and-shape signal.</td></tr>
+          <tr><td class="k">visas.js</td><td>Coverage, computed. Requirement, refused.</td></tr>
+          <tr><td class="k">travelTime.js</td><td>Maps adapter, traffic-aware, cached, never throws, never rewrites.</td></tr>
+          <tr><td class="k">directLine.js</td><td>The one room per principal.</td></tr>
+          <tr><td class="k">voiceNotes.js</td><td>Encrypted, expiring, hard-capped audio.</td></tr>
+          <tr><td class="k">stageStatus.js</td><td>Records override a stored stage status.</td></tr>
+          <tr><td class="k">reminders.js</td><td>The sweep, and once-per-threshold nudges.</td></tr>
+          <tr><td class="k">accessCodes.js</td><td>Armed pairing codes; identical failures.</td></tr>
+          <tr><td class="k">handles.js</td><td>Normalisation, reserved names, relationship-scoped resolution.</td></tr>
+          <tr><td class="k">connections.js</td><td>Peers. Emphatically not delegation.</td></tr>
+          <tr><td class="k">plans.js</td><td>Entitlement. Fails open, records reach, off by default.</td></tr>
+          <tr><td class="k">connectors.js</td><td>The catalogue of 17. Deployment versus account.</td></tr>
+          <tr><td class="k">capabilities.js</td><td>The single registry of what does not work yet.</td></tr>
+          <tr><td class="k">accountDeletion.js</td><td>Explicit walk of non-cascading authorship columns, in one transaction.</td></tr>
+          <tr><td class="k">rateLimit.js</td><td>In memory. Per account <em>and</em> per address.</td></tr>
+          <tr><td class="k">emailProviders.js</td><td>SendGrid or Resend, one shape, different error envelopes.</td></tr>
+          <tr><td class="k">asyncRouter.js</td><td>Rejections become 500s instead of hangs.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="leaf" id="client">
+  <div class="rail"><b>07</b>The client</div>
+  <div class="col">
+    <h2>One shell, deep-linkable tabs, no framework</h2>
+    <p>
+      <code>AppShell</code> provides the nav rail, the principal switcher, the account menu, the
+      back control and the badge fetches. Every signed-in screen uses it. Tabs are query
+      parameters, so <code>/dashboard?tab=essentials</code> is a real address you can send
+      somebody.
+    </p>
+    <p>
+      Styling is one hand-rolled stylesheet with a small token set. There is no component library
+      and no CSS-in-JS; match the surrounding conventions rather than introducing a third way.
+    </p>
+
+    <h3>Two client-side pieces worth knowing</h3>
+    <ul>
+      <li><code>components/SoonButton.jsx</code> — the in-situ placeholder for an unbuilt
+        capability. It fetches the registry once per page and renders <em>nothing</em> when the
+        capability reports available, so the real control drops into exactly that position with no
+        other change anywhere.</li>
+      <li><code>components/TimezonePicker.jsx</code> — searchable over city, region, zone and
+        offset, with an alias map for the cities people actually name, and five prominence bands so
+        typing "lon" offers London before Longyearbyen.</li>
+    </ul>
+
+    <div class="why">
+      <b>A timezone bug that will bite you again</b>
+      Wall-clock times entered on a screen are in the leg's zone, not the browser's.
+      <code>src/lib/timezones.js</code> mirrors <code>server/lib/timezone.js</code> line for line,
+      including the two-pass DST offset guess. If you change one, change the other, and add a case
+      to <code>btz</code>.
+    </div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="leaf" id="adapters">
+  <div class="rail"><b>08</b>Adapters</div>
+  <div class="col">
+    <h2>The pattern for anything outside the process</h2>
+    <p>Every external service follows the same four-part shape. Copy it rather than inventing a fifth.</p>
+    <ol>
+      <li><strong><code>isConfigured()</code></strong> reads the environment and answers honestly.</li>
+      <li><strong>The call itself</strong> never throws into a request path — it returns a result
+        that says what happened, including a failure.</li>
+      <li><strong>A <code>*_BASE_URL</code> override</strong> so a suite can point it at a local
+        stub. This is why <code>btravel</code> and <code>bsend</code> can test the real code path
+        without a real vendor.</li>
+      <li><strong>An entry in the capability registry</strong> if a user-facing control depends on
+        it, listing the exact variables it awaits.</li>
+    </ol>
+    <p>
+      Existing examples: email (SendGrid or Resend), maps (Google Distance Matrix), and the
+      unconfigured seams for calendar sync, WhatsApp, flight data, storage and transcription. The
+      email pair is the best one to read first — the two providers differ mostly in the details
+      that break silently (SendGrid answers 202 with an empty body and reports
+      <code>{errors:[{message}]}</code> where Resend uses <code>{message}</code>), which is exactly
+      the class of bug the delivery-status work exists to prevent.
+    </p>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="leaf" id="capabilities">
+  <div class="rail"><b>09</b>Capabilities</div>
+  <div class="col">
+    <h2>How to add — or retire — an unbuilt feature</h2>
+    <p>
+      <code>lib/capabilities.js</code> is the single registry. Each entry carries an id, the
+      control's name, the screen it appears on, a plain-English description, the variables it
+      awaits, a state, and — the important part — <strong><code>available</code>, computed by
+      calling the same function the feature itself calls</strong>.
+    </p>
+    <pre><code>add({
+  id: 'travel_time',
+  control: 'Travel time',
+  screen: 'itinerary',
+  label: 'Travel time with live traffic',
+  what: 'Ask the road how long this leg takes, at the hour it happens.',
+  available: travelTime.isConfigured(),   // not a hardcoded false
+  needs: ['MAPS_API_KEY'],
+  state: 'needs_key',
+});</code></pre>
+    <p>
+      Then place <code>&lt;SoonButton feature="travel_time" /&gt;</code> where the working control
+      will live. When the feature starts working, <code>available</code> flips, the placeholder
+      renders nothing, and the row disappears from <code>/coming</code> — all from one fact on the
+      server. <strong>You delete nothing.</strong>
+    </p>
+    <div class="stopblock">
+      <b>Never hardcode availability</b>
+      A screen that hardcodes "coming soon" keeps saying it after the credential is set. A screen
+      that hardcodes nothing quietly offers a button that does nothing. Both are how a product
+      loses the right to be believed about anything else.
+    </div>
+    <p class="small dim">
+      <code>state</code> is <code>'soon'</code> when the work is ours and <code>'needs_key'</code>
+      when the deployment is missing something an operator can set today. The distinction is for the
+      reader: one is being asked to wait, the other is being handed a task.
+    </p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="leaf" id="plans">
+  <div class="rail"><b>10</b>Plans</div>
+  <div class="col">
+    <h2>Entitlement, switched off, and recording</h2>
+    <pre><code>const DEFAULT_PLAN = PLANS[process.env.DEFAULT_PLAN] ? process.env.DEFAULT_PLAN : 'founding';
+const ENFORCED = String(process.env.PLAN_ENFORCEMENT || '').toLowerCase() === 'on';</code></pre>
+    <p>
+      <code>requirePlan(feature)</code> records that the feature was reached, and refuses only when
+      <code>ENFORCED</code>. It fails open on anything unexpected — a null column, a half-run
+      migration, an unknown plan name — and it is only ever applied to <em>creating</em> things,
+      never to reading them.
+    </p>
+    <p>
+      <code>founding</code> ranks equal to Executive and is the default, so nothing is withheld from
+      anybody today. Early accounts keep it permanently; that is a promise, not an oversight.
+    </p>
+    <div class="why">
+      <b>Two things to check before shipping a plan change</b>
+      That signup writes <code>DEFAULT_PLAN</code> explicitly — a column default alone made the
+      variable inert once, because signup never wrote the field and every account fell to
+      <code>'founding'</code> regardless. And that no entitlement check has crept onto a read path;
+      <code>bplan</code> asserts that nothing is locked today.
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="leaf" id="tests">
+  <div class="rail"><b>11</b>Tests</div>
+  <div class="col">
+    <h2>Fifty-one suites, and what each of them is for</h2>
+    <p>
+      Tests are standalone Node scripts, not a framework. Each is named <code>b*.js</code>, prints
+      ticks and crosses, exits non-zero on failure, and ends with a single sentence saying what it
+      proved. API suites use <code>fetch</code> against a server the suite starts on its own port;
+      UI suites drive Chromium through <code>playwright-core</code> at
+      <code>/opt/pw-browsers/chromium</code>.
+    </p>
+    <pre><code>bash allsuites.sh          # every suite, sequentially, one port each
+node btravel.js            # one suite
+bash pgmatrix.sh           # pairing codes across all four storage configs
+bash sigmatrix.sh          # signal + trips across the Postgres configs</code></pre>
+
+    <h3>The four database configurations</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Config</th><th>Proves</th></tr></thead>
+        <tbody>
+          <tr><td>SQLite (no <code>DATABASE_URL</code>)</td><td>Local development works with no database installed</td></tr>
+          <tr><td>Postgres, fresh database</td><td>The schema builds correctly from nothing</td></tr>
+          <tr><td>Postgres, <code>DATABASE_SCHEMA=kairos</code></td><td>Isolation — Kairos can share an instance with another app</td></tr>
+          <tr><td>Postgres, an older database</td><td>The migrations actually run, losing nothing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Anything touching the schema or a query must be run against all four. The fourth is the one
+      that catches a column added in the wrong place, and it is the one people skip.
+    </p>
+
+    <h3>Writing a suite</h3>
+    <ul>
+      <li>Assert on <em>behaviour a person would notice</em>, and make the sentence at the end say
+        what was proved. "Nobody held up a name, and nobody had to guess" is a better assertion set
+        than "signal endpoint returns 200".</li>
+      <li>Scope every fixture to the run — a fixed handle or email means the suite passes exactly
+        once per database.</li>
+      <li>Wait on the thing itself, not on a sleep. A pause long enough today is a flake tomorrow.</li>
+      <li>Give the suite its own port.</li>
+      <li>When a suite fails, work out which of the two is wrong before changing either. Several
+        entries in section 14 exist because the test was right.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="leaf" id="status">
+  <div class="rail"><b>12</b>Status<br><span class="dim">19 Aug 2026</span></div>
+  <div class="col">
+    <h2>The real result of the last full run</h2>
+    <p>
+      All 51 suites, run back to back on this machine: <strong>46 passed, 5 failed.</strong> None of
+      the five is a product regression, and here is exactly what each one is, because "known
+      environmental failure" is a phrase that hides bugs.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Suite</th><th>What happened</th><th>Verified</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">bnoticeui</td>
+            <td>Raced the nav badge, which arrives from a fetch the assertion does not wait for.</td>
+            <td><span class="tag on">Passes alone</span></td>
+          </tr>
+          <tr>
+            <td class="k">bflow</td>
+            <td>Signup refused — the shared server's in-memory rate limiter had accumulated across the run.</td>
+            <td><span class="tag on">Passes alone</span></td>
+          </tr>
+          <tr>
+            <td class="k">btitle</td>
+            <td>Same cause as <code>bflow</code>.</td>
+            <td><span class="tag on">Passes alone</span></td>
+          </tr>
+          <tr>
+            <td class="k">bfail</td>
+            <td>Needs a local Postgres at <code>127.0.0.1:5432</code>, which is not running here.</td>
+            <td><span class="tag soon">Not run</span></td>
+          </tr>
+          <tr>
+            <td class="k">bcustody</td>
+            <td>Claims a fixed handle (<code>ada-boss</code>) and so passes only against a genuinely fresh database, once — then reports "that handle is already taken". It also exhausts the sign-in limiter within its own run.</td>
+            <td><span class="tag no">Not green</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <code>bcustody</code> is the one to fix, and it is a test defect rather than a product one: it
+      needs run-scoped fixtures like every other suite, and its two-factor section needs to tolerate
+      the limiter. Until that is done, <strong>do not describe the suite as green</strong> — describe
+      it as 46 of 51 with the five accounted for.
+    </p>
+    <div class="why">
+      <b>And a standing hygiene problem</b>
+      <code>allsuites.sh</code> shares one rate-limiter across everything that uses the long-running
+      server on port 4000. Either give every suite its own server, or reset limiter state between
+      suites. Right now a clean run depends on the order things happen in, which is not a property a
+      test run should have.
+    </div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="leaf" id="work">
+  <div class="rail"><b>13</b>The work</div>
+  <div class="col wide">
+    <h2>Outstanding, as tasks</h2>
+    <p style="max-width:62ch;">
+      Ordered by what unblocks the most. Each says what exists already, so nobody starts from zero.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Task</th><th>What already exists</th><th>What is missing</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Fix <code>bcustody</code> and the limiter hygiene</strong></td>
+            <td>The suite, and everything it asserts.</td>
+            <td>Run-scoped fixtures; per-suite servers or a limiter reset in <code>allsuites.sh</code>.</td>
+            <td><span class="tag no">First</span></td>
+          </tr>
+          <tr>
+            <td><strong>Live flight status</strong></td>
+            <td>The connector entry, the capability row, and a cascade that already reasons from anchors.</td>
+            <td>A flight-data contract, an adapter on the standard shape, and a decision about how a changed departure re-runs the cascade.</td>
+            <td><span class="tag soon">Contract</span></td>
+          </tr>
+          <tr>
+            <td><strong>Forward a confirmation</strong></td>
+            <td>The trip and journey model, the capability row, the placeholder on Trips.</td>
+            <td>An inbound mail domain, a signed-webhook receiver, and a parser for airline and hotel mail. Start with two airlines and one hotel chain, and refuse anything it cannot read rather than guessing.</td>
+            <td><span class="tag soon">Build</span></td>
+          </tr>
+          <tr>
+            <td><strong>Attach a scan</strong></td>
+            <td><code>secretBox</code>, the essentials catalogue, the placeholder in the vault.</td>
+            <td>Object storage, an upload path that encrypts before it stores, and a reveal path behind the same step-up as the field it belongs to.</td>
+            <td><span class="tag soon">Build</span></td>
+          </tr>
+          <tr>
+            <td><strong>Transcribe a voice note</strong></td>
+            <td>Encrypted, expiring, capped audio, and the placeholder under each note.</td>
+            <td>A route that does not hand the audio to a third party. When it lands, the text becomes the durable artifact — revisit the thirty-day expiry then, not before.</td>
+            <td><span class="tag soon">Build</span></td>
+          </tr>
+          <tr>
+            <td><strong>Calendar sync</strong></td>
+            <td>The seam in <code>calendarSync.js</code>, connector entries, honest not-configured everywhere.</td>
+            <td>OAuth for Google and Microsoft, two-way sync, and a conflict policy. The hard part is not the API — it is deciding what wins when both sides moved.</td>
+            <td><span class="tag soon">Credential</span></td>
+          </tr>
+          <tr>
+            <td><strong>WhatsApp</strong></td>
+            <td>The seam in <code>whatsapp.js</code> and the connector entry.</td>
+            <td>A Business API token, template approval, and a rule for what is sent — nothing outbound automatically.</td>
+            <td><span class="tag soon">Credential</span></td>
+          </tr>
+          <tr>
+            <td><strong>Billing</strong></td>
+            <td>The whole plan layer, plus recorded reach data telling you what people actually use.</td>
+            <td>A payment integration, and the switch. Keep the fail-open rule when you throw it.</td>
+            <td><span class="tag soon">Build</span></td>
+          </tr>
+          <tr>
+            <td><strong>Shared rate-limit store</strong></td>
+            <td>Per-account and per-address keying, already correct.</td>
+            <td>A backing store, before running more than one instance. Until then, one instance.</td>
+            <td><span class="tag soon">Scale</span></td>
+          </tr>
+          <tr>
+            <td><strong>Durable Postgres with backups</strong></td>
+            <td>The adapter, the schema isolation, the migration discipline.</td>
+            <td>A paid instance. Free tiers have no backups at all — this must happen before a real principal's data lands.</td>
+            <td><span class="tag no">Before launch</span></td>
+          </tr>
+          <tr>
+            <td><strong>External security review</strong></td>
+            <td>An access model designed to be reviewable, and suites that state their invariants.</td>
+            <td>Somebody outside this team, before custody is sold to anyone.</td>
+            <td><span class="tag no">Before launch</span></td>
+          </tr>
+          <tr>
+            <td><strong>Visa requirement lookup</strong></td>
+            <td>Coverage, the adapter seam, and a screen that says plainly it is not answered.</td>
+            <td>A maintained, licensed ruleset. Do not build this from scraped data. If we cannot buy accuracy, the honest answer stays "we do not know".</td>
+            <td><span class="tag no">Refused</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="leaf" id="traps">
+  <div class="rail"><b>14</b>Traps</div>
+  <div class="col">
+    <h2>Mistakes already made here, so they are not made twice</h2>
+    <ul class="rules">
+      <li><b>An edit that cannot fail loudly should not be trusted to have happened.</b>
+        <span>A scripted string replacement assumed an import that was not there, changed nothing,
+        and reported success. The server then would not boot. If you script an edit, assert on the
+        result.</span></li>
+      <li><b>A column default is not a migration.</b><span><code>DEFAULT_PLAN</code> was inert for a
+        while because signup never wrote the column and the default swallowed every new account.
+        Write the value explicitly.</span></li>
+      <li><b>A control that reacts must not claim to be disabled.</b><span><code>SoonButton</code>
+        was built with <code>aria-disabled</code> and an <code>onClick</code>. Playwright refused to
+        click it, and it was right: a screen reader would announce "dimmed" and the thing would
+        respond anyway. The button is a disclosure; what is unavailable is the feature behind
+        it.</span></li>
+      <li><b>Navigating to the page you are already on is a reload.</b><span>A "back" test assumed
+        a cold arrival and got a preserved history instead. Open a fresh tab.</span></li>
+      <li><b>Ranking by substring is not ranking.</b><span>Typing "lon" offered Longyearbyen before
+        London. Fixed with prominence bands, not by weakening the test.</span></li>
+      <li><b>Response shapes are not guessable.</b><span>Posting a message returns
+        <code>{ id }</code>, not <code>{ message }</code>. The direct line is surfaced on
+        <code>/api/today</code>, not on its own route. Read the route before asserting on it.</span></li>
+      <li><b><code>pkill -f</code> matches its own shell.</b><span>It has killed this session's
+        commands more than once. Find the PID and kill that.</span></li>
+      <li><b>A leftover stub server holds its port.</b><span>Suites that start a stub must stop it,
+        or the next run fails with <code>EADDRINUSE</code> and looks like a hang.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="leaf" id="start">
+  <div class="rail"><b>15</b>Getting started</div>
+  <div class="col">
+    <h2>Your first day</h2>
+    <pre><code># two processes
+cd app/server &amp;&amp; npm install &amp;&amp; npm run dev     # :4000
+cd app/client &amp;&amp; npm install &amp;&amp; npm run dev     # :5173, proxies /api
+
+# single-process, as production runs it
+cd app/client &amp;&amp; npm run build
+cd app/server &amp;&amp; npm start                        # :4000 serves both
+
+# a key, if you want the vault and voice notes locally
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code></pre>
+    <p>Then, in order:</p>
+    <ol>
+      <li>Sign up, walk onboarding, book yourself from an incognito window.</li>
+      <li>Build a day with a flight at the end and overrun the first thing by two hours. Read
+        <code>lib/cascade.js</code> with the result in front of you.</li>
+      <li>Read <code>lib/db.js</code> top to bottom. It is the file most likely to bite you.</li>
+      <li>Read <code>lib/spaceAccess.js</code> and <code>lib/paAccess.js</code> together, and note
+        that they answer differently on purpose.</li>
+      <li>Run <code>bash allsuites.sh</code> once before you change anything, so you know what this
+        machine's baseline looks like.</li>
+      <li>Then read section 05 again. Those are the things a review will ask you about.</li>
+    </ol>
+    <p class="pull">
+      Comments in this codebase explain <em>why</em>, not what. When you change a decision, change
+      the comment that argued for it — a stale rationale is worse than none.
+    </p>
+  </div>
+</section>
+
+<div class="end">
+  Building on Kairos · Developer handover · 19 August 2026<br>
+  Companion documents: the orientation deck, and the founder handbook
+</div>
+
+</div>

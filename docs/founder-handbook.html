@@ -1,0 +1,1240 @@
+<title>The Kairos Handbook</title>
+
+<style>
+:root {
+  --ground: #F6F4EE; --sheet: #FFFDF8; --ink: #191D22; --muted: #6A6558;
+  --rule: #DFDACD; --accent: #3E6357; --warn: #8A6A24; --stop: #A63F34;
+  --accent-wash: rgba(62, 99, 87, 0.09);
+  --warn-wash: rgba(138, 106, 36, 0.11);
+  --stop-wash: rgba(166, 63, 52, 0.10);
+  --shadow: 0 1px 2px rgba(25, 29, 34, 0.05);
+  --book: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --machine: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+    --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+    --accent-wash: rgba(123, 170, 152, 0.13);
+    --warn-wash: rgba(199, 164, 92, 0.14);
+    --stop-wash: rgba(217, 121, 107, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+  --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+  --accent-wash: rgba(123, 170, 152, 0.13);
+  --warn-wash: rgba(199, 164, 92, 0.14);
+  --stop-wash: rgba(217, 121, 107, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font-family: var(--book); font-size: 17px; line-height: 1.62;
+  margin: 0; padding: 0 24px 120px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1020px; margin: 0 auto; }
+
+.leaf {
+  display: grid; grid-template-columns: 168px minmax(0, 1fr);
+  gap: 0 40px; padding: 48px 0; border-top: 1px solid var(--rule); align-items: start;
+}
+.leaf:first-of-type { border-top: none; }
+.rail {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); line-height: 1.55;
+  padding-top: 9px; position: sticky; top: 24px;
+}
+.rail b { display: block; color: var(--accent); font-weight: 400; }
+.col { max-width: 62ch; }
+.col.wide { max-width: none; }
+
+@media (max-width: 860px) {
+  .leaf { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 36px 0; }
+  .rail { position: static; padding-top: 0; }
+  .rail b { display: inline; }
+  body { font-size: 16px; padding: 0 18px 90px; }
+}
+
+h1, h2, h3, h4 { text-wrap: balance; font-weight: 400; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5.6vw, 3.2rem); line-height: 1.09; letter-spacing: -0.015em; }
+h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); line-height: 1.2; margin-bottom: 14px; }
+h3 { font-size: 1.13rem; margin: 30px 0 8px; color: var(--accent); }
+h4 { font-size: 1.02rem; margin: 20px 0 4px; }
+p { margin: 0 0 15px; }
+p.lead { font-size: 1.2rem; line-height: 1.5; }
+.dim { color: var(--muted); }
+.small { font-size: 0.95rem; }
+.eyebrow {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 10px;
+}
+.pull {
+  font-size: clamp(1.22rem, 2.5vw, 1.5rem); line-height: 1.36;
+  border-left: 2px solid var(--accent); padding-left: 20px; margin: 24px 0;
+}
+ul, ol { margin: 0 0 15px; padding-left: 22px; }
+li { margin-bottom: 8px; }
+code {
+  font-family: var(--machine); font-size: 0.85em;
+  background: var(--accent-wash); padding: 1px 5px; border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.title-leaf { padding: 80px 0 56px; }
+.title-leaf .col { max-width: 24ch; }
+.stamp {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin-top: 26px; line-height: 2;
+}
+
+/* contents */
+.toc { columns: 2; column-gap: 36px; margin: 8px 0 0; padding: 0; list-style: none; }
+.toc li { break-inside: avoid; margin-bottom: 5px; font-size: 0.97rem; }
+.toc .n {
+  font-family: var(--machine); font-size: 10.5px; letter-spacing: 0.1em;
+  color: var(--muted); margin-right: 9px;
+}
+@media (max-width: 640px) { .toc { columns: 1; } }
+
+.card {
+  background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 16px 18px; box-shadow: var(--shadow);
+}
+.card h4 { margin: 0 0 5px; }
+.card p:last-child { margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 20px 0; }
+
+.tablewrap { overflow-x: auto; margin: 18px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.94rem; }
+th, td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font-family: var(--machine); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); font-weight: 400; white-space: nowrap;
+}
+td.k { font-family: var(--machine); font-size: 0.86em; white-space: nowrap; }
+td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.tag {
+  font-family: var(--machine); font-size: 9.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 2px;
+  white-space: nowrap; display: inline-block; vertical-align: 1px;
+}
+.tag.on { background: var(--accent-wash); color: var(--accent); }
+.tag.soon { background: var(--warn-wash); color: var(--warn); }
+.tag.no { background: var(--stop-wash); color: var(--stop); }
+
+.why {
+  border-left: 2px solid var(--warn); background: var(--warn-wash);
+  padding: 12px 16px; margin: 16px 0; font-size: 0.96rem;
+}
+.why b {
+  font-family: var(--machine); font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--warn); display: block; margin-bottom: 4px; font-weight: 400;
+}
+
+.rules { list-style: none; padding: 0; margin: 20px 0; }
+.rules li { border-left: 2px solid var(--rule); padding-left: 18px; margin-bottom: 16px; }
+.rules li b { display: block; font-weight: 400; font-size: 1.06rem; }
+.rules li span { color: var(--muted); font-size: 0.95rem; }
+
+.end {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); text-align: center;
+  padding: 54px 0 0; border-top: 1px solid var(--rule); line-height: 2;
+}
+</style>
+
+<div class="wrap">
+
+<section class="leaf title-leaf">
+  <div class="rail"><b>Kairos</b>by Exousia<br>Founder handbook</div>
+  <div class="col">
+    <span class="eyebrow">Exousia Prime Emporium Ltd</span>
+    <h1>Everything we have built, and why each part is shaped the way it is</h1>
+    <p class="lead dim" style="margin-top:20px;">
+      The complete account. Not a summary and not a pitch — the reasoning behind every
+      screen, in the order somebody new should meet it. Read it once end to end; come back
+      to a single section when you need to change something in it.
+    </p>
+    <div class="stamp">19 August 2026 · pre-launch · counted from the repository</div>
+  </div>
+</section>
+
+<section class="leaf">
+  <div class="rail"><b>00</b>Contents</div>
+  <div class="col wide">
+    <ol class="toc">
+      <li><span class="n">01</span><a href="#thesis">The thesis</a></li>
+      <li><span class="n">02</span><a href="#people">Who the product is for</a></li>
+      <li><span class="n">03</span><a href="#day">The day</a></li>
+      <li><span class="n">04</span><a href="#booking">Booking and access tiers</a></li>
+      <li><span class="n">05</span><a href="#team">The team around a principal</a></li>
+      <li><span class="n">06</span><a href="#codes">Pairing codes</a></li>
+      <li><span class="n">07</span><a href="#essentials">The essentials vault</a></li>
+      <li><span class="n">08</span><a href="#stepup">Step-up and two-factor</a></li>
+      <li><span class="n">09</span><a href="#trips">Trips</a></li>
+      <li><span class="n">10</span><a href="#pickup">Meeting a car</a></li>
+      <li><span class="n">11</span><a href="#visas">Visas</a></li>
+      <li><span class="n">12</span><a href="#household">The household</a></li>
+      <li><span class="n">13</span><a href="#line">The direct line</a></li>
+      <li><span class="n">14</span><a href="#spaces">Spaces, projects, tasks</a></li>
+      <li><span class="n">15</span><a href="#pa">The assistant's desk</a></li>
+      <li><span class="n">16</span><a href="#peers">Peers and handles</a></li>
+      <li><span class="n">17</span><a href="#notices">Notices</a></li>
+      <li><span class="n">18</span><a href="#honesty">Saying what does not work</a></li>
+      <li><span class="n">19</span><a href="#plans">Plans and connectors</a></li>
+      <li><span class="n">20</span><a href="#ops">Running it</a></li>
+      <li><span class="n">21</span><a href="#outstanding">What is outstanding</a></li>
+      <li><span class="n">22</span><a href="#rules">Rules we do not break</a></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 01 -->
+<section class="leaf" id="thesis">
+  <div class="rail"><b>01</b>The thesis</div>
+  <div class="col">
+    <h2>A day is a chain, not a list</h2>
+    <p>
+      Every calendar ever built stores appointments as independent rows. Move one row and
+      one row moves. But an 11:00 only works because the 10:00 ends at 10:45 and the car
+      takes twenty minutes — so when the 10:00 overruns, the 11:00 stays exactly where it
+      was, sitting on top of the meeting that just ran over, the driver is still at the old
+      time, and nothing anywhere says so. The principal finds out by being late.
+    </p>
+    <p>
+      That gap is the entire company. The work an assistant is paid for is the chain they
+      run in their head, and no product in this category has ever modelled it.
+    </p>
+
+    <h3>Where the name comes from</h3>
+    <p>
+      <em>Chronos</em> is clock time — what a calendar stores. <em>Kairos</em> is the right
+      moment. That is what an assistant is protecting when they move a meeting, and it is
+      not a thing you can store in a row.
+    </p>
+
+    <h3>The second half of the job</h3>
+    <p>
+      Time is only half. The other half is <em>answers</em>: the passport number, the name
+      exactly as printed, the BVN a bank asks for and the NIN a telco asks for. Those live
+      today in a WhatsApp thread and an assistant's memory. Holding them properly is the
+      reason an office stays, once scheduling has got them in the door.
+    </p>
+
+    <h3>Why Nigeria first</h3>
+    <p>
+      Nigeria has the hardest version of every one of these problems. Traffic makes travel
+      time the whole schedule rather than a rounding error. Identity is four numbers, not
+      one, each demanded by name. A name board in an arrivals hall is a targeting notice
+      rather than a courtesy. Build for that and London is a simplification; build for
+      London and Lagos is a rewrite.
+    </p>
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="leaf" id="people">
+  <div class="rail"><b>02</b>Who it is for</div>
+  <div class="col">
+    <h2>Eight kinds of person, and each sees a different app</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Who</th><th>What they get</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Principal</strong></td><td>The account owner. Owns everything, decides who else may reach any of it. Lands on Today.</td></tr>
+          <tr><td><strong>PA / EA / Chief&nbsp;of&nbsp;Staff</strong></td><td>Full assistant remit: approvals, briefs, contacts, comms, itinerary. Lands on their own desk, with a switcher between principals. These are <em>titles, not tiers</em> — none outranks another.</td></tr>
+          <tr><td><strong>Delegate</strong></td><td>Scheduling only. A genuinely narrower remit, not a junior title. Sees availability and meeting types; never the vault's sensitive half.</td></tr>
+          <tr><td><strong>Household staff</strong></td><td>Driver, cook, housekeeper, nanny. Sees only what was addressed to them. Lives in its own table so no existing query can include them by accident.</td></tr>
+          <tr><td><strong>Peer</strong></td><td>An assistant at a different principal's office. A line of communication and nothing else — no reach into either principal.</td></tr>
+          <tr><td><strong>Booker</strong></td><td>Someone booking time from a public page. No account needed. Can reschedule or cancel through a link.</td></tr>
+          <tr><td><strong>Driver at an airport</strong></td><td>Holds a card link. Sees the flight, the meeting point, and a signal — never the principal's name.</td></tr>
+          <tr><td><strong>Operator</strong></td><td>Whoever runs the deployment. Reads <code>/api/status</code>, sets the environment, and is told plainly what is missing.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="why">
+      <b>Why this matters</b>
+      Chief of Staff is not a senior PA. Treating the three assistant titles as a hierarchy
+      was the original mistake — a Chief of Staff was appointed as somebody's PA and read
+      that word on every screen. The one genuinely hierarchical capability is that only a
+      Chief of Staff can grant and withdraw other assistants' access to a space.
+    </div>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="leaf" id="day">
+  <div class="rail"><b>03</b>The day<br><span class="dim">Today · Itinerary</span></div>
+  <div class="col">
+    <h2>One screen that answers "what needs me"</h2>
+    <p>
+      <strong>Today</strong> is the landing screen. It merges bookings and itinerary items
+      into a single ordered day and separates two questions the assistant actually asks:
+      what is happening, and what needs a decision. Both come from one endpoint, so there
+      is no way for the two halves to disagree.
+    </p>
+    <p>
+      <strong>Itinerary</strong> is the planner. An item has a start, an optional end, a
+      kind, a location, travel minutes, and two flags that matter more than the rest:
+      <code>is_anchor</code> and <code>status</code>.
+    </p>
+
+    <h3>Draft, proposed, confirmed</h3>
+    <p>
+      An assistant's draft is invisible to the principal. That is deliberate: the working
+      copy of a day is not part of the day. <em>Proposed</em> puts it in front of the
+      principal with a note; <em>confirmed</em> is the real day. The delay engine reasons
+      over confirmed and proposed only.
+    </p>
+
+    <h3>The delay cascade</h3>
+    <p>
+      Say a thing overran by <em>n</em> minutes and Kairos computes what happens to
+      everything after it — and shows that <em>before</em> applying it. Two rules do the work:
+    </p>
+    <ul class="rules">
+      <li><b>A gap absorbs.</b><span>Each following item is measured against where the
+        principal actually is, not against the original delay. The moment there is enough
+        slack, the ripple stops and everything after it is reported unchanged. Saying
+        "nothing needs doing" is worth as much as the warnings — a system that shunts the
+        afternoon regardless cries wolf.</span></li>
+      <li><b>An anchor does not move.</b><span>A flight, a train, a court appearance.
+        Kairos refuses to re-time it and reports how late you would be instead, in words:
+        <em>you would reach this 20 min after it leaves. It will not wait.</em> Nothing
+        after an anchor moves either — the anchor pins the rest of the day to its own
+        clock.</span></li>
+    </ul>
+    <p>
+      The output is not a count. It is a list of effects with reasons, plus two deduplicated
+      lists: <strong>people to tell</strong> (household staff, once each however many of
+      their legs moved) and <strong>attendees to tell</strong> (external bookers). Neither is
+      messaged automatically — the wording of "we are running late" is a judgement call, and
+      always a person's.
+    </p>
+
+    <h3>Travel time with live traffic</h3>
+    <p>
+      <code>travel_minutes</code> has existed since the day was first modelled as a chain,
+      and until recently it was a number somebody typed. In Lagos that number <em>is</em> the
+      schedule: Ikoyi to Victoria Island is twelve minutes on a Sunday and eighty at six on
+      a Thursday, and an assistant guessing once and reusing it forever is the commonest way
+      a principal is late through nobody's fault.
+    </p>
+    <p>
+      So Kairos asks a maps provider at the departure hour, with traffic, and says which
+      answer it got — a traffic-aware estimate or a plain one. Results are cached to the
+      quarter hour. It never throws, and it <strong>never silently rewrites the itinerary</strong>:
+      the estimate is offered and a person accepts it, because a schedule that reshuffles
+      itself while nobody is looking is a schedule nobody trusts — and the assistant often
+      knows something the road does not, like a closed gate or a convoy.
+    </p>
+    <div class="why">
+      <b>Provider shape</b>
+      Google Distance Matrix today, behind an adapter with a base-URL override, exactly like
+      the email service. Which maps API a deployment can get billing for is an operator's
+      decision, not an architectural one.
+    </div>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="leaf" id="booking">
+  <div class="rail"><b>04</b>Booking<br><span class="dim">Availability · Tiers</span></div>
+  <div class="col">
+    <h2>Who may book you, and what that costs them</h2>
+    <p>
+      A principal sets weekly availability — several blocks per day, not one, because a
+      real diary has a morning and an afternoon with a gap in the middle. Meeting types
+      carry a duration, buffers before and after, a location or video, and an
+      <strong>access tier</strong>.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tier</th><th>Who</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Anyone with the link</td><td>Books straight onto the diary</td></tr>
+          <tr><td class="num">2</td><td>Anyone with the link</td><td>Books straight onto the diary</td></tr>
+          <tr><td class="num">3</td><td>Named or invited</td><td>Goes to the approval queue</td></tr>
+          <tr><td class="num">4</td><td>Inner circle</td><td>Goes to the approval queue</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Tier 3 and above never lands on the calendar unapproved. It arrives in the
+      <strong>approval queue</strong>, where the principal or a full assistant accepts,
+      declines, or proposes another time. Tier drives the colour on the calendar too, so the
+      shape of a week reads at a glance.
+    </p>
+
+    <h3>Slots</h3>
+    <p>
+      Open slots are computed from availability minus existing bookings and itinerary
+      items, in the owner's timezone, over a fixed booking window. The same engine serves
+      the public page, the assistant's view, and AI Assist — there is deliberately one
+      implementation, because three would drift.
+    </p>
+
+    <h3>The public page</h3>
+    <p>
+      Lives at <code>/book/&lt;handle&gt;</code>, with an optional meeting-type slug. No
+      account required. The booker gets a confirmation with a management link that lets them
+      reschedule or cancel without signing in — and rescheduling excludes their own booking
+      from the slot computation, so their current time is offered back to them rather than
+      appearing taken.
+    </p>
+    <p class="small dim">
+      Video meeting types get an in-app join link. Email confirmations go through the same
+      swappable delivery layer as everything else, and are recorded in the Outbox whether
+      or not a provider is configured.
+    </p>
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="leaf" id="team">
+  <div class="rail"><b>05</b>The team</div>
+  <div class="col">
+    <h2>Bringing somebody on, and taking them off</h2>
+    <p>
+      A <strong>membership</strong> connects an assistant to a principal, with a role and a
+      status. Invitations go by email with a token; accepting one carries the invite context
+      into onboarding so the new arrival knows whose desk they have joined before they have
+      finished signing up.
+    </p>
+    <p>
+      Access to a PA route is granted to the principal themselves — a solo user can use
+      their own approval queue without ever inviting anyone — or to a user with an active
+      membership. Anyone else gets a 403.
+    </p>
+
+    <h3>Scheduling access is separately revocable</h3>
+    <p>
+      On by default for every assistant, because approving a Tier 3 booking while being
+      unable to set the hours that produced the slot makes no sense. But some principals
+      treat their own hours as personal, so it can be withdrawn per assistant. It is
+      deliberately narrower than "can act as PA": profile, members and integrations stay
+      owner-only whatever it says, because those are identity and access rather than
+      scheduling.
+    </p>
+
+    <h3>Deleting an account</h3>
+    <p>
+      Most rows would go on their own — the schema declares <code>ON DELETE CASCADE</code>
+      on everything hanging off a user by ownership. But a handful of columns reference a
+      user <em>without</em> cascade: <code>created_by</code>, <code>author_id</code>,
+      <code>assignee_id</code>, <code>decided_by</code>. Those record who did something
+      rather than who owns it, and cascading there would delete a whole project because one
+      contributor left.
+    </p>
+    <p>
+      So deletion walks them explicitly, authorship first and the user last, in one
+      transaction. Anything missed surfaces as a foreign-key error rather than a silent
+      partial delete, because a half-deleted account is far worse than a failed deletion.
+    </p>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="leaf" id="codes">
+  <div class="rail"><b>06</b>Pairing codes</div>
+  <div class="col">
+    <h2>Bringing on an assistant without an email</h2>
+    <p>
+      The emailed invitation is still the better path when it works. But it needs a working
+      mailbox and a configured provider, and a principal has no view of either — so
+      onboarding stalls on infrastructure nobody in the room can fix. A code read down the
+      phone needs neither.
+    </p>
+    <p>Three decisions carry its security, and all three are deliberate.</p>
+    <ul class="rules">
+      <li><b>The handle is required as well as the code.</b><span>Two principals will
+        eventually choose the same phrase, and a bare global code is a bearer token
+        guessable against every account at once. Requiring the handle means an attacker must
+        already know who they are targeting — and the collision problem disappears rather
+        than being papered over with a uniqueness check that would itself leak which codes
+        are live.</span></li>
+      <li><b>It is armed, not standing.</b><span>Off by default, live for a window the
+        principal chooses, spent after a set number of joins. A credential to an executive's
+        calendar that exists only in the hour it is needed cannot leak six months later out
+        of an old message.</span></li>
+      <li><b>Every failure answers identically.</b><span>A wrong code, an unknown handle, an
+        expired window and a spent code are indistinguishable from outside. Otherwise the
+        error message becomes an oracle.</span></li>
+    </ul>
+    <div class="why">
+      <b>Scope, decided by the principal</b>
+      A code grants PA access to a principal's account and nothing else. It is not required
+      to sign up — anyone may create an account freely, because an account on its own reaches
+      nothing: there is no directory, no resolvable handle, no space and no membership. The
+      door worth guarding is the one where somebody gains access to a <em>principal</em>, and
+      that is the door the code is on.
+    </div>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="leaf" id="essentials">
+  <div class="rail"><b>07</b>Essentials<br><span class="dim">The vault</span></div>
+  <div class="col">
+    <h2>The catalogue of things people are asked for and cannot recall</h2>
+    <p>
+      Not "documents" — <em>answers</em>. Every entry is a question somebody else puts to a
+      principal: an airline, a hotel, a visa form, an event organiser. That is why the useful
+      unit is a field with a copy button rather than a folder with a file in it.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Category</th><th>Default sensitivity</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr><td>Travel identity</td><td><span class="tag no">Sensitive</span></td><td>Passport number and country, name as printed, nationality, visa, Known Traveller, driving licence, yellow fever card</td></tr>
+          <tr><td>Identity and registration numbers</td><td><span class="tag no">Sensitive</span></td><td>BVN, NIN, voter's card, social security — and TIN and RC number, which are marked <em>ordinary</em> per field</td></tr>
+          <tr><td>Loyalty and memberships</td><td><span class="tag on">Ordinary</span></td><td>Airline programmes, hotel status, lounge access</td></tr>
+          <tr><td>Preferences</td><td><span class="tag on">Ordinary</span></td><td>Seat, meal, allergies, room</td></tr>
+          <tr><td>Sizes</td><td><span class="tag on">Ordinary</span></td><td>Suit, shirt, shoe</td></tr>
+          <tr><td>Insurance and emergencies</td><td><span class="tag no">Sensitive</span></td><td>Policy numbers, next of kin, medical</td></tr>
+          <tr><td>Vehicles and addresses</td><td><span class="tag on">Ordinary</span></td><td>Plates, home and office addresses</td></tr>
+          <tr><td>Advisers</td><td><span class="tag no">Sensitive</span></td><td>Lawyer, doctor, banker, accountant</td></tr>
+          <tr><td>Professional</td><td><span class="tag on">Ordinary</span></td><td>Titles, affiliations, bio lines</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Sensitivity is per field, not per category</h3>
+    <p>
+      This is the load-bearing property, and the reason Nigerian identity numbers get their
+      own group. A BVN is a key to somebody's banking and a delegate has no business seeing
+      it. An RC number is printed on the company letterhead and withholding it would be
+      theatre. One generic "National ID" field would have forced a choice between four
+      numbers that are not interchangeable — a bank wants the BVN, a telco the NIN, an
+      invoice the TIN — and a PA is asked for two of them in the same phone call.
+    </p>
+    <p>
+      Adding a field means deciding its sensitivity, once, in the catalogue. Not at each
+      screen that happens to display it.
+    </p>
+
+    <h3>Encryption</h3>
+    <p>
+      AES-256-GCM, with the key held outside the database in <code>ENCRYPTION_KEY</code>.
+      A stolen copy of the data is not a stolen identity — the attacker needs the running
+      server's environment too. GCM rather than CBC because it authenticates as well as
+      encrypts: a tampered ciphertext fails to open rather than decrypting to plausible
+      rubbish. Stored as <code>v1:iv:tag:ciphertext</code>, base64, with the version prefix
+      so a future rotation can tell old rows from new.
+    </p>
+    <div class="why">
+      <b>The bargain, stated plainly</b>
+      Lose the key and the data is gone. There is no recovery path, by design — a recovery
+      path is just a second key, usually a worse-kept one. The key is generated into the
+      deployment's environment and backed up somewhere that is not this application. It never
+      travels through chat or email, including to us.
+    </div>
+    <p class="small dim">
+      With no key set the app runs normally and refuses only the sensitive fields, saying so.
+      Turning the key on later is additive: nothing already stored breaks.
+    </p>
+
+    <h3>Expiry, trip readiness, and the travel block</h3>
+    <p>
+      Fields that expire carry a date and a computed state, warned well before the day.
+      <strong>Trip readiness</strong> answers one question for a given travel date: is
+      anything expired or expiring, and is the principal fit to travel — without ever putting
+      the number itself in the response. The <strong>travel block</strong> assembles what an
+      airline or a border will ask for, in one go, behind a step-up.
+    </p>
+    <p class="small dim">
+      Documents can also be held on behalf of somebody else — a spouse, a child, a member
+      of staff — which is what a family office actually needs and which the plan layer
+      places at Executive.
+    </p>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="leaf" id="stepup">
+  <div class="rail"><b>08</b>Step-up<br><span class="dim">Two-factor</span></div>
+  <div class="col">
+    <h2>Proving it is still you, at the moment you ask for something sensitive</h2>
+    <p>
+      Revealing a passport number used to cost the account password. That defends against a
+      borrowed laptop and against nothing else — because the attacker this vault has to
+      survive is the one who <em>already knows the password</em>. Phished, reused, leaked:
+      they sign in as you, and a gate made of the same password opens on the first try.
+      Re-asking for a secret the intruder already holds is theatre.
+    </p>
+    <p>
+      So where two-factor is enrolled, the second gate asks for the <strong>second
+      factor</strong>. Somebody who has taken the account still cannot read a BVN without the
+      phone in your pocket. Where two-factor is not enrolled there is no second factor to
+      ask for, so the password stands — the gate never gets weaker than it was.
+    </p>
+
+    <h3>Where the code is demanded is the principal's choice</h3>
+    <p>
+      And the default is <em>here</em>, not at sign-in. A code at the front door protects
+      everything but is paid on every login — which is the friction that makes people turn
+      two-factor off, and an account with two-factor off protects nothing at all. Spending it
+      on the vault instead puts the cost where the value is: a stranger with the password
+      reaches a calendar, and still cannot read a passport number. A principal who wants it
+      at both is one switch away.
+    </p>
+
+    <h3>A short grace window</h3>
+    <p>
+      One step-up covers a few minutes of work. Without it, a Chief of Staff at a check-in
+      desk reads a passport, then a visa, then a Known Traveller number, and types three
+      codes from an app that rotates every thirty seconds — so at least one means standing
+      there waiting for the next. Friction that heavy does not make people careful; it makes
+      them turn two-factor off. The window is short, per-session, and every reveal inside it
+      is still logged individually.
+    </p>
+
+    <h3>The rest of the perimeter</h3>
+    <ul>
+      <li><strong>TOTP</strong> to RFC 6238, written out rather than pulled from a package —
+        it is thirty lines of HMAC and base32, and a dependency in the authentication path is
+        a dependency you have to trust forever.</li>
+      <li><strong>Recovery codes</strong>, each usable once.</li>
+      <li><strong>Rate limiting</strong> keyed on both the account being attacked and the
+        address attacking, so neither a single account being hammered nor one source
+        spraying many accounts gets through. In memory, which is honest about its limits: it
+        resets on restart and does not span instances.</li>
+      <li><strong>Sessions</strong> as cookies, with scrypt password hashing.</li>
+      <li><strong>An access log</strong>: every reveal of a sensitive field, recorded.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="leaf" id="trips">
+  <div class="rail"><b>09</b>Trips</div>
+  <div class="col">
+    <h2>A journey as an object, and the two things that follow</h2>
+    <p><strong>First: the principal's day is drawn where they are.</strong></p>
+    <p>
+      Today used to compute the whole day in the timezone on the principal's profile — their
+      home zone, always. A week in London was therefore rendered in Lagos time: "today" began
+      and ended at the wrong moment, a 09:00 meeting showed as 08:00, and the cascade reasoned
+      about gaps against the wrong wall clock. The itinerary row could always express a leg
+      that crosses zones; nothing read those columns, because nothing knew where the principal
+      was on a given date. A trip knows.
+    </p>
+    <p><strong>Second: a leg can say who is meeting the principal.</strong></p>
+    <p>
+      An itinerary item could name exactly one person — the household driver. That is a
+      household relation and by definition exists only at home. Land in London and the
+      arrival transfer has a person-shaped hole. So a leg carries an <em>arrangement</em>:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Arrangement</th><th>Needs a contact</th><th>Why it exists</th></tr></thead>
+        <tbody>
+          <tr><td class="k">own_driver</td><td>No</td><td>Your household driver. Only at home.</td></tr>
+          <tr><td class="k">hired</td><td>Yes</td><td>A car service — needs a booking reference and a dispatcher to call.</td></tr>
+          <tr><td class="k">hotel</td><td>Yes</td><td>Arranged by the hotel. They need the flight number, or nobody comes.</td></tr>
+          <tr><td class="k">host</td><td>Yes</td><td>The office or host at the other end is sending someone.</td></tr>
+          <tr><td class="k">own_way</td><td>No</td><td>A decision, recorded — so nobody is improvising in an arrivals hall.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The journey builder</h3>
+    <p>
+      A trip is built from the screen that shows it. The chain form takes a flight, both
+      cars, the hotel check-out and the transfer, and the armed pickup, in one pass — because
+      that is how an assistant thinks about an arrival, not as five unrelated rows. There is
+      also a single-leg form for everything else.
+    </p>
+    <p class="small dim">
+      Times are entered as wall-clock in the leg's own zone and converted at the boundary.
+      A searchable timezone picker covers every zone the browser knows, ranked so that
+      typing "lon" offers London before Longyearbyen, with aliases for the cities people
+      actually name — Abuja resolves to Africa/Lagos.
+    </p>
+    <p>
+      Trips also carry <strong>travellers</strong> (who else is on this journey) and
+      <strong>contacts</strong> (who to call at the other end).
+    </p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="leaf" id="pickup">
+  <div class="rail"><b>10</b>Meeting a car</div>
+  <div class="col">
+    <h2>Neither side holds up a name</h2>
+    <p>
+      The ordinary way an executive is met at an airport is a stranger holding a placard with
+      their name on it. That board publishes, to everyone in an arrivals hall, that this named
+      person has just landed and is about to get into a car. For a principal in this market
+      that is not an indignity — it is a targeting notice, and the people who read placards
+      for a living are exactly the audience it is worst to have.
+    </p>
+
+    <h3>The phrase</h3>
+    <p>
+      Both sides hold the same short phrase, agreed in advance. The principal knows the car,
+      the plate and the phrase. The driver knows the flight, the meeting point and the
+      phrase. Whoever speaks first, the other answers, and nobody's name is said aloud. It is
+      <strong>per pickup</strong> — a phrase that stayed the same across trips would end up
+      known by every driver a household has ever used, which is a standing credential with a
+      rotation problem.
+    </p>
+
+    <h3>The signal</h3>
+    <p>
+      The phrase solves half an arrivals hall. It only works once two people are already
+      facing each other — and the principal walks out of customs into forty strangers holding
+      forty boards with nothing to look for. So both screens show the same thing at the same
+      second: a plain colour and a plain shape, derived from the card token by HMAC over a
+      rotating window.
+    </p>
+    <p>
+      The driver holds the phone up, screen outward. The principal is looking for orange with
+      a triangle on it, not for their own name in a stranger's hands. It is a name board with
+      the name taken out — which is the only part of a name board that was ever a problem.
+    </p>
+    <p>
+      Once the driver marks that they have been found, the signal <strong>freezes</strong>, so
+      it stays true while the principal walks over rather than rotating out from under them.
+    </p>
+    <p class="small dim">
+      The driver's card lives at <code>/pickup/&lt;token&gt;</code> and needs no account. It
+      shows the flight, the meeting point, the phrase and the signal — and never the
+      principal's name.
+    </p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="leaf" id="visas">
+  <div class="rail"><b>11</b>Visas</div>
+  <div class="col">
+    <h2>The part that can be answered truthfully, and the part that cannot</h2>
+    <p>
+      "Visa requirements" is two questions wearing one name, and they are not equally safe to
+      answer.
+    </p>
+    <ul class="rules">
+      <li><b>Coverage — does the visa I hold cover this trip?</b><span>Deterministic, from
+        facts the principal supplied: a Schengen multi-entry valid to March, a single-entry US
+        visa already used in January, a UK visa that expires four days before the return
+        flight. Nothing has to be looked up, and being wrong in a way that matters is
+        impossible, because the inputs are the principal's own documents.
+        <strong>This is built.</strong></span></li>
+      <li><b>Requirement — does a Nigerian passport need a visa for Kenya?</b><span>Forty
+        thousand nationality-by-destination pairs, revised by governments without notice,
+        where a wrong "no visa needed" strands somebody at a check-in desk with a boarding
+        pass they cannot use. Not guessable and not responsibly scrapeable. It stays a
+        provider adapter, unconfigured, and the screen says so.
+        <strong>This is refused.</strong></span></li>
+    </ul>
+    <p>
+      Coverage returns one of six states, and the useful one is the third:
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>State</th><th>Means</th></tr></thead>
+        <tbody>
+          <tr><td class="k">covers</td><td>Valid for the whole trip, entries remaining.</td></tr>
+          <tr><td class="k">none</td><td>Nothing on file for that country.</td></tr>
+          <tr><td class="k">expired</td><td>Already expired before departure.</td></tr>
+          <tr><td class="k">expires</td><td>Valid on the way out and not on the way back. The failure nobody catches by eye.</td></tr>
+          <tr><td class="k">not_yet</td><td>Valid, but not until after this trip starts.</td></tr>
+          <tr><td class="k">spent</td><td>Entries used up.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Processing-time guidance is included and carries a review date on its face, so nobody
+      relies on a figure that has quietly gone stale.
+    </p>
+    <div class="why">
+      <b>The number is not in this table</b>
+      A visa's identifying number stays in the essentials vault, encrypted and behind a
+      step-up. Coverage records what a visa covers, not what it is.
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="leaf" id="household">
+  <div class="rail"><b>12</b>The household</div>
+  <div class="col">
+    <h2>A driver, a cook, a housekeeper, a nanny</h2>
+    <p>
+      Deliberately <em>not</em> a role on memberships. Access to a PA route is granted on any
+      active membership whatever the role, and five other queries do the same — so a household
+      role added to that table would have handed a cook the approval queue, contacts, briefs
+      and the ordinary tier of the vault at six call sites at once, none of which would have
+      looked wrong in review.
+    </p>
+    <p>
+      A separate table means no existing query can include them by accident. Same reasoning as
+      private spaces: structural, rather than a flag somebody could flip later without noticing
+      what it touched.
+    </p>
+    <p>
+      <code>job_title</code> is free text and carries no access whatever. A driver and a chef
+      see exactly the same thing: what was addressed to them. Instructions go out, replies come
+      back, and an itinerary leg can name a member of staff so the cascade knows who to tell.
+    </p>
+    <p class="small dim">
+      Hiring and dismissing is owner-only — the same kind of act as appointing an assistant,
+      because it decides who is inside the household.
+    </p>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="leaf" id="line">
+  <div class="rail"><b>13</b>The direct line</div>
+  <div class="col">
+    <h2>The room that is already there</h2>
+    <p>
+      Spaces, threads and messages already existed, and a principal <em>could</em> create a
+      space and invite their assistants into it. Nobody does. The message that needs sending —
+      "car's outside", "he's running twenty minutes late", "can you confirm the Thursday
+      dinner" — is worth thirty seconds, not a setup flow, so it ends up on WhatsApp and out
+      of the record entirely.
+    </p>
+    <p>
+      So every principal has exactly one direct line, created the moment they have somebody to
+      talk to, containing them and every active assistant. One room rather than a DM per pair,
+      because that is the actual shape of the work: two assistants covering the same principal
+      need to see each other's traffic, not run parallel private conversations about the same
+      diary.
+    </p>
+    <p>
+      It is an ordinary space and an ordinary thread, so notes, records, acknowledgement and
+      task-from-message all work here for free.
+    </p>
+
+    <h3>Voice</h3>
+    <p>
+      Three decisions carry it, and each is about a recording being <em>more</em> sensitive
+      than the typed message it replaces, not less.
+    </p>
+    <ul>
+      <li><strong>It requires the encryption key</strong> — the same key the vault requires.
+        Without one it says so and refuses. Holding a principal's voice in plaintext because a
+        key was inconvenient to set is the one outcome worth refusing outright.</li>
+      <li><strong>It expires</strong>, thirty days by default. An operational note has a useful
+        life measured in hours, and audio kept past its usefulness is a liability nobody
+        revisits until it leaks.</li>
+      <li><strong>It is capped hard</strong> — two minutes, two megabytes, and only the
+        formats browsers actually produce. A direct line is for "the car is downstairs", not
+        for dictating a memo, and an uncapped audio endpoint is an invitation to fill somebody
+        else's database.</li>
+    </ul>
+    <p class="small dim">
+      The assistant can also dictate typed messages using the browser's own speech
+      recognition, with an explicit statement on screen about where that audio goes.
+    </p>
+
+    <h3>Marking an instruction carried out</h3>
+    <p>
+      A voice note that says "book the Thursday dinner" leaves no trace of having been acted
+      on. So a <em>note</em> can be marked done, by anybody in the room, and un-marked. A
+      <em>record</em> cannot: a record is acknowledged, not carried out — and saying so in the
+      refusal is how the distinction stays learnable.
+    </p>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="leaf" id="spaces">
+  <div class="rail"><b>14</b>Spaces<br><span class="dim">Projects · Tasks</span></div>
+  <div class="col">
+    <h2>Compartments, and two registers of message</h2>
+    <p>
+      A space has a <strong>context</strong>: work, personal, or private. Role sets the opening
+      position rather than a ceiling — assistants are auto-granted work spaces, personal is
+      opt-in because a PA routinely runs household logistics, and private is unreachable for
+      everyone including a Chief of Staff.
+    </p>
+    <p>
+      Every read and write of a space, thread or message goes through one access resolver.
+      There is deliberately no second path, because isolation rules are only worth anything if
+      they cannot be routed around. Two properties matter:
+    </p>
+    <ul>
+      <li>A space you cannot see returns <strong>nothing</strong>, indistinguishable from one
+        that does not exist. The mere existence of a space is information the owner has not
+        shared.</li>
+      <li>A private space <strong>short-circuits before consulting membership at all</strong>,
+        so a stray row from a migration, a bug or a future refactor still cannot open a door
+        that is supposed not to exist.</li>
+    </ul>
+
+    <h3>Notes and records</h3>
+    <p>
+      Two registers in the same thread. A <strong>note</strong> is conversation: editable,
+      deletable, ordinary. A <strong>record</strong> is a commitment — a decision, an approval,
+      a blocker, a sign-off — and is immutable once filed. A note can be
+      <em>promoted</em> to a record, which is the moment a conversation becomes a fact.
+    </p>
+    <p class="pull">
+      That distinction is the reason an office would move off WhatsApp at all.
+    </p>
+
+    <h3>Projects and stages</h3>
+    <p>
+      A project has ordered stages, and a stage's status is <em>stored</em> so an owner can set
+      it by hand and have that stick — but <strong>records override it</strong>. Any open
+      blocker makes a stage blocked; otherwise an accepted sign-off makes it done; otherwise, if
+      it was auto-moved, it returns to active; otherwise it is left alone.
+    </p>
+    <p>
+      A blocker everyone can see while the board still says "active" is exactly the disconnect
+      this product exists to remove. Filing a record is what actually moves the project — which
+      is precisely what makes promoting a note worth doing.
+    </p>
+
+    <h3>Tasks and reminders</h3>
+    <p>
+      A task can be created straight from a message, assigned, given a due date, and closed.
+      Each task and stage carries a reminder stage (<code>null → due_soon → overdue</code>) so a
+      nudge fires exactly once per threshold rather than on every sweep. Changing a due date,
+      reassigning, or reopening clears it, because those genuinely deserve a fresh set.
+    </p>
+    <p class="small dim">
+      How much warning something gets scales with what missing it costs. Reminders go through
+      the same email service as everything else, so with no provider configured they still land
+      in the Outbox and the server log — visible and testable rather than silently dropped.
+    </p>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="leaf" id="pa">
+  <div class="rail"><b>15</b>The desk</div>
+  <div class="col">
+    <h2>What an assistant gets that a principal does not</h2>
+    <p>
+      Assistants land on their own home with a switcher across principals. Everything below is
+      scoped to whichever principal is selected.
+    </p>
+    <div class="grid2">
+      <div class="card"><h4>Approvals</h4><p>Tier 3 and 4 bookings waiting on a decision. Accept, decline, or propose another time.</p></div>
+      <div class="card"><h4>Contacts</h4><p>Contact intelligence: who this person is to the principal, relationship tier, history, and the dates that matter.</p></div>
+      <div class="card"><h4>Relationships</h4><p>Birthdays and anniversaries as a rolling calendar, counted forward from today so nothing is missed by a week.</p></div>
+      <div class="card"><h4>Briefs</h4><p>A pre-meeting brief: who is in the room, what was last agreed, what to raise. Can be pre-filled from what the app already holds.</p></div>
+      <div class="card"><h4>Instructions</h4><p>The principal's standing instructions, written once, readable by whoever is covering.</p></div>
+      <div class="card"><h4>Comms</h4><p>Drafting and sending on the principal's behalf, with every message recorded in the Outbox.</p></div>
+      <div class="card"><h4>AI Assist</h4><p>Plain-language scheduling: "find Adaeze an hour next week". Extracts a contact, a meeting type and a date hint, then filters real open slots.</p></div>
+      <div class="card"><h4>Itinerary</h4><p>The day planner, drafts included — the assistant's working copy, invisible to the principal until proposed.</p></div>
+    </div>
+    <div class="why">
+      <b>AI Assist never books anything</b>
+      It returns candidates. Every one still needs an explicit click from a person. That is the
+      blueprint's rule — the assistant approves every output, never autonomous — and it holds
+      whether the extraction is done by the current pattern parser or by a model call later.
+      The contract does not change.
+    </div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="leaf" id="peers">
+  <div class="rail"><b>16</b>Peers<br><span class="dim">Handles</span></div>
+  <div class="col">
+    <h2>Two assistants, two different executives, one room to book</h2>
+    <p>
+      That negotiation is the single most common conversation in the job, and the app had
+      nowhere to hold it: the two share no principal, no space and no membership, so nothing in
+      the model connected them. It went to WhatsApp, and the confirmation went with it.
+    </p>
+    <p>
+      A <strong>connection</strong> is emphatically not a delegation. It gives neither side any
+      reach into the other's principal, calendar, contacts or team. It is a line of
+      communication and nothing else, which is why it lives in its own table: there is no query
+      anywhere that could mistake one for the other.
+    </p>
+
+    <h3>Handles</h3>
+    <p>
+      A person is <code>@ada</code>, and their booking page happens to live at
+      <code>/book/@ada</code> — not the other way round. Handles are deliberately
+      <strong>not a global directory</strong>. Kairos is built on compartments, and a handle
+      that resolved for anyone would quietly undo that. Look one up that you have no
+      relationship with and you get nothing back, indistinguishable from a typo.
+    </p>
+    <p>
+      A handle resolves when you already support each other, share a space, or have an accepted
+      peer connection. Establishing a new relationship still goes through an invitation, because
+      that is an act and should feel like one. A reserved list keeps the app's own paths and the
+      names people would impersonate off the market.
+    </p>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="leaf" id="notices">
+  <div class="rail"><b>17</b>Notices</div>
+  <div class="col">
+    <h2>Who may write to everyone</h2>
+    <p>
+      Read from the environment, not from a column. There is deliberately no way to grant
+      yourself this from inside the app and nothing in the database to flip — the same reasoning
+      as the encryption key living outside the data it protects.
+    </p>
+    <p>
+      Unset means nobody can post, and the screen says so — to the people who could act on it,
+      and to nobody else. Notices can be addressed to everyone or to assistants only, arrive with
+      an unread badge on the nav rail, and are marked read by opening the page.
+    </p>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="leaf" id="honesty">
+  <div class="rail"><b>18</b>Honesty<br><span class="dim">The capability registry</span></div>
+  <div class="col">
+    <h2>Saying what does not work, in the place it will work</h2>
+    <p>
+      The first version of this put a list at the foot of each screen. That is a footnote, and a
+      footnote is not the same as seeing the feature: it tells somebody a thing is planned without
+      ever showing them where it will live or what it will be called.
+    </p>
+    <p>
+      So each unbuilt capability now stands in the place the working one will occupy, named the way
+      it will be named, and visibly inert. <strong>Pressing it does something</strong> — it opens a
+      line saying it is not ready and what it is waiting on. A control that is merely greyed out and
+      swallows clicks reads as broken, and somebody being shown the product cannot tell a disabled
+      button from a bug.
+    </p>
+    <p>
+      One registry decides all of it, and computes availability from the same environment the
+      feature itself reads. Set the maps key and the travel-time placeholder disappears by itself,
+      because the notice and the feature are asking the same question. There is no screen anywhere
+      that decides for itself whether something works.
+    </p>
+
+    <h3>Two states, said differently</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>State</th><th>Means</th><th>Read by</th></tr></thead>
+        <tbody>
+          <tr><td class="k">soon</td><td>The work is ours — code to write, or a contract to sign.</td><td>A principal, being asked to wait</td></tr>
+          <tr><td class="k">needs_key</td><td>The work is done; this deployment is missing something specific.</td><td>An operator, being handed a task</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      There is also a <code>/coming</code> screen listing every one of them with its screen, its
+      control name and the variable it awaits — plus what <em>is</em> working on this deployment.
+      A capability drops off that page and its placeholder disappears in the same instant, from one
+      fact on the server.
+    </p>
+
+    <h3>The two refusals</h3>
+    <p>
+      Concierge and visa requirement are not backlog. The concierge desk is gated on
+      <em>people</em> — a vetted network who answer at 2am in the city the principal is actually in
+      — so nothing on that screen offers to "connect", because there is no key that turns people on.
+      And the screen has no request box: the obvious placeholder, a form that takes a request and
+      returns a friendly message, would be a lie told to somebody at the exact moment they were
+      relying on us. The one thing it accepts is an expression of interest, which is real, is kept,
+      and says on its face that it reaches Exousia rather than a concierge.
+    </p>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="leaf" id="plans">
+  <div class="rail"><b>19</b>Plans<br><span class="dim">Connectors</span></div>
+  <div class="col">
+    <h2>What a plan includes, and — until launch — what it would have excluded</h2>
+    <p class="small dim">
+      The word "tier" is deliberately not used for this. It already means a meeting type's access
+      tier and a contact's relationship tier; a third meaning would make every conversation about
+      any of them ambiguous. The commercial one is a <strong>plan</strong>.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Plan</th><th>Per month</th><th>Adds</th></tr></thead>
+        <tbody>
+          <tr><td>Free</td><td class="num">₦0</td><td>Your own diary, bookings, essentials at ordinary sensitivity</td></tr>
+          <tr><td>Standard</td><td class="num">₦8,000</td><td>An assistant, the full vault, contacts, tasks, the direct line</td></tr>
+          <tr><td>Plus</td><td class="num">₦15,000</td><td>Spaces and projects, trips, voice notes, travel time, AI Assist, household</td></tr>
+          <tr><td>Executive</td><td class="num">₦25,000</td><td>Briefs, peer connections, documents held for others, the concierge desk</td></tr>
+          <tr><td>Family Office</td><td class="num">₦120,000</td><td>More than one principal</td></tr>
+          <tr><td>Enterprise</td><td class="num">On application</td><td>Single sign-on</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Two rules that are not negotiable</h3>
+    <ul class="rules">
+      <li><b>Entitlement is never access control.</b><span>Whether a delegate may see a BVN is
+        decided by the essentials catalogue and a second factor. Whether the account is on Plus is
+        decided by the plan layer. If those ever merge, a billing bug becomes a data breach, and a
+        lapsed card locks a principal out of their own passport — precisely the thing this product
+        exists not to do.</span></li>
+      <li><b>It fails open.</b><span>A null column, a half-run migration, an unknown plan name: the
+        answer is allow. The failure mode of a strict check is somebody at an airport unable to read
+        their own visa number because a database default did not apply. A month of unpaid Plus costs
+        less than that, every time.</span></li>
+    </ul>
+    <p>
+      And it ships before billing does, switched off. Every account is on <code>founding</code>,
+      which grants Executive. What the layer does meanwhile is record which plan each action
+      <em>would</em> have needed, so the pricing question is answered by evidence when the switch is
+      thrown. Gating applies to creating things, never to reading them.
+    </p>
+
+    <h3>Seventeen connectors, two kinds</h3>
+    <p>
+      A <strong>deployment</strong> connector is configured once by whoever runs Kairos and no
+      principal ever sees a button for it — flight data, object storage, the transcription route.
+      On for everybody or off for everybody. An <strong>account</strong> connector is connected by
+      each principal to their own thing: their Google Calendar, their WhatsApp number, their Zoom.
+      Two states must both be true, and telling them apart is the difference between "we haven't
+      built this" and "you haven't finished setting it up" — very different sentences to read.
+    </p>
+    <p class="small dim">
+      All seventeen are catalogued, placed on a plan, and currently return <em>not implemented</em>.
+      The catalogue exists; the integrations do not. Do not describe them as available.
+    </p>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="leaf" id="ops">
+  <div class="rail"><b>20</b>Running it</div>
+  <div class="col">
+    <h2>What the operator has to know</h2>
+    <p>
+      One web service. In production the server also serves the built client and hands unknown
+      paths back to the app for client-side routing.
+    </p>
+
+    <h3>The server comes up and explains itself</h3>
+    <p>
+      It binds its port immediately and reports readiness, rather than refusing to start until the
+      database answers. The old order made a database problem look like a deploy problem: nothing
+      listened, so the platform showed a successful build followed by a deploy spinning forever with
+      no explanation. Every API route is still held at 503 until the schema is ready — what changed
+      is that the failure is now visible at a URL instead of invisible in a queue. The page itself
+      always loads, because a blank 503 tells a person nothing.
+    </p>
+
+    <h3>The status endpoint</h3>
+    <p>
+      <code>/api/status</code> reports whether storage is durable, whether the database is ready,
+      which backend is in use, the named target (never the password — it is public), and whether
+      email delivery is configured.
+    </p>
+
+    <h3>Storage is the one that bites</h3>
+    <p>
+      A hosted web instance has an ephemeral filesystem. A local database file there is wiped on
+      every restart, taking every account with it — which arrives at the login screen as "incorrect
+      email or password" and looks nothing like a storage problem. Setting a Postgres connection
+      string switches backends and the data survives. Until it is set the app still runs, and the
+      login screen says so after a failed sign-in rather than blaming your password.
+    </p>
+
+    <h3>Environment, in plain terms</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Setting</th><th>What it turns on</th></tr></thead>
+        <tbody>
+          <tr><td class="k">DATABASE_URL</td><td>Durable storage. The single most important one.</td></tr>
+          <tr><td class="k">DATABASE_SCHEMA</td><td>Keeps Kairos in its own schema when sharing a database with another app.</td></tr>
+          <tr><td class="k">ENCRYPTION_KEY</td><td>Sensitive fields, two-factor, voice notes. 32 bytes. No recovery path.</td></tr>
+          <tr><td class="k">ANNOUNCEMENT_AUTHORS</td><td>Who may publish notices. Unset means nobody.</td></tr>
+          <tr><td class="k">Email provider key</td><td>Real delivery. Without it every message still lands in the Outbox.</td></tr>
+          <tr><td class="k">MAPS_API_KEY</td><td>Travel time with live traffic.</td></tr>
+          <tr><td class="k">DEFAULT_PLAN · PLAN_ENFORCEMENT</td><td>Which plan new accounts get, and whether plans are enforced at all.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="why">
+      <b>How credentials travel</b>
+      Connection strings, provider keys and the encryption key go from the provider or the generator
+      <em>straight into the deployment's environment</em>. Never through chat, never through email,
+      never into a document — including to us. The key card in the app says exactly this, and it is
+      not a formality.
+    </div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="leaf" id="outstanding">
+  <div class="rail"><b>21</b>Outstanding</div>
+  <div class="col">
+    <h2>What is not built, and why not</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Thing</th><th>Why it is not done</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Live flight status</td><td>Needs a flight-data contract. The delay cascade is already shaped to consume it.</td><td><span class="tag soon">Contract</span></td></tr>
+          <tr><td>Forward a confirmation</td><td>Needs an inbound mail domain and a parser for airline and hotel mail.</td><td><span class="tag soon">Build</span></td></tr>
+          <tr><td>Attach a scan</td><td>Needs object storage. The passport page itself, encrypted, when the number alone is not enough.</td><td><span class="tag soon">Build</span></td></tr>
+          <tr><td>Transcribe a voice note</td><td>Needs a route that does not hand the audio to a third party. When it lands, the text becomes the durable artifact and the thirty-day expiry stops costing anything.</td><td><span class="tag soon">Build</span></td></tr>
+          <tr><td>Whether a visa is required</td><td>Refused until there is a maintained ruleset. A wrong "no" strands somebody.</td><td><span class="tag no">Refused</span></td></tr>
+          <tr><td>The concierge desk</td><td>Contracted, vetted people. There is no key that turns this on.</td><td><span class="tag no">People</span></td></tr>
+          <tr><td>Calendar sync, WhatsApp, Zoom, Teams, SMS, and the rest</td><td>Catalogued and placed on plans; every one currently returns not-implemented.</td><td><span class="tag soon">Credential</span></td></tr>
+          <tr><td>Billing</td><td>The plan layer exists and is switched off. There is no payment integration.</td><td><span class="tag soon">Build</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Known operational limits</h3>
+    <ul>
+      <li>Rate limiting is in memory: it resets on restart and does not span instances. Adequate for
+        one instance; it needs a shared store before running several.</li>
+      <li>Free hosted Postgres has no backups. Fine while evaluating; move to a paid instance before
+        this holds a real principal's calendar and contacts.</li>
+      <li>The app has not been through an external security review.</li>
+      <li>No principal is paying yet. Every claim about behaviour in this handbook is a claim about
+        the software, not about usage.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="leaf" id="rules">
+  <div class="rail"><b>22</b>The rules</div>
+  <div class="col">
+    <h2>Things we do not do, whatever the reason looks like</h2>
+    <ol>
+      <li><strong>Never claim a feature works when it does not.</strong> Not in a demo, not in a
+        deck, not in a screen. This is also our best sales line.</li>
+      <li><strong>404, not 403,</strong> for anything whose existence is itself private.</li>
+      <li><strong>Prefer structural to conditional.</strong> If a door can be made not to exist,
+        make it not exist rather than locking it.</li>
+      <li><strong>Never move an anchor.</strong> Not to make a schedule work, not to avoid an
+        awkward message.</li>
+      <li><strong>Never send on somebody's behalf automatically.</strong> Draft it; a person sends
+        it.</li>
+      <li><strong>Never guess an answer somebody will act on at a border.</strong> Say we do not
+        know.</li>
+      <li><strong>Entitlement never gates reading.</strong> Money problems must not become access
+        problems.</li>
+      <li><strong>Credentials never travel through a conversation.</strong> Including with us.</li>
+      <li><strong>A record is immutable.</strong> If that becomes inconvenient, the answer is a new
+        record, not an edit.</li>
+      <li><strong>Sensitivity is decided once, in the catalogue.</strong> Never at the screen.</li>
+    </ol>
+    <p class="pull">
+      We would rather ship less and be believed about all of it.
+    </p>
+  </div>
+</section>
+
+<div class="end">
+  The Kairos Handbook · Exousia Prime Emporium Ltd · 19 August 2026<br>
+  Companion documents: the orientation deck, and the developer handover
+</div>
+
+</div>

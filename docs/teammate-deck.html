@@ -1,0 +1,470 @@
+<title>Inside Kairos</title>
+
+<style>
+:root {
+  --ground: #F6F4EE; --sheet: #FFFDF8; --ink: #191D22; --muted: #6A6558;
+  --rule: #DFDACD; --accent: #3E6357; --warn: #8A6A24; --stop: #A63F34;
+  --accent-wash: rgba(62, 99, 87, 0.09);
+  --warn-wash: rgba(138, 106, 36, 0.11);
+  --stop-wash: rgba(166, 63, 52, 0.10);
+  --shadow: 0 1px 2px rgba(25, 29, 34, 0.05);
+  --book: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --machine: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+    --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+    --accent-wash: rgba(123, 170, 152, 0.13);
+    --warn-wash: rgba(199, 164, 92, 0.14);
+    --stop-wash: rgba(217, 121, 107, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14171A; --sheet: #1B1F23; --ink: #ECE9E0; --muted: #98938A;
+  --rule: #2E343A; --accent: #7BAA98; --warn: #C7A45C; --stop: #D9796B;
+  --accent-wash: rgba(123, 170, 152, 0.13);
+  --warn-wash: rgba(199, 164, 92, 0.14);
+  --stop-wash: rgba(217, 121, 107, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font-family: var(--book); font-size: 17px; line-height: 1.62;
+  margin: 0; padding: 0 24px 120px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+
+.leaf {
+  display: grid; grid-template-columns: 148px minmax(0, 1fr);
+  gap: 0 40px; padding: 52px 0; border-top: 1px solid var(--rule); align-items: start;
+}
+.leaf:first-of-type { border-top: none; }
+.rail {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted); line-height: 1.5;
+  padding-top: 8px; position: sticky; top: 24px;
+}
+.rail b { display: block; color: var(--accent); font-weight: 400; }
+.col { max-width: 62ch; }
+.col.wide { max-width: none; }
+
+@media (max-width: 820px) {
+  .leaf { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 38px 0; }
+  .rail { position: static; padding-top: 0; }
+  .rail b { display: inline; }
+  body { font-size: 16px; padding: 0 18px 90px; }
+}
+
+h1, h2, h3 { text-wrap: balance; font-weight: 400; margin: 0; }
+h1 { font-size: clamp(2.3rem, 6vw, 3.4rem); line-height: 1.08; letter-spacing: -0.015em; }
+h2 { font-size: clamp(1.45rem, 3.2vw, 1.95rem); line-height: 1.18; margin-bottom: 14px; }
+h3 { font-size: 1.14rem; margin: 28px 0 8px; }
+p { margin: 0 0 16px; }
+p.lead { font-size: 1.22rem; line-height: 1.5; }
+.dim { color: var(--muted); }
+.eyebrow {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 10px;
+}
+.pull {
+  font-size: clamp(1.3rem, 2.8vw, 1.65rem); line-height: 1.34;
+  border-left: 2px solid var(--accent); padding-left: 22px; margin: 26px 0;
+}
+ul, ol { margin: 0 0 16px; padding-left: 22px; }
+li { margin-bottom: 9px; }
+code {
+  font-family: var(--machine); font-size: 0.86em;
+  background: var(--accent-wash); padding: 1px 5px; border-radius: 2px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.title-leaf { padding: 84px 0 60px; }
+.title-leaf .col { max-width: 22ch; }
+.stamp {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin-top: 28px; line-height: 2;
+}
+
+.card {
+  background: var(--sheet); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 18px 20px; box-shadow: var(--shadow);
+}
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 22px 0; }
+.card h3 { margin: 0 0 6px; font-size: 1.04rem; }
+.card p { margin: 0; font-size: 0.95rem; color: var(--muted); }
+
+.tablewrap { overflow-x: auto; margin: 20px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font-family: var(--machine); font-size: 10.5px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); font-weight: 400; white-space: nowrap;
+}
+td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.tag {
+  font-family: var(--machine); font-size: 9.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 2px;
+  white-space: nowrap; display: inline-block; vertical-align: 1px;
+}
+.tag.on { background: var(--accent-wash); color: var(--accent); }
+.tag.soon { background: var(--warn-wash); color: var(--warn); }
+.tag.no { background: var(--stop-wash); color: var(--stop); }
+
+/* the day, as a static figure */
+.day { border-top: 1px solid var(--rule); margin: 18px 0 6px; }
+.row {
+  display: grid; grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: 0 18px; padding: 10px 0; border-bottom: 1px solid var(--rule); align-items: baseline;
+}
+.row .when {
+  font-family: var(--machine); font-size: 12.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.row .when s { color: var(--muted); }
+.row .what { font-size: 0.99rem; }
+.row .what .sub { display: block; font-size: 0.85rem; color: var(--muted); }
+.row.is-shift .when b { color: var(--warn); font-weight: 400; }
+.row.is-break { background: var(--stop-wash); }
+.row.is-break .when b { color: var(--stop); font-weight: 400; }
+@media (max-width: 560px) { .row { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+.rules { list-style: none; padding: 0; margin: 22px 0; }
+.rules li {
+  border-left: 2px solid var(--rule); padding: 0 0 0 18px; margin-bottom: 18px;
+}
+.rules li b { display: block; font-weight: 400; font-size: 1.08rem; }
+.rules li span { color: var(--muted); font-size: 0.96rem; }
+
+.end {
+  font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); text-align: center;
+  padding: 56px 0 0; border-top: 1px solid var(--rule); line-height: 2;
+}
+</style>
+
+<div class="wrap">
+
+  <section class="leaf title-leaf">
+    <div class="rail"><b>Kairos</b>by Exousia<br>Orientation</div>
+    <div class="col">
+      <span class="eyebrow">For everyone joining Exousia Prime Emporium</span>
+      <h1>What we are building, and what we refuse to build</h1>
+      <p class="lead dim" style="margin-top:22px;">
+        Half an hour, start to finish. When you want the whole thing — every screen, every
+        decision, and the reasoning behind it — read the founder handbook instead. This is
+        the part everybody needs.
+      </p>
+      <div class="stamp">19 August 2026 · pre-launch, in build</div>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>01</b>The company</div>
+    <div class="col">
+      <h2>Exousia builds the software an executive assistant would build</h2>
+      <p>
+        Kairos is a scheduling and custody platform for principals — executives, high-net-worth
+        individuals, family offices — and for the people who run their days: PAs, EAs and Chiefs
+        of Staff. Lagos and London. Nigerian company, global problem.
+      </p>
+      <p>
+        The name is deliberate. <em>Chronos</em> is clock time, the thing every calendar already
+        stores. <em>Kairos</em> is the right moment — which is what an assistant is actually
+        protecting when they move a meeting.
+      </p>
+      <p class="pull">
+        We are not building a prettier calendar. We are building the part the assistant
+        currently holds in their head.
+      </p>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>02</b>The idea</div>
+    <div class="col wide">
+      <h2>A day is a chain, not a list</h2>
+      <p style="max-width:62ch;">
+        Every calendar stores appointments as independent rows. Move one, and one moves.
+        But an 11:00 only works because the 10:00 ends at 10:45 and the car takes twenty
+        minutes — so when the 10:00 overruns, an assistant runs a chain in their head that
+        no software has ever run for them.
+      </p>
+      <p style="max-width:62ch;">
+        Here is a Thursday in Lagos where the board pre-read overruns by two hours. This is
+        what Kairos shows, before anything is changed:
+      </p>
+
+      <div class="day">
+        <div class="row">
+          <span class="when"><s>09:30–10:15</s> <b>09:30–12:15</b></span>
+          <span class="what">Board pre-read<span class="sub">Overran by 120 min</span></span>
+          <span class="tag on">The cause</span>
+        </div>
+        <div class="row is-shift">
+          <span class="when"><s>10:30–11:15</s> <b>12:15–13:00</b></span>
+          <span class="what">Call with counsel<span class="sub">Adaeze Okafor is expecting you</span></span>
+          <span class="tag soon">Moves 105 min</span>
+        </div>
+        <div class="row is-shift">
+          <span class="when"><s>12:15–13:30</s> <b>13:30–14:45</b></span>
+          <span class="what">Lunch, Eko Hotel<span class="sub">Allowing 30 min to get there</span></span>
+          <span class="tag soon">Moves 75 min</span>
+        </div>
+        <div class="row is-shift">
+          <span class="when"><s>14:15–16:45</s> <b>15:00–17:30</b></span>
+          <span class="what">Car to the airport<span class="sub">Emeka is driving</span></span>
+          <span class="tag soon">Moves 45 min</span>
+        </div>
+        <div class="row is-break">
+          <span class="when"><b>17:10</b></span>
+          <span class="what">BA75 to London<span class="sub">You would reach it 20 min after it leaves</span></span>
+          <span class="tag no">Missed</span>
+        </div>
+      </div>
+
+      <p style="max-width:62ch; margin-top:22px;">
+        Two rules produce all of that, and they are the whole engine:
+      </p>
+      <ul class="rules" style="max-width:62ch;">
+        <li>
+          <b>A gap absorbs.</b>
+          <span>If the next thing does not start for an hour, a twenty-minute overrun changes
+          nothing and the ripple stops there. A system that shunts the whole afternoon
+          regardless is worse than useless — it cries wolf, and people stop reading it.</span>
+        </li>
+        <li>
+          <b>An anchor does not move.</b>
+          <span>A flight departs when it departs. Kairos will not quietly re-time one to make
+          the arithmetic work. The most expensive thing this product could ever do is let
+          somebody believe a plane will wait.</span>
+        </li>
+      </ul>
+      <p style="max-width:62ch;">
+        And the output is not <em>three things moved</em>. It is who has to be told —
+        the driver once, however many of his legs changed, and the external attendee
+        flagged for a human to message, never messaged automatically, because the wording
+        of <em>we are running late</em> is a judgement call.
+      </p>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>03</b>The second half</div>
+    <div class="col">
+      <h2>The other thing an assistant holds is a passport number</h2>
+      <p>
+        Half the job has nothing to do with time. An airline wants a passport number and
+        the name exactly as printed. A visa form wants a BVN. A bank wants a BVN, a telco
+        wants a NIN, an invoice wants a TIN — three different numbers, asked for by name,
+        often in the same phone call.
+      </p>
+      <p>
+        Kairos calls these <strong>essentials</strong>, and treats each one as an
+        <em>answer</em> rather than a document: a field with a copy button, an expiry date,
+        and a sensitivity. Everything is encrypted with a key that lives outside the
+        database, and revealing a sensitive field asks for a second factor — not the
+        account password, because the attacker who matters already has that.
+      </p>
+      <p>
+        The load-bearing idea is <strong>sensitivity per field</strong>. A delegate engaged
+        for scheduling can see a nut allergy and a dietary note. They cannot see a BVN.
+        That is decided once, in the catalogue, rather than at every screen that happens
+        to show a field.
+      </p>
+      <p class="dim" style="font-size:0.96rem;">
+        This is also the commercial answer to <em>why would they not just switch back</em>.
+        A calendar is switched in an afternoon. Custody of the numbers an institution asks
+        for by name is not.
+      </p>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>04</b>How we decide</div>
+    <div class="col">
+      <h2>Six principles, and they have teeth</h2>
+      <p>
+        These are not values on a wall. Each one has changed something in the product, and
+        each one will be quoted at you in review.
+      </p>
+      <ul class="rules">
+        <li><b>404, not 403.</b><span>Ask for a space you cannot see and the answer is
+        <em>no such thing</em>, not <em>not allowed</em>. Refusing tells you it is there,
+        and the existence of a private space is itself information the owner did not share.</span></li>
+
+        <li><b>Absent, not refused.</b><span>Where we can make a door structurally
+        impossible rather than merely locked, we do. Private spaces have no members by
+        construction. Household staff live in their own table so no existing query can
+        include a driver by accident.</span></li>
+
+        <li><b>Never pretend.</b><span>A feature that does not work says so, by name, in the
+        place it will live. No greyed-out buttons that swallow clicks, no request box with
+        nobody behind it. If we would have to guess, we say we do not know.</span></li>
+
+        <li><b>Entitlement is never access control.</b><span>What plan an account is on and
+        what a person may read are answered in different places, on purpose. If they ever
+        merge, a billing bug becomes a data breach.</span></li>
+
+        <li><b>Fail open on money, fail closed on data.</b><span>An unpaid month must never
+        stop a principal reading their own passport number at an airport. A missing
+        permission must always stop somebody reading someone else's.</span></li>
+
+        <li><b>The record is the product.</b><span>Notes are conversation and can be edited.
+        Records are commitments and cannot. That distinction is why an office would move
+        off WhatsApp at all.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>05</b>The product<br>Today</div>
+    <div class="col">
+      <h2>What works right now</h2>
+      <p>
+        You can sign up today and do all of this. Nothing in this list is a mock-up.
+      </p>
+      <div class="grid2">
+        <div class="card"><h3>The day</h3><p>Today, itinerary, the delay cascade, travel time
+          with live traffic, anchors, and one screen that answers <em>what needs me</em>.</p></div>
+        <div class="card"><h3>Booking</h3><p>Weekly availability, meeting types with four
+          access tiers, a public booking page, reschedule and cancel, correct timezones
+          throughout.</p></div>
+        <div class="card"><h3>The team</h3><p>PA, EA, Chief of Staff and delegate. An approval
+          queue for the sensitive tiers. Pairing codes so an assistant can be brought on by
+          phone, without email.</p></div>
+        <div class="card"><h3>Essentials</h3><p>The encrypted vault, sensitivity per field,
+          expiry warnings, trip readiness, and two-factor step-up before anything sensitive
+          is revealed.</p></div>
+        <div class="card"><h3>Trips</h3><p>A journey as an object: per-leg timezones, the
+          flight chain, hotel, transfers, travellers, visa coverage, and the arrivals-hall
+          signal instead of a name board.</p></div>
+        <div class="card"><h3>The direct line</h3><p>One room per principal with every active
+          assistant in it. Typed or spoken. Notes, records, acknowledgement, and marking an
+          instruction carried out.</p></div>
+        <div class="card"><h3>Spaces and projects</h3><p>Work, personal and private
+          compartments. Stages driven by records — an open blocker moves the board, not a
+          status dropdown.</p></div>
+        <div class="card"><h3>Household and peers</h3><p>Drivers, cooks and housekeepers with
+          no reach into anything else. Connections between two assistants at two different
+          offices.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>06</b>The product<br>Not yet</div>
+    <div class="col">
+      <h2>What is named in the app and does not work</h2>
+      <p>
+        Every one of these is visible in the product, in the place its working control will
+        occupy, and says so when pressed. There is also a <code>/coming</code> screen listing
+        all of them. Read it before any demo — a teammate who cannot tell built from unbuilt
+        will eventually promise one as the other.
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Capability</th><th>What it is waiting on</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Live flight status</td><td>A flight-data contract</td><td><span class="tag soon">Credential</span></td></tr>
+            <tr><td>Forward a confirmation</td><td>An inbound mail domain, and the parser</td><td><span class="tag soon">Build</span></td></tr>
+            <tr><td>Attach a scan</td><td>Object storage</td><td><span class="tag soon">Build</span></td></tr>
+            <tr><td>Transcribe a voice note</td><td>A route that does not hand audio to a third party</td><td><span class="tag soon">Build</span></td></tr>
+            <tr><td>Whether a visa is required</td><td>A maintained ruleset — we will not guess</td><td><span class="tag no">Refused</span></td></tr>
+            <tr><td>The concierge desk</td><td>Contracted, vetted people. Not a setting.</td><td><span class="tag no">People</span></td></tr>
+            <tr><td>Calendar, WhatsApp, Zoom, SMS, and 13 more</td><td>Provider credentials</td><td><span class="tag soon">Credential</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The last two rows are the ones to understand properly. They are not backlog; they are
+        <em>refusals</em>. We will not answer <em>does a Nigerian passport need a visa for
+        Kenya</em> from a guess, because a wrong <em>no</em> strands somebody at a check-in
+        desk with a boarding pass they cannot use. And a concierge request box with nobody
+        behind it would be a lie told at the exact moment somebody was relying on us.
+      </p>
+      <p class="dim" style="font-size:0.96rem;">
+        Say both of those out loud when you demo. They land better than anything on the
+        built list.
+      </p>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>07</b>Commercial</div>
+    <div class="col">
+      <h2>Six plans, built and switched off</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Plan</th><th>Per month</th><th>What it opens</th></tr></thead>
+          <tbody>
+            <tr><td>Free</td><td class="num">₦0</td><td>One principal, your own diary, bookings, essentials at ordinary sensitivity</td></tr>
+            <tr><td>Standard</td><td class="num">₦8,000</td><td>An assistant, contacts, tasks, the direct line, the full vault</td></tr>
+            <tr><td>Plus</td><td class="num">₦15,000</td><td>Trips, travel time, spaces and projects, voice notes, household, AI Assist</td></tr>
+            <tr><td>Executive</td><td class="num">₦25,000</td><td>Briefs, peer connections, documents held for others, the concierge desk</td></tr>
+            <tr><td>Family Office</td><td class="num">₦120,000</td><td>More than one principal on one account</td></tr>
+            <tr><td>Enterprise</td><td class="num">On application</td><td>Single sign-on, per-seat terms</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Every account today is on <code>founding</code>, which grants Executive. Nothing is
+        withheld from anybody before launch. What the plan layer does in the meantime is
+        <em>record</em> which plan each action would have needed, so when we switch it on we
+        are pricing from evidence rather than from opinion.
+      </p>
+      <p class="dim" style="font-size:0.96rem;">
+        If you are talking to an early user: they keep Executive-level access permanently.
+        That is what <code>founding</code> is for, and it is a promise, not a bug.
+      </p>
+    </div>
+  </section>
+
+  <section class="leaf">
+    <div class="rail"><b>08</b>Where you fit</div>
+    <div class="col">
+      <h2>Your first week</h2>
+      <ol>
+        <li><strong>Use it as a principal.</strong> Sign up, set your hours, make a meeting
+          type, book yourself from an incognito window. An hour.</li>
+        <li><strong>Use it as an assistant.</strong> Have someone invite you, or join with a
+          pairing code. Notice how different the two home screens are — that is deliberate,
+          and it is the thing competitors get wrong.</li>
+        <li><strong>Break a day.</strong> Build a Thursday with a flight at the end, then
+          overrun the first thing by two hours. Watch the anchor refuse.</li>
+        <li><strong>Read <code>/coming</code>.</strong> Learn the seven unbuilt things by
+          name before you ever describe the product to anyone outside.</li>
+        <li><strong>Then read the founder handbook.</strong> Everything above in full, with
+          the reasoning. If you are writing code, read the developer handover as well.</li>
+      </ol>
+
+      <h3>How to talk about Kairos outside</h3>
+      <ul>
+        <li>Never say a thing works when it does not. This is the one rule with no
+          exceptions, and it is also our best sales line.</li>
+        <li>Lead with the chain, not the feature list. The demo that lands is a day
+          breaking, not a screenshot tour.</li>
+        <li>Do not promise dates for anything on the not-yet list. Three of those depend on
+          a contract nobody has signed.</li>
+        <li>Credentials — connection strings, API keys, the encryption key — never travel
+          through chat, email, or a document. They go from the provider straight into the
+          deployment's environment. This includes talking to us.</li>
+      </ul>
+
+      <p class="pull">
+        We would rather ship less and be believed about all of it.
+      </p>
+    </div>
+  </section>
+
+  <div class="end">
+    Kairos by Exousia · Orientation · 19 August 2026<br>
+    Next: the founder handbook, then the developer handover
+  </div>
+
+</div>

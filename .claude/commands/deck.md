@@ -1,14 +1,29 @@
 ---
-description: Build the Kairos presentation decks — investor, design partner, or teammate
-argument-hint: "[investor|partner|team|all]"
+description: Build the Kairos presentation decks — investor, design partner, teammate, or developer
+argument-hint: "[investor|partner|team|dev|all]"
 ---
 
 # Build the Kairos deck
 
-Locked 13 August 2026. Do not build these until the owner asks — they are for
-**when the build is complete and Exousia is ready to engage**, not before.
+Unlocked 19 August 2026 — the owner asked, and four documents now exist. These
+are the live URLs; **update them, do not publish rivals**:
 
-Audience requested: **$ARGUMENTS** (if empty, ask which of the three, or `all`).
+| Audience | Document | URL |
+|---|---|---|
+| `investor` | The Chain, Not the List | https://claude.ai/code/artifact/1509661e-993b-42a4-9e09-722b85b29ace |
+| `team` | Inside Kairos | https://claude.ai/code/artifact/6cb74d4c-e5a6-436d-bdef-69d600301235 |
+| `team` (full) | The Kairos Handbook | https://claude.ai/code/artifact/45ab7cab-e109-4e3c-bc52-4bc84c34f38a |
+| `dev` | Building on Kairos | https://claude.ai/code/artifact/44f381d3-c702-4b62-9136-9fe9c3ea0bff |
+
+Each is also committed at `docs/investor-deck.html`, `docs/teammate-deck.html`,
+`docs/founder-handbook.html` and `docs/developer-handover.html` — edit the file
+in the repo, then republish it to the URL above so the two never diverge.
+
+`partner` has not been built. `team` deliberately split in two: a half-hour
+orientation everybody reads, and the handbook behind it for anyone who needs the
+whole thing.
+
+Audience requested: **$ARGUMENTS** (if empty, ask which, or `all`).
 
 ---
 
@@ -25,13 +40,23 @@ Audience requested: **$ARGUMENTS** (if empty, ask which of the three, or `all`).
 3. **Re-run the suites** and state the real result. If something is red, the
    deck does not claim it is green.
 
-Facts as of the lock (recount them, do not reuse): 144 endpoints · 33 tables ·
-47 screens · 19 suites · ~15.4k lines.
+Facts as of 19 August 2026 (recount them, do not reuse): 183 endpoints across 30
+routers · 42 tables · 31 client routes · 51 suites · ~23k lines · 17 connectors,
+all of them still returning not-implemented.
 
-## The three decks
+Test status on that date, stated the way the documents state it: 46 of 51 passed
+in a back-to-back run. `bnoticeui`, `bflow` and `btitle` pass individually and
+fail under shared rate-limit state; `bfail` needs a local Postgres; `bcustody`
+claims a fixed handle and so passes only once against a fresh database. Recount
+and re-run before writing any status claim, and never write "green" while
+`bcustody` is not.
 
-All three share the design system and the live cascade demo. What changes is
-what leads, what gets cut, and what gets added.
+## The four decks
+
+All share the design system. The live cascade demo belongs to `investor`; the
+others carry it as a static figure, because a slider is a distraction in a
+document somebody is reading for reference. What changes is what leads, what
+gets cut, and what gets added.
 
 ### `investor`
 **Leads with the wedge.** The chain-not-a-list observation, then the live
@@ -56,15 +81,29 @@ State clearly what is *not* built yet, since they will hit it in week one.
 reads as pitching.
 
 ### `team`
-For someone joining or already building.
+For anyone joining Exousia, in any role — not only engineers.
+**Leads with the company, then the chain.** What we are building, the two rules
+of the cascade shown on a broken day, custody as the second half, the six
+principles, what works today and what does not, and a first week.
+**Add:** how to talk about Kairos outside, including the rule that nothing is
+described as working when it is not, and that credentials never travel through
+a conversation.
+**Cut:** architecture and market. Both live elsewhere.
+
+Behind it sits **The Kairos Handbook** — the same ground in full, section by
+section, with the reasoning that produced each decision. Twenty-two sections
+with their own contents rail. Update this whenever a subsystem changes; it is
+the document that goes stale first.
+
+### `dev`
+For someone about to change the codebase.
 **Leads with the architecture.** The dual-backend interface, listen-first
-startup, additive migrations, the two-register messaging model, and the access
-model as a set of invariants to preserve.
-**Add:** a map of the codebase — `lib/` by responsibility, where the load-
-bearing decisions live (`cascade.js`, `spaceAccess.js`, `household.js`,
-`db.js`), the migration discipline (columns and their indexes go in
-`lib/db.js` after `ensureColumn`, never in `schema.sql`), and how to run the
-suites against all four database configurations.
+startup, additive migrations, the four separate access systems, and a list of
+invariants each tied to the suite that enforces it.
+**Add:** a map of `lib/` by responsibility, the four database configurations and
+why the fourth is the one people skip, the real current test status with every
+failure accounted for, the outstanding work written as tasks with what already
+exists, and the traps already fallen into.
 **Cut:** the pitch. Keep the *why* behind each invariant, because that is what
 stops someone undoing one by accident.
 
@@ -93,12 +132,27 @@ Grounded in the app's own palette so the deck and the product agree.
 
 ## The live cascade demo
 
-Reuse it in all three. It is the strongest thing in the deck: a slider over a
-five-item day, running the same two rules as `app/server/lib/cascade.js` — a
-gap absorbs and stops the ripple, an anchor never moves and reports how late
-you would be. The arc is deliberate: at 20 min almost nothing, at 45 and 90 a
-gap swallows it, and only at 120 does the flight break. Keep that arc; it
-teaches both rules without a word of explanation.
+It is the strongest thing in the investor deck: a slider over a five-item day,
+running the same two rules as `app/server/lib/cascade.js` — a gap absorbs and
+stops the ripple, an anchor never moves and reports how late you would be.
+
+The day, and the arc it produces, are already tuned. Keep both:
+
+    09:30–10:15  Board pre-read          travel  0   ← the delayed one
+    10:30–11:15  Call with counsel       travel  0   external attendee
+    12:15–13:30  Lunch, Eko Hotel        travel 30
+    14:15–16:45  Car to the airport      travel 15   household driver
+    17:10        BA75 to London          ANCHOR
+
+     20 min → one leg moves, nothing else changes
+     45 min → one leg moves, the lunch gap absorbs the rest
+     90 min → three legs move, the flight is made with 10 min to spare
+    120 min → the flight is missed by 20 min, and says so
+
+Twenty and forty-five teach that a gap absorbs; ninety teaches that the ripple
+travels and still stops; a hundred and twenty teaches the anchor. Do not report
+"minutes to spare" unless the ripple actually reached the car — otherwise the
+number is about the middle of the afternoon and the sentence says "flight".
 
 If `cascade.js` has changed, re-derive the demo from it so the page cannot
 drift from the product.
@@ -109,9 +163,14 @@ drift from the product.
 - Verify in a real browser at desktop and mobile widths, in **both** themes,
   with zero console errors and no horizontal overflow, before publishing.
 - Publish each deck to its **own** artifact URL; do not overwrite another
-  audience's deck.
+  audience's deck. The four that exist are listed at the top of this file —
+  republish those paths rather than creating rivals.
+- Keep the repo copy in `docs/` and the published artifact identical.
 - Title is a name, not a caption. `Kairos by Exousia` is taken by the
   prototype — give each deck its own specific name.
+- `checkdecks.js` in the scratchpad drives all four through Chromium in both
+  themes at both widths and asserts the demo arc. Rewrite it if it is gone;
+  publishing without it has no way of catching a theme that never resolves.
 
 ## Reference
 
