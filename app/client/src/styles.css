@@ -1407,3 +1407,39 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   background: var(--warn-soft); color: var(--warn);
 }
 .connector-needs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* --- Not available yet, said in one voice ------------------------------ */
+/* See server/lib/capabilities.js: a screen never decides this for itself, so
+   a notice disappears exactly when the thing behind it starts working. */
+
+.notyet {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
+  background: var(--warn-soft); color: var(--warn); white-space: nowrap;
+}
+.notyet.is-key { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+.notyet-needs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: none; letter-spacing: 0; font-weight: 400; opacity: 0.8;
+}
+
+/* At the foot of a screen, never the top: somebody came here to use what
+   works, and a page that opens with an apology buries it. */
+.notyet-panel {
+  margin-top: 28px; padding-top: 16px; border-top: 1px dashed var(--border);
+}
+.notyet-panel h3 {
+  margin: 0 0 10px; font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted);
+}
+.notyet-panel ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.notyet-panel li { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.notyet-label { font-weight: 600; font-size: 0.92rem; }
+.notyet-what { color: var(--text-muted); font-size: 0.85rem; flex: 1 1 260px; }
+
+.travel-note {
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 0.85rem; color: var(--text-muted);
+}
+.travel-note strong { color: var(--text); }

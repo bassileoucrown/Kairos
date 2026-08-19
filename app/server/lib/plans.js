@@ -69,6 +69,7 @@ const FEATURES = {
   spaces: { plan: 'plus', label: 'Spaces and projects' },
   trips: { plan: 'plus', label: 'Trips' },
   voice_notes: { plan: 'plus', label: 'Voice notes' },
+  travel_time: { plan: 'plus', label: 'Travel time with live traffic' },
   ai_assist: { plan: 'plus', label: 'AI Assist' },
   household: { plan: 'plus', label: 'Household staff' },
   briefs: { plan: 'executive', label: 'Brief builder' },

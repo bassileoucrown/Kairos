@@ -46,6 +46,8 @@ function StalePill({ essential }) {
   return <span className="pill is-off">Unconfirmed for {Math.floor(days / 365)}y</span>;
 }
 
+import NotYet from '../../components/NotYet.jsx';
+
 export default function EssentialsTab({ ownerId }) {
   const [data, setData] = useState(null);
   const [catalogue, setCatalogue] = useState([]);
@@ -294,6 +296,8 @@ export default function EssentialsTab({ ownerId }) {
           Your remit here covers scheduling, so identity details are not shown.
         </p>
       )}
+
+      <NotYet screen="vault" />
     </div>
   );
 }

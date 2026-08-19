@@ -11,6 +11,8 @@ const { isValidTimeZone } = require('../lib/timezone');
 const { planDelay } = require('../lib/cascade');
 const { sendEmail } = require('../lib/email');
 const { directLineFor } = require('../lib/directLine');
+const { requirePlan } = require('../lib/plans');
+const travelTime = require('../lib/travelTime');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -345,6 +347,45 @@ router.delete('/:ownerId/items/:itemId/signal/found', requirePaAccess, async (re
   await pickupSignal.clearFound(item.id);
   const fresh = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(item.id);
   res.json({ signal: await pickupSignal.currentFor(fresh) });
+});
+
+// --- How long the drive actually takes ----------------------------------
+//
+// The estimate is offered, never applied on its own. A schedule that reshuffles
+// itself because traffic moved while nobody was looking is a schedule nobody
+// trusts — and the assistant often knows something the road does not, like a
+// closed gate or a convoy. See lib/travelTime.js.
+
+router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, requirePlan('travel_time'), async (req, res) => {
+  const item = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, req.principal.id);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+
+  const from = req.body?.from || item.location;
+  const to = req.body?.to || item.destination;
+  const departAt = Date.parse(req.body?.departAt || item.start_at);
+
+  const result = await travelTime.estimate({ from, to, departAt });
+  if (result.error) {
+    // Not configured is our work outstanding, so it reads as a 501 rather than
+    // a 400 that looks like the assistant typed something wrong.
+    return res.status(result.unconfigured ? 501 : 400).json(result);
+  }
+
+  if (req.body?.apply) {
+    await db.prepare('UPDATE itinerary_items SET travel_minutes = ? WHERE id = ?')
+      .run(result.minutes, item.id);
+  }
+
+  res.json({
+    ...result,
+    applied: !!req.body?.apply,
+    from,
+    to,
+    // What it was before, so the screen can say "was 30, now 75" rather than
+    // silently replacing a number somebody chose on purpose.
+    previousMinutes: Number(item.travel_minutes || 0),
+  });
 });
 
 // --- The draft → proposed → confirmed path ------------------------------

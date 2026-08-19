@@ -845,3 +845,17 @@ CREATE TABLE IF NOT EXISTS connector_connections (
   UNIQUE(owner_id, connector_id)
 );
 CREATE INDEX IF NOT EXISTS idx_connector_connections ON connector_connections(owner_id);
+
+-- Travel-time answers, bucketed by quarter hour. Traffic does not change
+-- meaningfully between 09:01 and 09:07 and every lookup is billed, so an
+-- assistant nudging a meeting and re-estimating pays once. See lib/travelTime.js.
+CREATE TABLE IF NOT EXISTS travel_estimates (
+  id           TEXT PRIMARY KEY,
+  origin       TEXT NOT NULL,
+  destination  TEXT NOT NULL,
+  depart_at    TEXT NOT NULL,
+  minutes      INTEGER NOT NULL,
+  with_traffic INTEGER NOT NULL DEFAULT 0,
+  distance_km  REAL,
+  created_at   TEXT NOT NULL
+);

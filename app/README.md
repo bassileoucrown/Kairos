@@ -1399,6 +1399,73 @@ what the vault promises. If it is ever added it belongs behind explicit
 per-document consent, never as a background check, and it is not being slipped
 into a registry of conveniences.
 
+## Travel time, asked of the road
+
+`travel_minutes` has been on every itinerary item since the day was first
+modelled as a chain, and the delay cascade already reasons from it — but it has
+always been a number somebody typed once and reused forever. In Lagos that
+number *is* the schedule. Ikoyi to Victoria Island is twelve minutes at eleven
+on a Sunday and eighty at six on a Thursday, and an assistant guessing it once
+is the commonest way a principal is late through nobody's fault.
+
+`lib/travelTime.js` asks a maps provider, **at the departure time, with
+traffic**. One shape and more than one provider, for the same reason the email
+service has two: which maps API a deployment can get billing for is an
+operator's decision, not an architectural one.
+
+- **It offers; it never applies.** The estimate comes back with the previous
+  number beside it and is written only when somebody presses *Use it*. A
+  schedule that reshuffles itself because traffic moved while nobody was
+  looking is one nobody trusts — and the assistant often knows something the
+  road does not, like a closed gate or a convoy.
+- **Cached by quarter hour.** Traffic does not change between 09:01 and 09:07
+  and every lookup is billed per element, so nudging a meeting and
+  re-estimating four times pays for one call. A cached answer says it is
+  cached, so nobody reads it as fresh.
+- **The traffic figure is preferred and labelled.** Where a region has no
+  traffic data it falls back to the free-flow duration and *says so*, rather
+  than passing off one number as the other.
+- **It never throws.** A maps outage returns something readable and leaves the
+  hand-typed number exactly where it was; the day sheet still loads.
+- Unconfigured is a **501 naming `MAPS_API_KEY`**, not a 400 — this is our work
+  outstanding, not a typo of the assistant's.
+
+The provider is given two places and a time, and never a name. That is
+unavoidable for the feature to exist, and it is why this is a connector an
+operator turns on deliberately.
+
+## Saying "not available yet", in one voice
+
+Every unbuilt thing now appears in the app where somebody would look for it,
+marked. The registry is `lib/capabilities.js` and the badge is
+`components/NotYet.jsx`, and **no screen decides this for itself** — which is
+the whole point. A page that hardcodes "coming soon" keeps saying it long after
+the credential is set; a page that hardcodes nothing quietly offers a button
+that does nothing. Both cost the product the right to be believed about the
+parts that *do* work, which in an app holding passports is the only asset it
+has.
+
+So availability is computed from the same environment the feature itself reads.
+Set `MAPS_API_KEY` and the itinerary's notice disappears by itself — the suite
+proves exactly that by booting the same client build against a configured
+server and watching the line vanish.
+
+Two labels, because they are two different promises:
+
+- **Coming soon** — the work is ours. A dataset to build, a partner to
+  contract, code to write.
+- **Not available yet**, with the variable named — the work is done and the
+  deployment is missing something specific that an operator can set this
+  afternoon.
+
+Where they appear: **Itinerary** (travel time), **Trips** (visa requirements,
+live flight status, forwarding a confirmation), **Essentials** (attaching a
+scan), **Settings** (all seventeen connectors with their state), **Concierge**
+(the desk, already marked in the nav with a Soon tag). Each panel sits at the
+foot of its screen rather than the top: somebody came there to use what works,
+and a page that opens with an apology buries it. The panel renders nothing at
+all once everything on that screen works.
+
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling

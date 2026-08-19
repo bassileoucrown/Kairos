@@ -30,6 +30,7 @@ const tripsRouter = require('./routes/trips');
 const conciergeRouter = require('./routes/concierge');
 const connectorsRouter = require('./routes/connectors');
 const planRouter = require('./routes/plan');
+const capabilitiesRouter = require('./routes/capabilities');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 const { startVoiceExpiry } = require('./lib/voiceNotes');
@@ -124,6 +125,7 @@ app.use('/api/trips', tripsRouter);
 app.use('/api/concierge', conciergeRouter);
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/plan', planRouter);
+app.use('/api/capabilities', capabilitiesRouter);
 
 // An unmatched API path is a mistake, and it should say so.
 //

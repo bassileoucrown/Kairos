@@ -7,6 +7,7 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
+import NotYet from '../components/NotYet.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -362,6 +363,11 @@ export default function Itinerary() {
               <button className="btn btn-sm no-print" type="button"
                 aria-label={`${e.title} is running late`} onClick={() => setLateItem(e)}>Running late</button>
             )}
+            {/* Offered, never applied on its own: a schedule that reshuffles
+                itself because traffic moved is one nobody trusts. */}
+            {e.source === 'itinerary' && e.location && e.destination && (
+              <TravelTime ownerId={ownerId} item={e} onApplied={load} />
+            )}
             {e.source === 'itinerary' && (
               <button className="btn btn-danger btn-sm no-print" type="button"
                 aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>
@@ -370,6 +376,65 @@ export default function Itinerary() {
           </div>
         ))}
       </ul>
+
+      <NotYet screen="itinerary" />
     </AppShell>
+  );
+}
+
+/**
+ * How long this leg will actually take, asked of the road.
+ *
+ * The number it replaces has always been typed by hand, and in Lagos it is the
+ * whole schedule — the same drive is twelve minutes on a Sunday morning and
+ * eighty at six on a Thursday. The answer is shown with the old number beside
+ * it and applied only when somebody says so.
+ */
+function TravelTime({ ownerId, item, onApplied }) {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function ask(apply) {
+    setBusy(true);
+    try {
+      const d = await api.post(`/itinerary/${ownerId}/items/${item.id}/travel-time`, { apply });
+      setState(d);
+      if (apply) onApplied?.();
+    } catch (e) {
+      setState({ error: e.message, unconfigured: e.status === 501 });
+    } finally { setBusy(false); }
+  }
+
+  if (state?.error) {
+    return (
+      <span className="travel-note">
+        {state.unconfigured
+          ? <span className="notyet">Not available yet</span>
+          : state.error}
+      </span>
+    );
+  }
+
+  if (!state) {
+    return (
+      <button className="btn btn-sm no-print" type="button" disabled={busy}
+        onClick={() => ask(false)}>
+        {busy ? 'Asking…' : 'Travel time'}
+      </button>
+    );
+  }
+
+  return (
+    <span className="travel-note">
+      <strong>{state.minutes} min</strong>
+      {state.traffic ? ' with traffic' : ' without traffic data'}
+      {state.previousMinutes > 0 && state.previousMinutes !== state.minutes
+        && ` · was ${state.previousMinutes}`}
+      {!state.applied && (
+        <button className="btn btn-sm no-print" type="button" disabled={busy}
+          onClick={() => ask(true)}>Use it</button>
+      )}
+      {state.applied && <span className="pill">Applied</span>}
+    </span>
   );
 }

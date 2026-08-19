@@ -4,6 +4,7 @@ import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import SignalPanel from '../components/SignalPanel.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { FlightChainForm, SingleLegForm } from '../components/JourneyForms.jsx';
+import NotYet from '../components/NotYet.jsx';
 import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
@@ -338,6 +339,8 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
         submitLabel="Add contact"
         onSubmit={(body) => act(() => api.post(`/trips/${ownerId}/${tripId}/contacts`, body))}
       />
+
+      <NotYet screen="trips" />
     </div>
   );
 }
