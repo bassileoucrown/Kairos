@@ -53,15 +53,22 @@ function serializeMessage(m, acks, voiceByMessage) {
     createdAt: m.created_at,
     editedAt: m.edited_at,
     acks: acks.filter((a) => a.message_id === m.id).map((a) => ({ userId: a.user_id, name: a.name, ackedAt: a.acked_at })),
+    // Carried out. Deliberately separate from acks: acknowledging a decision
+    // and having done the thing are different facts about different registers.
+    doneAt: m.done_at || null,
+    doneBy: m.done_by || null,
+    doneByName: m.done_by_name || null,
   };
 }
 
 router.get('/:threadId/messages', loadThread, async (req, res) => {
   const rows = await db.prepare(`
-    SELECT m.*, u.name AS author_name, p.name AS promoted_by_name
+    SELECT m.*, u.name AS author_name, p.name AS promoted_by_name,
+           d.name AS done_by_name
     FROM messages m
     JOIN users u ON u.id = m.author_id
     LEFT JOIN users p ON p.id = m.promoted_by_id
+    LEFT JOIN users d ON d.id = m.done_by
     WHERE m.thread_id = ?
     ORDER BY m.created_at ASC
   `).all(req.thread.id);
@@ -272,6 +279,47 @@ router.post('/:threadId/messages/:messageId/ack', loadThread, async (req, res) =
     await db.prepare('UPDATE messages SET locked_at = ? WHERE id = ?').run(now, message.id);
   }
   res.json({ ok: true, locked: true });
+});
+
+// "That is done" — which is not the same claim as "I have seen it".
+//
+// A voice note saying "book the car for six tomorrow" had nowhere to record
+// that the car was booked. The two things that already existed both miss it:
+// an acknowledgement means somebody read a decision and agreed to it, and a
+// task is the heavy path, right for something with a deadline and an owner and
+// wrong for an instruction worth thirty seconds. So the light one is here.
+//
+// Only notes. A record is a decision people acknowledge and later cite, not an
+// errand somebody runs — keeping done off records is what stops the two
+// registers collapsing into one list of things with ticks against them.
+//
+// Anyone in the thread may mark it, including the author: the assistant who
+// said "I will book the car" is exactly the person who then booked it. And it
+// is reversible, because "done" gets pressed on the wrong line.
+
+router.post('/:threadId/messages/:messageId/done', loadThread, async (req, res) => {
+  const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
+    .get(req.params.messageId, req.thread.id);
+  if (!message) return res.status(404).json({ error: 'Message not found.' });
+  if (message.register === 'record') {
+    return res.status(400).json({
+      error: 'A record is acknowledged, not carried out. Mark the note it came from, or file what happened as a new record.',
+    });
+  }
+  if (message.done_at) return res.status(409).json({ error: 'That is already marked done.' });
+
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE messages SET done_at = ?, done_by = ? WHERE id = ?')
+    .run(now, req.user.id, message.id);
+  res.json({ doneAt: now, doneBy: req.user.id, doneByName: req.user.name });
+});
+
+router.delete('/:threadId/messages/:messageId/done', loadThread, async (req, res) => {
+  const message = await db.prepare('SELECT id FROM messages WHERE id = ? AND thread_id = ?')
+    .get(req.params.messageId, req.thread.id);
+  if (!message) return res.status(404).json({ error: 'Message not found.' });
+  await db.prepare('UPDATE messages SET done_at = NULL, done_by = NULL WHERE id = ?').run(message.id);
+  res.json({ doneAt: null });
 });
 
 router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {

@@ -1443,3 +1443,15 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-size: 0.85rem; color: var(--text-muted);
 }
 .travel-note strong { color: var(--text); }
+
+/* --- Carried out ------------------------------------------------------- */
+/* Not the same claim as acknowledged: a record is agreed to, a note is done.
+   See routes/threads.js. */
+
+.msg-note.is-done .msg-bubble { opacity: 0.62; }
+.msg-done { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.msg-done-mark {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-hover);
+}

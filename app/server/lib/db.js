@@ -321,6 +321,10 @@ function ready() {
       // Which plan the account is on. Existing rows land on 'founding' — see
       // lib/plans.js for why that is a fact in the row rather than a promise.
       await ensureColumn('users', 'plan', "TEXT NOT NULL DEFAULT 'founding'");
+      // "The thing you asked for has happened", which is not the same claim as
+      // "I have seen this". See routes/threads.js.
+      await ensureColumn('messages', 'done_at', 'TEXT');
+      await ensureColumn('messages', 'done_by', 'TEXT');
       await ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
       await ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
       await ensureColumn('project_stages', 'reminder_stage', 'TEXT');

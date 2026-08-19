@@ -1434,6 +1434,35 @@ The provider is given two places and a time, and never a name. That is
 unavoidable for the feature to exist, and it is why this is a connector an
 operator turns on deliberately.
 
+## "That is done" — a claim nothing could make
+
+A voice note saying *"book the car for six tomorrow"* had nowhere to record
+that the car was booked. Both existing mechanisms miss it:
+
+- An **acknowledgement** means somebody read a decision and agreed to it. It
+  freezes a record's body. That is a different fact.
+- A **task** is the heavy path — right for something with a deadline and an
+  owner, wrong for an errand worth thirty seconds. Nobody opens a task form to
+  close "car's booked".
+
+So the direct line accumulated instructions with no way to tell the handled
+from the outstanding, and the only thing offered on a recording was *"write out
+what was said"* — asking somebody to transcribe an instruction in order to
+admit they had already carried it out.
+
+`messages.done_at` / `done_by` fixes it for voice and text alike, since a voice
+note hangs off an ordinary message and a typed instruction has exactly the same
+gap. One press, whoever did it, with their name and the time against it.
+
+- **Only notes.** A record is acknowledged, not carried out. Keeping *done* off
+  records is what stops the two registers collapsing into one list of things
+  with ticks against them — the refusal says so rather than just refusing.
+- **Anyone in the room, including the author.** The assistant who said "I'll
+  book the car" is exactly the person who then booked it.
+- **Reversible**, because Done gets pressed on the wrong line.
+- **Needs nothing written.** The screen says so, where it used to offer only
+  the two heavy paths.
+
 ## Saying "not available yet", in one voice
 
 Every unbuilt thing now appears in the app where somebody would look for it,

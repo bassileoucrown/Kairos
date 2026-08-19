@@ -89,12 +89,12 @@ function VoiceBubble({ threadId, m }) {
   );
 }
 
-function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask }) {
+function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone }) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
   const hasText = !!String(m.body || '').trim();
   return (
-    <div className="msg-note">
+    <div className={'msg-note' + (m.doneAt ? ' is-done' : '')}>
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
@@ -104,19 +104,43 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask 
             a frozen record, or a task with a title. A recording has neither
             until it is transcribed, so they are not offered rather than
             offered and then refused. */}
-        {canWrite && hasText && !picking && !tasking && (
-          <div className="msg-actions-row">
-            <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
-              Promote to record
-            </button>
-            <button className="msg-promote" type="button" onClick={() => setTasking(true)}>
-              Make a task
-            </button>
+        {/* Works on a recording as readily as on text, which is the point:
+            "book the car for six" needs no transcription to have been done. */}
+        {m.doneAt && (
+          <div className="msg-done">
+            <span className="msg-done-mark">✓ Done</span>
+            <span className="hint">
+              by {m.doneByName || 'someone'} · {timeLabel(m.doneAt)}
+            </span>
+            {canWrite && (
+              <button className="msg-promote" type="button" onClick={() => onDone(m.id, false)}>
+                Undo
+              </button>
+            )}
           </div>
         )}
-        {canWrite && !hasText && m.voice && (
+
+        {canWrite && !m.doneAt && !picking && !tasking && (
+          <div className="msg-actions-row">
+            <button className="msg-promote" type="button" onClick={() => onDone(m.id, true)}>
+              Mark done
+            </button>
+            {hasText && (
+              <>
+                <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
+                  Promote to record
+                </button>
+                <button className="msg-promote" type="button" onClick={() => setTasking(true)}>
+                  Make a task
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {canWrite && !hasText && m.voice && !m.doneAt && (
           <p className="hint msg-voice-hint">
-            Write out what was said to file it as a record or turn it into a task.
+            Marking it done needs nothing written. Write out what was said only to
+            file it as a record or turn it into a task.
           </p>
         )}
         {picking && (
@@ -297,6 +321,11 @@ export default function ThreadView() {
   const supersede = (id, replacementBody, replacementType) => act(() =>
     api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
   const makeTask = (payload) => act(() => api.post('/tasks', payload));
+  // Carried out, or not after all. Deliberately lighter than a task: an
+  // instruction worth thirty seconds should cost about that to close.
+  const markDone = (id, done) => act(() => (done
+    ? api.post(`/threads/${threadId}/messages/${id}/done`)
+    : api.del(`/threads/${threadId}/messages/${id}/done`)));
 
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
@@ -349,7 +378,8 @@ export default function ThreadView() {
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
                   onAck={ack} onStatus={setStatus} onSupersede={supersede} />
               : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
-                  viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask} />
+                  viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask}
+                  onDone={markDone} />
           ))}
           <div ref={endRef} />
         </div>
