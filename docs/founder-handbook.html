@@ -55,7 +55,7 @@ body {
 @media (max-width: 860px) {
   .leaf { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 36px 0; }
   .rail { position: static; padding-top: 0; }
-  .rail b { display: inline; }
+  .rail b { display: inline; margin-right: 0.45em; }
   body { font-size: 16px; padding: 0 18px 90px; }
 }
 
@@ -87,7 +87,8 @@ a { color: var(--accent); text-underline-offset: 2px; }
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .title-leaf { padding: 80px 0 56px; }
-.title-leaf .col { max-width: 24ch; }
+.title-leaf .col { max-width: 62ch; }
+.title-leaf h1 { max-width: 18ch; }
 .stamp {
   font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--muted); margin-top: 26px; line-height: 2;

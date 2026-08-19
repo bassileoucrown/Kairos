@@ -103,7 +103,7 @@ body {
 @media (max-width: 820px) {
   .leaf { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 38px 0; }
   .rail { position: static; padding-top: 0; }
-  .rail b { display: inline; }
+  .rail b { display: inline; margin-right: 0.45em; }
   body { font-size: 16px; padding: 0 18px 90px; }
 }
 
@@ -157,7 +157,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 /* ---- title leaf ---- */
 
 .title-leaf { padding: 84px 0 60px; }
-.title-leaf .col { max-width: 24ch; }
+.title-leaf .col { max-width: 62ch; }
+.title-leaf h1 { max-width: 18ch; }
 .stamp {
   font-family: var(--machine);
   font-size: 11px;
@@ -263,7 +264,7 @@ input[type=range] {
 .day { border-top: 1px solid var(--rule); }
 .row {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) auto;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   gap: 0 18px;
   padding: 11px 0;
   border-bottom: 1px solid var(--rule);
@@ -328,7 +329,7 @@ input[type=range] {
   <section class="leaf title-leaf">
     <div class="rail"><b>Kairos</b>by Exousia<br>Investment case</div>
     <div class="col">
-      <span class="eyebrow">Exousia Prime Emporium Ltd · Lagos &amp; London</span>
+      <span class="eyebrow">Exousia Prime Emporium Ltd · Lagos, Nigeria</span>
       <h1>A day is not a list.<br>It is a chain.</h1>
       <p class="lead dim" style="margin-top:22px;">
         Every calendar ever built stores appointments as independent rows. That single
@@ -700,7 +701,7 @@ input[type=range] {
         </li>
         <li>
           <strong>Design partners, paid attention rather than paid fees.</strong> Ten
-          offices in Lagos and London, onboarded by us, for a quarter.
+          offices, onboarded by us, for a quarter.
         </li>
         <li>
           <strong>The concierge network.</strong> The one part that is not software:
@@ -712,7 +713,7 @@ input[type=range] {
         trusted with the data.
       </p>
       <p class="dim">
-        Exousia Prime Emporium Ltd · Lagos and London ·
+        Exousia Prime Emporium Ltd · Lagos, Nigeria ·
         <a href="mailto:bassileoucrown@gmail.com">bassileoucrown@gmail.com</a>
       </p>
     </div>

@@ -58,7 +58,7 @@ body {
 @media (max-width: 860px) {
   .leaf { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 36px 0; }
   .rail { position: static; padding-top: 0; }
-  .rail b { display: inline; }
+  .rail b { display: inline; margin-right: 0.45em; }
   body { font-size: 16px; padding: 0 18px 90px; }
 }
 
@@ -96,7 +96,8 @@ a { color: var(--accent); text-underline-offset: 2px; }
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .title-leaf { padding: 80px 0 56px; }
-.title-leaf .col { max-width: 24ch; }
+.title-leaf .col { max-width: 62ch; }
+.title-leaf h1 { max-width: 18ch; }
 .stamp {
   font-family: var(--machine); font-size: 11px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--muted); margin-top: 26px; line-height: 2;
@@ -683,54 +684,62 @@ bash sigmatrix.sh          # signal + trips across the Postgres configs</code></
   <div class="col">
     <h2>The real result of the last full run</h2>
     <p>
-      All 51 suites, run back to back on this machine: <strong>46 passed, 5 failed.</strong> None of
-      the five is a product regression, and here is exactly what each one is, because "known
-      environmental failure" is a phrase that hides bugs.
+      All 51 suites, run back to back on this machine: <strong>49 passed, 2 failed.</strong>
+      Neither failure is a product regression, and both are named here rather than filed under
+      "known environmental failure", which is a phrase that hides bugs.
     </p>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Suite</th><th>What happened</th><th>Verified</th></tr></thead>
+        <thead><tr><th>Suite</th><th>What happens</th><th>State</th></tr></thead>
         <tbody>
           <tr>
-            <td class="k">bnoticeui</td>
-            <td>Raced the nav badge, which arrives from a fetch the assertion does not wait for.</td>
-            <td><span class="tag on">Passes alone</span></td>
-          </tr>
-          <tr>
             <td class="k">bflow</td>
-            <td>Signup refused — the shared server's in-memory rate limiter had accumulated across the run.</td>
-            <td><span class="tag on">Passes alone</span></td>
+            <td>Signup is refused when it runs inside <code>allsuites.sh</code>, so <code>/auth/me</code> returns no user and the run dies on the next line. It is one of three suites that still borrow the long-running server rather than spawning their own.</td>
+            <td><span class="tag soon">Passes alone</span></td>
           </tr>
           <tr>
             <td class="k">btitle</td>
-            <td>Same cause as <code>bflow</code>.</td>
-            <td><span class="tag on">Passes alone</span></td>
-          </tr>
-          <tr>
-            <td class="k">bfail</td>
-            <td>Needs a local Postgres at <code>127.0.0.1:5432</code>, which is not running here.</td>
-            <td><span class="tag soon">Not run</span></td>
-          </tr>
-          <tr>
-            <td class="k">bcustody</td>
-            <td>Claims a fixed handle (<code>ada-boss</code>) and so passes only against a genuinely fresh database, once — then reports "that handle is already taken". It also exhausts the sign-in limiter within its own run.</td>
-            <td><span class="tag no">Not green</span></td>
+            <td>Same cause as <code>bflow</code>, and it fails the same way — on the first response that assumes a session it never got.</td>
+            <td><span class="tag soon">Passes alone</span></td>
           </tr>
         </tbody>
       </table>
     </div>
     <p>
-      <code>bcustody</code> is the one to fix, and it is a test defect rather than a product one: it
-      needs run-scoped fixtures like every other suite, and its two-factor section needs to tolerate
-      the limiter. Until that is done, <strong>do not describe the suite as green</strong> — describe
-      it as 46 of 51 with the five accounted for.
+      The fix is the one <code>bcustody</code> has already had: give each of them its own server on
+      its own port. Sharing one is what makes a clean run depend on the order things happened in,
+      which is not a property a test run should have. Until that is done, describe the suite as
+      <strong>49 of 51, with both accounted for</strong> — not as green.
     </p>
+
+    <h3>What <code>bcustody</code> was, and what fixing it taught</h3>
+    <p>
+      It used to fail every time. Four separate things were wrong, and only the last was about the
+      product at all — which is the useful part of the story, because three of them are mistakes any
+      suite here can make again.
+    </p>
+    <ul>
+      <li><strong>It borrowed a server.</strong> That meant borrowing an in-memory rate limiter keyed
+        on the address as well as the account — and a successful login clears the account key, never
+        the address key — so every login any other suite made from <code>127.0.0.1</code> counted
+        against it. It also meant borrowing that server's <code>ENCRYPTION_KEY</code>, usually
+        absent, so the whole vault half was quietly exercising the refusal path.</li>
+      <li><strong>Its handle was the literal <code>ada-boss</code>.</strong> Handles are unique
+        app-wide, so the second run against any database got "that handle is already taken" — which
+        reads exactly like a normalisation bug and is not one.</li>
+      <li><strong>Its expiry assertions were pinned to dates in 2026.</strong> They were going to
+        start failing on a Tuesday for no visible reason.</li>
+      <li><strong>One assertion was wrong about the product.</strong> It demanded that assembling a
+        travel block always costs a password. It does not, and should not: the earlier reveal had
+        already stepped the session up, and the grace window is deliberate. The suite now sets the
+        window to two seconds and checks both halves — the next sensitive read inside it costs
+        nothing, and once it lapses the gate comes back.</li>
+    </ul>
     <div class="why">
-      <b>And a standing hygiene problem</b>
-      <code>allsuites.sh</code> shares one rate-limiter across everything that uses the long-running
-      server on port 4000. Either give every suite its own server, or reset limiter state between
-      suites. Right now a clean run depends on the order things happen in, which is not a property a
-      test run should have.
+      <b>The rule that falls out of all four</b>
+      A suite should own its server, scope every fixture to the run, and express dates relative to
+      now. Any suite that does all three can be run twice in a row, in any order, against any
+      database — and a red result from it means something.
     </div>
   </div>
 </section>
@@ -748,9 +757,9 @@ bash sigmatrix.sh          # signal + trips across the Postgres configs</code></
         <thead><tr><th>Task</th><th>What already exists</th><th>What is missing</th><th></th></tr></thead>
         <tbody>
           <tr>
-            <td><strong>Fix <code>bcustody</code> and the limiter hygiene</strong></td>
-            <td>The suite, and everything it asserts.</td>
-            <td>Run-scoped fixtures; per-suite servers or a limiter reset in <code>allsuites.sh</code>.</td>
+            <td><strong>Give <code>bflow</code> and <code>btitle</code> their own servers</strong></td>
+            <td><code>bcustody</code> as the worked example, and an <code>allsuites.sh</code> that now starts and stops its own shared server rather than assuming one is lying around.</td>
+            <td>The same treatment for the last two borrowers. After that nothing shares a rate limiter and the run stops depending on order.</td>
             <td><span class="tag no">First</span></td>
           </tr>
           <tr>
