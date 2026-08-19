@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const trips = require('../lib/trips');
+const visas = require('../lib/visas');
 const pickup = require('../lib/pickup');
 const pickupSignal = require('../lib/pickupSignal');
 const { limit, clientIp } = require('../lib/rateLimit');
@@ -114,6 +115,9 @@ router.get('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
     // Checked against the trip's own dates rather than today, because "will
     // this passport still be good when I land" is the question being asked.
     documentWarnings: await trips.documentWarnings(req.principal.id, trip),
+    // Whether the visas on file cover THIS journey. Never whether one is
+    // required — see lib/visas.js.
+    visa: await visas.coverageFor(req.principal.id, trip),
     travellers: travellers.map((t) => ({
       id: t.id, name: t.name, role: t.role, contactId: t.contact_id,
     })),

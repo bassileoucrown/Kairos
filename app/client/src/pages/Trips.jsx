@@ -5,6 +5,7 @@ import SignalPanel from '../components/SignalPanel.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { FlightChainForm, SingleLegForm } from '../components/JourneyForms.jsx';
 import NotYet from '../components/NotYet.jsx';
+import VisaPanel from '../components/VisaPanel.jsx';
 import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 
@@ -161,7 +162,7 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
   });
 
   if (!data) return <p className="hint">Loading…</p>;
-  const { trip, items, travellers, contacts, documentWarnings } = data;
+  const { trip, items, travellers, contacts, documentWarnings, visa } = data;
   const label = (id) => arrangements.find((a) => a.id === id)?.label || id;
 
   return (
@@ -213,6 +214,9 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
           </ul>
         </div>
       )}
+
+      <h3 className="ess-heading">Getting in</h3>
+      <VisaPanel ownerId={ownerId} visa={visa} onChanged={load} />
 
       <h3 className="ess-heading">The journey</h3>
 

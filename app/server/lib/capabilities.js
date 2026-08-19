@@ -1,5 +1,6 @@
 const connectors = require('./connectors');
 const travelTime = require('./travelTime');
+const visas = require('./visas');
 const concierge = require('./concierge');
 const { isConfigured: encryptionConfigured } = require('./secretBox');
 
@@ -66,15 +67,16 @@ function build() {
     needs: ['FLIGHT_DATA_KEY'],
     state: 'needs_key',
   });
+  // Coverage is built and needs nothing. What stays unavailable is the other
+  // half of the question — whether a visa is REQUIRED — which needs a
+  // maintained ruleset and strands people when it is answered wrongly.
   add({
-    id: 'visa_check',
+    id: 'visa_rules',
     screen: 'trips',
-    label: 'Visa requirements',
-    what: 'Whether this passport needs a visa for this destination, and how long it takes to get.',
-    available: false,
-    needs: [],
-    // Not a credential: it needs a rules dataset somebody maintains, and being
-    // wrong here is worse than being absent.
+    label: 'Whether a visa is required',
+    what: 'Nationality-by-destination rules. Checking the visas you hold already works; this is the lookup that says whether one is needed at all.',
+    available: visas.rulesConfigured(),
+    needs: ['VISA_RULES_KEY'],
     state: 'soon',
   });
   add({

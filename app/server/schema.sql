@@ -859,3 +859,26 @@ CREATE TABLE IF NOT EXISTS travel_estimates (
   distance_km  REAL,
   created_at   TEXT NOT NULL
 );
+
+-- The shape of a visa, so a trip can be checked against it. The NUMBER is not
+-- here: it is sensitive, and the vault already has encryption, custody rules
+-- and a second factor for exactly that. One sensitive datum, one guard.
+-- See lib/visas.js.
+CREATE TABLE IF NOT EXISTS visas (
+  id                 TEXT PRIMARY KEY,
+  owner_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by         TEXT REFERENCES users(id) ON DELETE SET NULL,
+  -- Whose visa, when a spouse or child is travelling too.
+  subject_contact_id TEXT REFERENCES contacts(id) ON DELETE CASCADE,
+  -- The vault row holding the number, if somebody recorded it.
+  essential_id       TEXT REFERENCES essentials(id) ON DELETE SET NULL,
+  country            TEXT NOT NULL,
+  kind               TEXT NOT NULL,
+  entries_total      INTEGER,
+  entries_used       INTEGER NOT NULL DEFAULT 0,
+  valid_from         TEXT,
+  valid_to           TEXT,
+  notes              TEXT NOT NULL DEFAULT '',
+  created_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_visas_owner ON visas(owner_id, country);

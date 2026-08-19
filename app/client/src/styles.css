@@ -1455,3 +1455,19 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   padding: 2px 8px; border-radius: 999px;
   background: var(--accent-soft); color: var(--accent-hover);
 }
+
+/* --- Visas: what you hold, never what you need ------------------------- */
+/* See server/lib/visas.js — the absence of a visa on file is reported as an
+   absence, because a wrong "none needed" strands somebody at a check-in desk. */
+
+.visa-panel { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.visa-state {
+  align-self: stretch; padding: 12px 14px; border-radius: var(--radius);
+  border-left: 3px solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.visa-state.tone-ok { border-left-color: var(--accent); background: var(--accent-soft); }
+.visa-state.tone-warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.visa-state.tone-bad { border-left-color: var(--danger); background: var(--danger-soft); }
+.visa-state p { margin: 0; }
+.visa-form { align-self: stretch; }

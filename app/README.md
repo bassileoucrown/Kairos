@@ -1434,6 +1434,56 @@ The provider is given two places and a time, and never a name. That is
 unavoidable for the feature to exist, and it is why this is a connector an
 operator turns on deliberately.
 
+## Visas: the half that can be answered truthfully
+
+"Visa requirements" is two questions wearing one name, and they are not equally
+safe to answer.
+
+**Coverage — "does the visa I hold cover this trip?"** Deterministic, from
+documents the principal supplied. A Schengen multi-entry valid to March. A
+single-entry US already spent in January. A UK visa that lapses four days
+before the return flight. Nothing has to be looked up, and it is precisely what
+an assistant cannot hold in their head. **This is built.**
+
+**Requirement — "does a Nigerian passport need a visa for Kenya?"** Forty
+thousand nationality-by-destination pairs, revised by governments without
+notice, where a wrong *"no visa needed"* strands somebody at a check-in desk
+with a boarding pass they cannot use. Not guessable, and not scrapeable
+responsibly. **It stays a provider adapter, unconfigured, and the screen says
+so** — the Trips screen carries "Whether a visa is required" in its
+not-available list, gated on `VISA_RULES_KEY`.
+
+The distinction is the whole design. Answering the first well is most of the
+value: an assistant already knows Nigerians need a UK visa.
+
+`lib/visas.js` holds the **shape** of a visa — country, kind, entries, valid
+from and to. The **number is not here**: it is sensitive, and the vault already
+has encryption, custody rules and a second factor for exactly that class of
+thing. One sensitive datum, one place that guards it, with an optional link
+between them.
+
+Six answers, each a real way a journey falls over, and each stated as the thing
+that will happen rather than as a status code:
+
+| | |
+|---|---|
+| **Nothing on file** | Reported as an absence, *and explicitly not as "none needed"* |
+| **Expires during the trip** | "Valid on the way out and not on the way back" — the one people miss |
+| **Expired** | It lapsed before the trip even starts |
+| **Not valid yet** | Issued, but starts after the trip begins |
+| **Already used** | A single entry, spent |
+| **Covered** | It holds |
+
+Entries can be spent and **given back**, because trips fall through.
+
+**Processing times are guidance and labelled as guidance**, with the date they
+were last reviewed shown so staleness is visible rather than invisible. They
+are here because an assistant with no anchor starts a US application in March
+for a June trip when the appointment itself is months out — a rough number is
+the difference between starting and not. Being a week out on a lead time costs
+a nudge; being wrong about a requirement costs the trip. That asymmetry is why
+one is shipped and the other is not.
+
 ## "That is done" — a claim nothing could make
 
 A voice note saying *"book the car for six tomorrow"* had nowhere to record
