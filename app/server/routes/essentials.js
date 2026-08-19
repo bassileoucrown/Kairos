@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth, verifyPassword } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
+const { requirePlan } = require('../lib/plans');
 const { encrypt, decrypt, mask, isConfigured } = require('../lib/secretBox');
 const { CATEGORIES, findField, canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { limit, clientIp } = require('../lib/rateLimit');
@@ -104,7 +105,10 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   });
 });
 
-router.post('/:ownerId', requirePaAccess, async (req, res) => {
+// Adding is gated; reading is not. A principal who drops a plan keeps every
+// document they put in and simply cannot add more — losing sight of your own
+// passport number because a card expired is not a product behaviour.
+router.post('/:ownerId', requirePaAccess, requirePlan('vault'), async (req, res) => {
   const ctx = viewerContext(req);
   const { category, field, label, value, expiresOn, notes, subjectContactId } = req.body || {};
 

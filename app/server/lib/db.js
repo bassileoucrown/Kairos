@@ -318,6 +318,9 @@ function ready() {
       await ensureColumn('contacts', 'birthday', 'TEXT');
       await ensureColumn('contacts', 'anniversary', 'TEXT');
       await ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
+      // Which plan the account is on. Existing rows land on 'founding' — see
+      // lib/plans.js for why that is a fact in the row rather than a promise.
+      await ensureColumn('users', 'plan', "TEXT NOT NULL DEFAULT 'founding'");
       await ensureColumn('threads', 'project_id', 'TEXT REFERENCES projects(id)');
       await ensureColumn('threads', 'stage_id', 'TEXT REFERENCES project_stages(id)');
       await ensureColumn('project_stages', 'reminder_stage', 'TEXT');

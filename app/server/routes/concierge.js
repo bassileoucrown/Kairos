@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const concierge = require('../lib/concierge');
+const { requirePlan } = require('../lib/plans');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -66,7 +67,7 @@ router.delete('/:ownerId/interest/:service', requirePaAccess, async (req, res) =
  * than a 404 that looks like a bug, and so the client has something to call
  * the day the desk opens.
  */
-router.post('/:ownerId/requests', requirePaAccess, (req, res) => {
+router.post('/:ownerId/requests', requirePaAccess, requirePlan('concierge'), (req, res) => {
   if (!concierge.isAvailable()) {
     return res.status(501).json({ error: concierge.UNAVAILABLE_REASON });
   }

@@ -1312,6 +1312,93 @@ the switch is a real switch, not decoration, and the suite proves it by booting
 a second server with the variable set. Requests still refuse, with a *different*
 message, because a partner existing is not the same as the handoff being built.
 
+## Plans, built before they are enforced
+
+The commercial layer ships ahead of billing, switched off. `PLAN_ENFORCEMENT`
+defaults to off; while it is off every check still runs, still resolves, and
+**records what it would have refused** — and refuses nothing. Nothing becomes
+unreachable by building this.
+
+That is the reason to build it early rather than at launch. The price sheet is
+a hypothesis: trips are on Plus and briefs on Executive because it reads well,
+not because anybody has behaved that way. Some months of *who reached for what,
+on the plan they would have been on* turns those boundaries into evidence
+before a single customer is charged for a guess. `plan_signals` aggregates per
+account and feature rather than appending per event, because the question is
+"which boundaries are in the wrong place", not "what happened at 14:32".
+
+**The word "tier" is deliberately not used.** It already means a meeting type's
+access tier (1–4) and a contact's relationship tier. The commercial one is a
+**plan**, so no conversation about any of the three is ambiguous.
+
+Three rules in `lib/plans.js`, none of them negotiable:
+
+- **Entitlement is never access control.** Whether a delegate may see a BVN is
+  decided by `essentials.js` and a second factor. Whether the account is on Plus
+  is decided by `plans.js`. If those merge, a billing bug becomes a data breach.
+- **It fails open.** A null column, a half-run migration, an unknown plan name:
+  the answer is *allow*. The failure mode of a strict check is a principal at an
+  airport unable to read their own visa number because a default did not apply.
+- **Only creation is gated; reading back is never gated.** A principal who drops
+  from Plus to Standard keeps every trip and every document they put in, and
+  simply cannot add more. Losing sight of your own passport number because a
+  card expired is not a product behaviour, it is a hostage situation.
+
+Existing accounts land on a **founding** plan — a real row in the ladder that
+reaches Executive — so grandfathering is a fact in the data rather than a
+promise in a spreadsheet. Signup writes the plan explicitly from `DEFAULT_PLAN`
+rather than letting the column default catch it, which would have made the
+setting inert and quietly put everybody on founding forever.
+
+The gate reads the **principal's** plan, not the viewer's: an assistant with a
+free account of their own is working inside their principal's entitlements, and
+billing the wrong party for the right work would be a strange thing to build.
+
+## Connectors — everything Kairos talks to, in one list
+
+`lib/calendarSync.js` and `lib/whatsapp.js` were the same shape written twice.
+`lib/connectors.js` is that shape named once, and the Settings screen is driven
+by the registry rather than hand-written per provider.
+
+**Two kinds, which behave nothing alike.** A **deployment** connector is
+configured once by whoever runs Kairos and no principal ever sees a button —
+flight data, object storage, transcription, SMS. An **account** connector is
+connected by each principal to their own thing — their Google Calendar, their
+WhatsApp number, their Zoom. Both `configured` and `connected` are reported,
+never collapsed into one "available" flag, because they produce different
+sentences: *not configured here* is our work outstanding, *ready to connect* is
+theirs. A connector above the account's plan is shown rather than hidden —
+somebody deciding whether to move up should see what moving up gets them.
+
+Beyond the calendar and WhatsApp stubs that already existed, the registry names
+the ones that would make the app materially better here:
+
+- **Travel time with live traffic.** `travel_minutes` is typed by hand today. In
+  Lagos the difference between 20 minutes and 90 is the entire schedule, and the
+  delay cascade is already built to act on it.
+- **Forward a confirmation.** Send an airline or hotel email to a trips address
+  and the journey builds itself, instead of a flight being retyped from a PDF.
+- **Contacts.** The four thousand people already in a phone, so the relationship
+  calendar knows whose birthday is Thursday without anybody typing it.
+- **A calendar subscription link.** Read-only, no OAuth, works in Apple Calendar
+  and everything else. Needs no credential at all, so it is configured by
+  definition rather than given an invented barrier.
+- **Send from your own address.** An invitation from `office@theirbank.com`
+  rather than `noreply@` is the difference between a board member replying and
+  a board member ignoring it.
+- **Ride-hailing**, for when the arrangement is "making their own way", and
+  **SMS**, for the driver who will never open an app.
+
+**Two deliberate absences.** Paystack and Flutterwave are not connectors —
+billing has no per-account state and putting it beside Google Calendar would
+suggest a principal could switch their own subscription off. And **identity
+verification** (BVN or NIN checks through VerifyMe, Smile ID and the like) is a
+judgement rather than an oversight: it would make the vault more useful, and it
+would mean sending a principal's BVN to a third party, which is the opposite of
+what the vault promises. If it is ever added it belongs behind explicit
+per-document consent, never as a background check, and it is not being slipped
+into a registry of conveniences.
+
 ## What's deliberately not here yet
 
 Per the blueprint's own phasing (Section 7): multi-group management (independent scheduling

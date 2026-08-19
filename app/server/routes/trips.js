@@ -7,6 +7,7 @@ const trips = require('../lib/trips');
 const pickup = require('../lib/pickup');
 const pickupSignal = require('../lib/pickupSignal');
 const { limit, clientIp } = require('../lib/rateLimit');
+const { requirePlan } = require('../lib/plans');
 
 const router = asyncRouter();
 
@@ -78,7 +79,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   });
 });
 
-router.post('/:ownerId', requirePaAccess, async (req, res) => {
+router.post('/:ownerId', requirePaAccess, requirePlan('trips'), async (req, res) => {
   const { name, destination, destinationTimezone, startsOn, endsOn, status, notes } = req.body || {};
   const result = await trips.create({
     ownerId: req.principal.id,

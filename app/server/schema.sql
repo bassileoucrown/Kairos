@@ -815,3 +815,33 @@ CREATE TABLE IF NOT EXISTS concierge_interest (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_concierge_interest ON concierge_interest(owner_id);
+
+-- What a plan would have refused, while enforcement is still off.
+--
+-- Aggregated per account and feature rather than appended per event: the
+-- question is "which boundaries are in the wrong place", and a row per click
+-- would be a log rather than an answer. See lib/plans.js.
+CREATE TABLE IF NOT EXISTS plan_signals (
+  id        TEXT PRIMARY KEY,
+  owner_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  feature   TEXT NOT NULL,
+  plan      TEXT NOT NULL,
+  times     INTEGER NOT NULL DEFAULT 1,
+  first_at  TEXT NOT NULL,
+  last_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plan_signals ON plan_signals(owner_id, feature);
+
+-- One account's connection to one connector. Replaces the per-provider tables
+-- that came before it, which were the same three columns written twice.
+-- See lib/connectors.js.
+CREATE TABLE IF NOT EXISTS connector_connections (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  connector_id  TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'disconnected',
+  account_label TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL,
+  UNIQUE(owner_id, connector_id)
+);
+CREATE INDEX IF NOT EXISTS idx_connector_connections ON connector_connections(owner_id);

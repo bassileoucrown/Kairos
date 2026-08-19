@@ -11,6 +11,7 @@ const { isValidTimeZone } = require('../lib/timezone');
 const { isHouseholdStaff } = require('../lib/household');
 const { handleProblem } = require('../lib/handles');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
+const { DEFAULT_PLAN } = require('../lib/plans');
 const totp = require('../lib/totp');
 const { isConfigured: emailConfigured } = require('../lib/emailProviders');
 const { decrypt } = require('../lib/secretBox');
@@ -105,9 +106,15 @@ router.post('/signup', async (req, res) => {
   const passwordHash = hashPassword(String(password));
 
   await db.prepare(`
-    INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified, onboarding_step, account_category, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 1, 'profile', ?, ?)
-  `).run(id, normalizedEmail, passwordHash, String(name).trim(), slug, tz, category, new Date().toISOString());
+    INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified, onboarding_step, account_category, plan, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, 'profile', ?, ?, ?)
+  `).run(id, normalizedEmail, passwordHash, String(name).trim(), slug, tz, category,
+    // Written explicitly rather than left to the column default. The default
+    // exists to grandfather rows that already existed when the column was
+    // added; letting it also catch new signups would make DEFAULT_PLAN inert
+    // and quietly put everybody on the founding plan forever.
+    DEFAULT_PLAN,
+    new Date().toISOString());
   // MVP note: email_verified is set to 1 immediately — there is no email
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.

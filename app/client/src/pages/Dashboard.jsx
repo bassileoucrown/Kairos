@@ -120,7 +120,7 @@ export default function Dashboard() {
       {tab === 'essentials' && <EssentialsTab ownerId={user?.id} />}
       {tab === 'security' && <SecurityTab />}
       {tab === 'outbox' && <OutboxTab />}
-      {tab === 'settings' && <SettingsTab />}
+      {tab === 'settings' && <SettingsTab ownerId={user?.id} />}
     </AppShell>
   );
 }
