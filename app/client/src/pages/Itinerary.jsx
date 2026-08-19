@@ -7,7 +7,6 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
-import NotYet from '../components/NotYet.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -377,7 +376,6 @@ export default function Itinerary() {
         ))}
       </ul>
 
-      <NotYet screen="itinerary" />
     </AppShell>
   );
 }

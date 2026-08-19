@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import SoonButton from '../../components/SoonButton.jsx';
 import AppShell from '../../components/AppShell.jsx';
 import VoiceRecorder from '../../components/VoiceRecorder.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
@@ -85,6 +86,7 @@ function VoiceBubble({ threadId, m }) {
         src={`/api/threads/${threadId}/messages/${m.id}/audio`}
       />
       <span className="hint">Voice note · {clipLength(m.voice.durationMs)}</span>
+      <SoonButton feature="transcription" />
     </div>
   );
 }

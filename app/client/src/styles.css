@@ -1471,3 +1471,30 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .visa-state.tone-bad { border-left-color: var(--danger); background: var(--danger-soft); }
 .visa-state p { margin: 0; }
 .visa-form { align-self: stretch; }
+
+/* --- A feature that is here by name, not yet by function --------------- */
+/* See server/lib/capabilities.js. A control that only greys out reads as
+   broken; this one answers when pressed. */
+
+.soon-control { display: inline-flex; flex-direction: column; gap: 6px; }
+.btn.is-soon {
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: help;
+}
+.btn.is-soon:hover { border-color: var(--warn); color: var(--warn); }
+.soon-tag {
+  margin-left: 7px; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: 999px;
+  background: var(--warn-soft); color: var(--warn);
+}
+.soon-why {
+  font-size: 0.82rem; color: var(--text-muted); max-width: 52ch;
+  border-left: 2px solid var(--warn); padding-left: 10px;
+}
+.soon-why code { font-size: 0.78rem; }
+
+.coming-row { display: flex; justify-content: space-between; gap: 16px; }
+.coming-row.is-on { opacity: 0.72; }
+.coming-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.coming-head .name { font-weight: 650; }

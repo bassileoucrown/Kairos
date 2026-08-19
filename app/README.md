@@ -1513,37 +1513,46 @@ gap. One press, whoever did it, with their name and the time against it.
 - **Needs nothing written.** The screen says so, where it used to offer only
   the two heavy paths.
 
-## Saying "not available yet", in one voice
+## Every unbuilt feature is in the app, by name
 
-Every unbuilt thing now appears in the app where somebody would look for it,
-marked. The registry is `lib/capabilities.js` and the badge is
-`components/NotYet.jsx`, and **no screen decides this for itself** — which is
-the whole point. A page that hardcodes "coming soon" keeps saying it long after
-the credential is set; a page that hardcodes nothing quietly offers a button
-that does nothing. Both cost the product the right to be believed about the
-parts that *do* work, which in an app holding passports is the only asset it
-has.
+Not a footnote at the bottom of a screen — that tells somebody a thing is
+planned without ever showing them where it will live or what it will be called.
+Each unbuilt capability now **stands in the place the working one will occupy,
+named the way it will be named**, and visibly inert
+(`components/SoonButton.jsx`, driven by `lib/capabilities.js`).
 
-So availability is computed from the same environment the feature itself reads.
-Set `MAPS_API_KEY` and the itinerary's notice disappears by itself — the suite
-proves exactly that by booting the same client build against a configured
-server and watching the line vanish.
+| Placeholder | Sits on | Called |
+|---|---|---|
+| Travel time | Itinerary | on the leg it would time |
+| Live status | Trips | on the flight |
+| Check requirement | Trips | beside the visa coverage it complements |
+| Forward a confirmation | Trips | beside the journey builder |
+| Attach a scan | Essentials | under the entries |
+| Transcribe | Direct line | under the voice note |
+| Make a request | Concierge | under the banner |
 
-Two labels, because they are two different promises:
+**Pressing it answers.** A control that is merely greyed out and swallows
+clicks reads as broken, and somebody being shown the product cannot tell a
+disabled button from a bug. These open a line saying the feature is not ready,
+what it would do, and — where it is a credential — which one.
 
-- **Coming soon** — the work is ours. A dataset to build, a partner to
-  contract, code to write.
-- **Not available yet**, with the variable named — the work is done and the
-  deployment is missing something specific that an operator can set this
-  afternoon.
+There is deliberately **no `aria-disabled`**. The button is genuinely operable;
+what is unavailable is the feature behind it. Marking it disabled *and* having
+it respond is the worst of both — a screen reader announces "dimmed" and the
+thing reacts anyway. The visible tag says Soon, the accessible name says it is
+not available, and pressing it explains. All three agree.
 
-Where they appear: **Itinerary** (travel time), **Trips** (visa requirements,
-live flight status, forwarding a confirmation), **Essentials** (attaching a
-scan), **Settings** (all seventeen connectors with their state), **Concierge**
-(the desk, already marked in the nav with a Soon tag). Each panel sits at the
-foot of its screen rather than the top: somebody came there to use what works,
-and a page that opens with an apology buries it. The panel renders nothing at
-all once everything on that screen works.
+**`/coming` lists all of them**, with the screen each will appear on and the
+control it will be, for the question no amount of in-place marking answers:
+*what else is coming?* Nobody clicks through eight screens to assemble that
+list. It is last in the rail, because it is a roadmap rather than a place to
+work.
+
+All of it reads from one registry, computed from the same environment the
+features themselves read — so a placeholder disappears and its entry moves to
+"working on this deployment" at the instant the thing behind it starts working.
+The suite proves that literally: the same client build against a server with
+`MAPS_API_KEY` set, watching travel time move across on its own.
 
 ## What's deliberately not here yet
 

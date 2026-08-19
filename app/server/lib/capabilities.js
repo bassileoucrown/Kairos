@@ -49,6 +49,7 @@ function build() {
   // ---- Itinerary -----------------------------------------------------
   add({
     id: 'travel_time',
+    control: 'Travel time',
     screen: 'itinerary',
     label: 'Travel time with live traffic',
     what: 'Ask the road how long this leg takes, at the hour it happens.',
@@ -60,6 +61,7 @@ function build() {
   // ---- Trips ---------------------------------------------------------
   add({
     id: 'flight_status',
+    control: 'Live status',
     screen: 'trips',
     label: 'Live flight status',
     what: 'The flight as it is rather than as it was booked, feeding the delay cascade.',
@@ -72,6 +74,7 @@ function build() {
   // maintained ruleset and strands people when it is answered wrongly.
   add({
     id: 'visa_rules',
+    control: 'Check requirement',
     screen: 'trips',
     label: 'Whether a visa is required',
     what: 'Nationality-by-destination rules. Checking the visas you hold already works; this is the lookup that says whether one is needed at all.',
@@ -81,6 +84,7 @@ function build() {
   });
   add({
     id: 'inbound_email',
+    control: 'Forward a confirmation',
     screen: 'trips',
     label: 'Forward a confirmation',
     what: 'Send an airline or hotel email to your trips address and the journey builds itself.',
@@ -92,6 +96,7 @@ function build() {
   // ---- The vault -----------------------------------------------------
   add({
     id: 'document_scans',
+    control: 'Attach a scan',
     screen: 'vault',
     label: 'Attach a scan',
     what: 'The passport page itself, encrypted, when the number alone is not enough.',
@@ -103,6 +108,7 @@ function build() {
   // ---- The direct line -----------------------------------------------
   add({
     id: 'transcription',
+    control: 'Transcribe',
     screen: 'direct_line',
     label: 'Transcribe a voice note',
     what: 'Voice made searchable, through a route that does not hand the audio to anybody else.',
@@ -114,6 +120,7 @@ function build() {
   // ---- The desk ------------------------------------------------------
   add({
     id: 'concierge_desk',
+    control: 'Make a request',
     screen: 'concierge',
     label: 'The concierge desk',
     what: 'Somebody who takes the request and comes back with it done.',
@@ -128,6 +135,7 @@ function build() {
   const waiting = connectors.CONNECTORS.filter((c) => !connectors.isConfigured(c.id));
   add({
     id: 'connectors',
+    control: 'Connectors',
     screen: 'settings',
     label: 'Connectors',
     what: `${waiting.length} of ${connectors.CONNECTORS.length} are still waiting on a credential.`,

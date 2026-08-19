@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
+import SoonButton from '../components/SoonButton.jsx';
 
 // The concierge desk, shown before it opens.
 //
@@ -63,6 +64,9 @@ export default function Concierge() {
             <span className="pill is-off">Coming</span>
           </div>
           <p>{data.reason}</p>
+          <div className="code-actions">
+            <SoonButton feature="concierge_desk" size="md" />
+          </div>
           <p className="hint">
             Everything else on this screen is a description of what it will do, not
             something you can use today. Nothing here reaches anybody.

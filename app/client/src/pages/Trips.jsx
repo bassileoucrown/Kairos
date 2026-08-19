@@ -4,7 +4,7 @@ import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import SignalPanel from '../components/SignalPanel.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { FlightChainForm, SingleLegForm } from '../components/JourneyForms.jsx';
-import NotYet from '../components/NotYet.jsx';
+import SoonButton from '../components/SoonButton.jsx';
 import VisaPanel from '../components/VisaPanel.jsx';
 import { useSignal } from '../lib/useSignal.js';
 import { useAuth } from '../lib/AuthContext.jsx';
@@ -217,6 +217,10 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
 
       <h3 className="ess-heading">Getting in</h3>
       <VisaPanel ownerId={ownerId} visa={visa} onChanged={load} />
+      <div className="code-actions">
+        <SoonButton feature="visa_rules" />
+        <SoonButton feature="inbound_email" />
+      </div>
 
       <h3 className="ess-heading">The journey</h3>
 
@@ -279,6 +283,9 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
             {i.seat && ` · Seat ${i.seat}`}
             {i.reference && ` · ${i.reference}`}
           </div>
+          {i.kind === 'flight' && (
+            <div className="code-actions"><SoonButton feature="flight_status" /></div>
+          )}
           {i.location && <div className="meta">{i.location}{i.destination ? ` → ${i.destination}` : ''}</div>}
 
           {/* Who is meeting them, and on whose number. Away from home there is
@@ -344,7 +351,6 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
         onSubmit={(body) => act(() => api.post(`/trips/${ownerId}/${tripId}/contacts`, body))}
       />
 
-      <NotYet screen="trips" />
     </div>
   );
 }

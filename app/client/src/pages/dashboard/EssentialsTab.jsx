@@ -46,7 +46,7 @@ function StalePill({ essential }) {
   return <span className="pill is-off">Unconfirmed for {Math.floor(days / 365)}y</span>;
 }
 
-import NotYet from '../../components/NotYet.jsx';
+import SoonButton from '../../components/SoonButton.jsx';
 
 export default function EssentialsTab({ ownerId }) {
   const [data, setData] = useState(null);
@@ -291,13 +291,16 @@ export default function EssentialsTab({ ownerId }) {
         </section>
       ))}
 
+      <div className="code-actions" style={{ marginTop: 12 }}>
+        <SoonButton feature="document_scans" />
+      </div>
+
       {!data.canSeeSensitive && (
         <p className="hint" style={{ marginTop: 16 }}>
           Your remit here covers scheduling, so identity details are not shown.
         </p>
       )}
 
-      <NotYet screen="vault" />
     </div>
   );
 }

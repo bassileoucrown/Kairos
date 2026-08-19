@@ -36,6 +36,10 @@ const NAV = [
   { to: '/pa?tab=availability', match: '/pa', label: 'Scheduling', icon: '◷', principalScoped: true, needsScheduling: true },
   { to: '/dashboard?tab=members', match: '/dashboard', label: 'Team', icon: '⚉', principalOnly: true },
   { to: '/dashboard?tab=settings', match: '/dashboard', label: 'Settings', icon: '⚙' },
+  // Last in the rail, deliberately. It is a roadmap rather than a place to
+  // work, and somebody being shown the product should be able to find it
+  // without it competing with anything they actually use.
+  { to: '/coming', label: 'Coming', icon: '◷' },
 ];
 
 const ASSISTANT_CATEGORIES = new Set(['pa', 'ea', 'chief_of_staff']);
