@@ -44,12 +44,12 @@ Facts as of 19 August 2026 (recount them, do not reuse): 183 endpoints across 30
 routers · 42 tables · 31 client routes · 51 suites · ~23k lines · 17 connectors,
 all of them still returning not-implemented.
 
-Test status on that date, stated the way the documents state it: 46 of 51 passed
-in a back-to-back run. `bnoticeui`, `bflow` and `btitle` pass individually and
-fail under shared rate-limit state; `bfail` needs a local Postgres; `bcustody`
-claims a fixed handle and so passes only once against a fresh database. Recount
-and re-run before writing any status claim, and never write "green" while
-`bcustody` is not.
+Test status, measured 19 August 2026: a back-to-back run of all 51 suites gives
+**50 passed, 1 failed**. The one is `bfail`, which asserts on database failure
+modes and needs a real Postgres at 127.0.0.1:5432 that the container does not
+have. Every suite now spawns its own server, so run order no longer affects the
+result. Recount and re-run before writing any status claim, and never write
+green while anything is red — name the failure instead.
 
 ## The four decks
 

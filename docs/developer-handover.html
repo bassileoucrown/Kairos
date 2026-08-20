@@ -685,33 +685,59 @@ bash sigmatrix.sh          # signal + trips across the Postgres configs</code></
   <div class="col">
     <h2>The real result of the last full run</h2>
     <p>
-      All 51 suites, run back to back on this machine: <strong>49 passed, 2 failed.</strong>
-      Neither failure is a product regression, and both are named here rather than filed under
-      "known environmental failure", which is a phrase that hides bugs.
+      All 51 suites, run back to back on this machine: <strong>50 passed, 1 failed.</strong>
+      The one failure is named here rather than filed under "known environmental failure", which is
+      a phrase that hides bugs.
     </p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Suite</th><th>What happens</th><th>State</th></tr></thead>
         <tbody>
           <tr>
-            <td class="k">bflow</td>
-            <td>Signup is refused when it runs inside <code>allsuites.sh</code>, so <code>/auth/me</code> returns no user and the run dies on the next line. It is one of three suites that still borrow the long-running server rather than spawning their own.</td>
-            <td><span class="tag soon">Passes alone</span></td>
-          </tr>
-          <tr>
-            <td class="k">btitle</td>
-            <td>Same cause as <code>bflow</code>, and it fails the same way — on the first response that assumes a session it never got.</td>
-            <td><span class="tag soon">Passes alone</span></td>
+            <td class="k">bfail</td>
+            <td>Six assertions about database failure modes — a wrong password, a missing database,
+              a garbled URL, a working one. Telling those apart needs a real Postgres at
+              <code>127.0.0.1:5432</code>, and this container has none, so every assertion in it is
+              unanswered rather than answered wrongly.</td>
+            <td><span class="tag soon">Needs Postgres</span></td>
           </tr>
         </tbody>
       </table>
     </div>
     <p>
-      The fix is the one <code>bcustody</code> has already had: give each of them its own server on
-      its own port. Sharing one is what makes a clean run depend on the order things happened in,
-      which is not a property a test run should have. Until that is done, describe the suite as
-      <strong>49 of 51, with both accounted for</strong> — not as green.
+      Stand a local Postgres up and this is the fifty-first. Until then, describe the suite as
+      <strong>50 of 51 with the one accounted for</strong> — not as green.
     </p>
+
+    <h3>Why every suite now owns its server</h3>
+    <p>
+      Three suites used to share a long-running server on port 4000, and all three failed
+      intermittently. The rate limiter got the blame for a while — it is in memory and keyed on the
+      address as well as the account, so one suite could exhaust another's budget — but that was a
+      symptom sitting on top of something worse.
+    </p>
+    <p>
+      <strong>Twenty-seven of the fifty-one suites delete
+      <code>app/server/data/kairos.sqlite</code> before they start.</strong> A server that outlives
+      one of those deletions goes on writing to a file that is no longer on disk. The next suite to
+      use it sees a signup succeed and then finds no account — a failure that points nowhere near
+      its cause, and which lands on whichever suite happens to run next in alphabetical order rather
+      than on anything to do with what it tests.
+    </p>
+    <p>
+      So there is no shared server any more. Each suite spawns one on its own port with its own
+      environment and stops it again, which means run order can no longer change the result. If you
+      add a suite, do the same — and if you reach for a wipe, ask first whether run-scoped fixtures
+      would do instead. They almost always would.
+    </p>
+    <div class="why">
+      <b>Wait for the database, not for the port</b>
+      A suite's readiness loop must poll <code>/api/status</code> until <code>databaseReady</code> is
+      true. The server binds its port <em>before</em> the database is up — deliberately, so a
+      database problem is visible at a URL instead of invisible in a deploy queue — and every API
+      route answers 503 until it is ready. A loop that stops at the first HTTP response hands the
+      suite a server that refuses its signup.
+    </div>
 
     <h3>What <code>bcustody</code> was, and what fixing it taught</h3>
     <p>
@@ -758,10 +784,16 @@ bash sigmatrix.sh          # signal + trips across the Postgres configs</code></
         <thead><tr><th>Task</th><th>What already exists</th><th>What is missing</th><th></th></tr></thead>
         <tbody>
           <tr>
-            <td><strong>Give <code>bflow</code> and <code>btitle</code> their own servers</strong></td>
-            <td><code>bcustody</code> as the worked example, and an <code>allsuites.sh</code> that now starts and stops its own shared server rather than assuming one is lying around.</td>
-            <td>The same treatment for the last two borrowers. After that nothing shares a rate limiter and the run stops depending on order.</td>
+            <td><strong>A local Postgres for <code>bfail</code></strong></td>
+            <td>The suite, and the six failure modes it asserts on. Everything else in the matrix already runs.</td>
+            <td>A Postgres at <code>127.0.0.1:5432</code>. Without one, <code>bfail</code> cannot tell a wrong password from a missing database, which is the entire thing it exists to check — and the four-configuration matrix cannot be run at all.</td>
             <td><span class="tag no">First</span></td>
+          </tr>
+          <tr>
+            <td><strong>Stop the remaining database wipes</strong></td>
+            <td>Twenty-seven suites that delete <code>kairos.sqlite</code> on the way in, and <code>bcustody</code> as the worked example of not needing to.</td>
+            <td>Run-scoped fixtures in each of them, so a suite stops destroying development data as a side effect of running. Now that nothing shares a server this is hygiene rather than correctness, but it is why the bug was so hard to see.</td>
+            <td><span class="tag soon">Cleanup</span></td>
           </tr>
           <tr>
             <td><strong>Live flight status</strong></td>
