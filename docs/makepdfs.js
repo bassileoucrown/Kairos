@@ -47,12 +47,33 @@ const PRINT_CSS = `
   /* Keep a heading with what it introduces, and never split a figure. */
   h1, h2, h3, h4 { break-after: avoid-page; }
   .card, .why, .stopblock, .verdict, .stat, .rules li, tr, .row { break-inside: avoid; }
+
+  /* The day, whole or not at all.
+     Protecting each .row individually was not enough: the rows stayed intact
+     and the table still broke between them, so the cascade — the one figure
+     the deck is built around — arrived as two halves with the anchor stranded
+     on the following page. A reader meets the flight before they have met the
+     day it belongs to, which is exactly backwards. */
+  .demo, .day { break-inside: avoid; }
   .leaf { break-inside: auto; padding: 20pt 0; }
   .title-leaf { break-after: page; padding: 0 0 24pt; }
   .end { break-before: avoid-page; }
 
-  /* Nothing scrolls on paper — let wide things be as wide as they are. */
-  .tablewrap, pre { overflow: visible; }
+  /* Nothing scrolls on paper. On screen a long line sits inside a box that
+     scrolls sideways; in print that box has nowhere to go, so the line ran
+     straight out past its own background and off toward the margin. Wrapping
+     keeps it inside the box it belongs to — code with real indentation still
+     reads correctly, and a shell command that continues on the next line is
+     obviously one command. */
+  .tablewrap { overflow: visible; }
+  pre {
+    overflow: visible;
+    /* Small enough that the longest line in these documents fits, with wrapping
+       left in as the backstop rather than the mechanism. */
+    font-size: 8.6pt;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 
   /* The slider is frozen at one value in the PDF; say so rather than
      printing a control nobody can move. */

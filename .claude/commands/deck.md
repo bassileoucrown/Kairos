@@ -174,9 +174,14 @@ drift from the product.
 - Keep the repo copy in `docs/` and the published artifact identical.
 - Title is a name, not a caption. `Kairos by Exousia` is taken by the
   prototype — give each deck its own specific name.
-- `checkdecks.js` in the scratchpad drives all four through Chromium in both
-  themes at both widths and asserts the demo arc. Rewrite it if it is gone;
-  publishing without it has no way of catching a theme that never resolves.
+- `docs/checkdecks.js` drives all four through Chromium in both themes at both
+  widths and asserts the demo arc. Run it before publishing; a theme that never
+  resolves is invisible until somebody opens the page on the other setting.
+- `docs/checkpdfs.js --shots` opens each PDF in Chromium and screenshots the
+  pages most likely to be wrong. Run it after `makepdfs.js`, and **look at the
+  screenshots** — page counts alone let a bisected figure through. Never check a
+  PDF with `strings`: Chromium writes text as subsetted glyph ids, so a grep
+  comes back clean whether the word is on the page or not.
 
 ## Reference
 
