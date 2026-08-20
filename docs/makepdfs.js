@@ -8,7 +8,7 @@
 //   node docs/makepdfs.js
 //
 // Chromium is already on this machine at /opt/pw-browsers/chromium.
-const { chromium } = require('/home/user/Kairos/node_modules/playwright-core');
+const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
 
@@ -76,7 +76,7 @@ function wrapped(file) {
 
 (async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
 
   for (const [file, out, freezeAt] of DOCS) {
     const ctx = await browser.newContext({ colorScheme: 'light' });

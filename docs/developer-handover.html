@@ -635,16 +635,23 @@ const ENFORCED = String(process.env.PLAN_ENFORCEMENT || '').toLowerCase() === 'o
   <div class="col">
     <h2>Fifty-one suites, and what each of them is for</h2>
     <p>
-      Tests are standalone Node scripts, not a framework. Each is named <code>b*.js</code>, prints
-      ticks and crosses, exits non-zero on failure, and ends with a single sentence saying what it
-      proved. API suites use <code>fetch</code> against a server the suite starts on its own port;
-      UI suites drive Chromium through <code>playwright-core</code> at
-      <code>/opt/pw-browsers/chromium</code>.
+      They live in <code>app/tests/</code>. Standalone Node scripts, not a framework: each is named
+      <code>b*.js</code>, prints ticks and crosses, exits non-zero on failure, and ends with a single
+      sentence saying what it proved. That last line is the point — <em>Nobody held up a name, and
+      nobody had to guess</em> tells you what broke; <em>12 assertions failed</em> does not. Roughly
+      half drive the API with <code>fetch</code>; the rest drive Chromium through
+      <code>playwright-core</code>, looked for at <code>/opt/pw-browsers/chromium</code> unless
+      <code>CHROMIUM_PATH</code> says otherwise.
     </p>
-    <pre><code>bash allsuites.sh          # every suite, sequentially, one port each
-node btravel.js            # one suite
-bash pgmatrix.sh           # pairing codes across all four storage configs
-bash sigmatrix.sh          # signal + trips across the Postgres configs</code></pre>
+    <pre><code>npm test                       # every suite, sequentially
+bash app/tests/allsuites.sh    # the same thing
+node app/tests/btravel.js      # one suite
+bash app/tests/pgmatrix.sh     # pairing codes across all four storage configs
+bash app/tests/sigmatrix.sh    # signal + trips across the Postgres configs</code></pre>
+    <p>
+      Nothing needs to be running first. Every suite spawns and stops its own server on its own
+      port, so no two can interfere and run order cannot change the result.
+    </p>
 
     <h3>The four database configurations</h3>
     <div class="tablewrap">
@@ -922,7 +929,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code><
       <li>Read <code>lib/db.js</code> top to bottom. It is the file most likely to bite you.</li>
       <li>Read <code>lib/spaceAccess.js</code> and <code>lib/paAccess.js</code> together, and note
         that they answer differently on purpose.</li>
-      <li>Run <code>bash allsuites.sh</code> once before you change anything, so you know what this
+      <li>Run <code>npm test</code> once before you change anything, so you know what this
         machine's baseline looks like.</li>
       <li>Then read section 05 again. Those are the things a review will ask you about.</li>
     </ol>

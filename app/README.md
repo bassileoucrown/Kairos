@@ -43,6 +43,19 @@ cd app/client && npm run build
 cd ../server && npm start     # serves the built client + API on one port (4000)
 ```
 
+### Tests
+
+```bash
+npm test                      # all 51 suites, from the repo root
+node app/tests/btravel.js     # one of them
+```
+
+They live in [`app/tests/`](tests/README.md), which explains how they are
+written and why each one spawns its own server. Nothing needs to be running
+first. `bfail` is the single expected red without a local Postgres — it asserts
+on database *failure* modes and cannot tell a wrong password from a missing
+database with nothing listening.
+
 ## The database — two backends, one interface
 
 `server/lib/db.js` is the only file that knows which database is in use.

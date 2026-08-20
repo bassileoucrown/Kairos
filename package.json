@@ -7,10 +7,14 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "bash app/tests/allsuites.sh"
   },
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   },
   "engines": {
     "node": ">=18"

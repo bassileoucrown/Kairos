@@ -1,6 +1,6 @@
 // Verify the four documents render: both themes, desktop and mobile,
 // no console errors, no horizontal overflow, and the cascade demo's arc.
-const { chromium } = require('/home/user/Kairos/node_modules/playwright-core');
+const { chromium } = require('playwright-core');
 const path = require('path');
 
 const SC = __dirname;  // the four documents live beside this file
@@ -31,7 +31,7 @@ const ok = (l, c, extra = '') => {
 };
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
 
   for (const [name, file] of DOCS) {
     console.log('\n' + name);
