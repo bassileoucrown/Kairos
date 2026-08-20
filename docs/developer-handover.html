@@ -520,8 +520,9 @@ await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></
         capability reports available, so the real control drops into exactly that position with no
         other change anywhere.</li>
       <li><code>components/TimezonePicker.jsx</code> — searchable over city, region, zone and
-        offset, with an alias map for the cities people actually name, and five prominence bands so
-        typing "lon" offers London before Longyearbyen.</li>
+        offset, with an alias map for the cities people actually name, and five prominence bands so a
+        three-letter prefix offers the capital somebody meant rather than whichever
+        entry happens to share its opening letters.</li>
     </ul>
 
     <div class="why">
@@ -854,8 +855,9 @@ bash sigmatrix.sh          # signal + trips across the Postgres configs</code></
         it.</span></li>
       <li><b>Navigating to the page you are already on is a reload.</b><span>A "back" test assumed
         a cold arrival and got a preserved history instead. Open a fresh tab.</span></li>
-      <li><b>Ranking by substring is not ranking.</b><span>Typing "lon" offered Longyearbyen before
-        London. Fixed with prominence bands, not by weakening the test.</span></li>
+      <li><b>Ranking by substring is not ranking.</b><span>A three-letter prefix offered a remote
+        Arctic settlement ahead of the capital city everybody actually meant. Fixed with
+        prominence bands, not by weakening the test.</span></li>
       <li><b>Response shapes are not guessable.</b><span>Posting a message returns
         <code>{ id }</code>, not <code>{ message }</code>. The direct line is surfaced on
         <code>/api/today</code>, not on its own route. Read the route before asserting on it.</span></li>

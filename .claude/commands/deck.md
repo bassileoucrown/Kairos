@@ -65,7 +65,7 @@ honest-about-unbuilt) framed as *what a competitor cannot copy from a feature
 list*. Keep the honest-status section — it is a credibility asset with this
 audience, not a liability.
 **Add:** market shape (who pays, and whether it is the principal or the
-household), pricing posture, and why Nigeria/London is an advantage rather
+household), pricing posture, and why Nigeria is an advantage rather
 than something to explain away.
 **Cut:** implementation detail beyond one engineering section.
 
@@ -142,7 +142,7 @@ The day, and the arc it produces, are already tuned. Keep both:
     10:30–11:15  Call with counsel       travel  0   external attendee
     12:15–13:30  Lunch, Eko Hotel        travel 30
     14:15–16:45  Car to the airport      travel 15   household driver
-    17:10        BA75 to London          ANCHOR
+    17:10        Flight to Dubai         ANCHOR
 
      20 min → one leg moves, nothing else changes
      45 min → one leg moves, the lunch gap absorbs the rest
@@ -158,6 +158,12 @@ If `cascade.js` has changed, re-derive the demo from it so the page cannot
 drift from the product.
 
 ## Non-negotiables
+
+- **No London.** The owner asked for it out of these documents on 19 August
+  2026 — as an office, as a market, and as an example destination. Exousia is
+  Lagos, Nigeria. Trip and flight examples go to Dubai. The app code still
+  carries London in timezone fixtures and test data; that is deliberate and
+  stays.
 
 - Load the `artifact-design` skill before writing the page.
 - Verify in a real browser at desktop and mobile widths, in **both** themes,
