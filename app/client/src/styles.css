@@ -1498,3 +1498,9 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .coming-row.is-on { opacity: 0.72; }
 .coming-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .coming-head .name { font-weight: 650; }
+
+/* The device you are holding, in a list where picking the wrong row signs you
+   out of the one you are looking at. */
+.ess-row.is-current-device {
+  border-left: 2px solid var(--accent, #3E6357);
+}

@@ -36,6 +36,7 @@ export default function Dashboard() {
   const setTab = (t) => setSearchParams({ tab: t }, { replace: true });
   const [copied, setCopied] = useState(false);
   const [hasAvailability, setHasAvailability] = useState(null);
+  const [hasQuestion, setHasQuestion] = useState(null);
 
   const bookingPath = `/book/${user.slug}`;
   const bookingUrl = `${window.location.origin}${bookingPath}`;
@@ -54,6 +55,15 @@ export default function Dashboard() {
   // plainly instead of leaving them to discover it from an empty page.
   // Re-checked when leaving the Availability tab so the notice clears as
   // soon as hours are saved.
+  // The security question guards signing a lost device out, and the moment it
+  // is needed is the moment nobody is browsing settings. Prompted here so it is
+  // decided in advance, and only until it is set.
+  useEffect(() => {
+    api.get('/security/question')
+      .then((d) => setHasQuestion(d.question.isSet))
+      .catch(() => setHasQuestion(null));
+  }, [tab]);
+
   useEffect(() => {
     api.get('/availability')
       .then((data) => setHasAvailability(data.rules.length > 0))
@@ -88,6 +98,19 @@ export default function Dashboard() {
           </span>
           <button className="btn btn-primary btn-sm" type="button" onClick={() => setTab('availability')}>
             Set your hours
+          </button>
+        </div>
+      )}
+
+      {hasQuestion === false && (
+        <div className="alert alert-warning sq-prompt" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ flex: 1, minWidth: 240 }}>
+            <strong>You have no security question yet.</strong> It is what lets you sign a lost
+            phone out from whatever device you still have — deliberately not your authenticator
+            code, since that is often on the phone that went missing.
+          </span>
+          <button className="btn btn-primary btn-sm" type="button" onClick={() => setTab('security')}>
+            Set your question
           </button>
         </div>
       )}

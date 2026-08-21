@@ -28,6 +28,12 @@ import Household from './pages/Household.jsx';
 import MyInstructions from './pages/MyInstructions.jsx';
 import Announcements from './pages/Announcements.jsx';
 
+// Every step needs an entry here as well as a <Route>. A step with a route but
+// no entry falls through to the '/onboarding/profile' default below, which then
+// bounces straight back because that is not the step the account is on — a
+// redirect loop that renders as a blank page with nothing in the console.
+// This is not theoretical; it happened when the security question was briefly
+// a step here.
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
   meeting_type: '/onboarding/meeting-type',
@@ -39,7 +45,12 @@ const ONBOARDING_STEP_ROUTE = {
 // rather than dead-ending; normalizing here (not just in the route table)
 // keeps the guard's step comparison from bouncing them in a redirect loop.
 function effectiveStep(user) {
-  return user.onboardingStep === 'availability' ? 'meeting_type' : user.onboardingStep;
+  // Two retired steps, mapped rather than deleted so an account that stopped
+  // on one is not stranded on a screen that no longer exists. Availability
+  // moved to the dashboard; the security question is now a prompt there too.
+  if (user.onboardingStep === 'availability') return 'meeting_type';
+  if (user.onboardingStep === 'security_question') return 'done';
+  return user.onboardingStep;
 }
 
 // An assistant and a principal are asking different questions, so they get

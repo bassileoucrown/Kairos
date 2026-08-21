@@ -363,6 +363,18 @@ function ready() {
       // worth spending it on. See lib/stepUp.js.
       await ensureColumn('user_totp', 'scope', "TEXT NOT NULL DEFAULT 'vault'");
 
+      // Which device a session belongs to, and when it was last used, so a
+      // principal can see everywhere they are signed in and end any of it.
+      // See lib/devices.js.
+      await ensureColumn('sessions', 'user_agent', 'TEXT');
+      await ensureColumn('sessions', 'last_seen_at', 'TEXT');
+      await ensureColumn('sessions', 'last_ip', 'TEXT');
+      // The question that guards ending another device's session. Not a
+      // second factor: the emergency this is for is a lost phone, and the
+      // authenticator was on it. See lib/securityQuestion.js.
+      await ensureColumn('users', 'security_question', 'TEXT');
+      await ensureColumn('users', 'security_answer_hash', 'TEXT');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');

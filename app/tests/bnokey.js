@@ -46,9 +46,9 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
     await p.waitForURL('**/today', { timeout: 15000 });
 
     await p.goto(`${BASE}/dashboard?tab=essentials`);
-    await p.waitForSelector('.alert-warning', { timeout: 15000 });
+    await p.waitForSelector('.alert-warning:not(.sq-prompt)', { timeout: 15000 });
 
-    const notice = await p.locator('.alert-warning').innerText();
+    const notice = await p.locator('.alert-warning:not(.sq-prompt)').innerText();
     ok('the screen says identity documents are not available yet',
       /identity documents aren't available yet/i.test(notice), notice);
     ok('and says why, without jargon', /encryption key/i.test(notice));

@@ -73,6 +73,16 @@ async function requireAuth(req, res, next) {
   // for a few minutes rather than against the account everywhere. See
   // lib/stepUp.js.
   req.sessionId = cookies[SESSION_COOKIE];
+
+  // Note that this device is still in use, at most once every few minutes.
+  // Required here rather than at the top of the file: lib/devices.js reads
+  // this module for nothing, but lib/securityQuestion.js does, and a cycle
+  // through the authentication path is not worth the tidiness.
+  //
+  // Deliberately not awaited. Recording a last-seen is bookkeeping, and making
+  // every authenticated request wait on a write to earn it is the wrong trade;
+  // touch() swallows its own failures for the same reason.
+  require('./devices').touch(req.sessionId, req);
   next();
 }
 

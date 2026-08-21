@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const devices = require('../lib/devices');
 const { BRAND_SHORT, BRAND_FULL } = require('../lib/brand');
 const {
   hashPassword, verifyPassword, createSession, destroySession,
@@ -140,6 +141,9 @@ router.post('/signup', async (req, res) => {
 
   const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   const session = await createSession(id);
+  // Stamp the device at the moment it signs in, so a session that is never
+  // used again still shows where it came from.
+  await devices.stamp(session.id, req);
   setSessionCookie(res, session);
   res.status(201).json({ user: publicUser(user) });
 });
@@ -209,6 +213,9 @@ router.post('/login', loginLimiter, async (req, res) => {
 
   clear(`login:${String(email).trim().toLowerCase()}`);
   const session = await createSession(user.id);
+  // Stamp the device at the moment it signs in, so a session that is never
+  // used again still shows where it came from.
+  await devices.stamp(session.id, req);
   setSessionCookie(res, session);
   res.json({ user: publicUser(user) });
 });

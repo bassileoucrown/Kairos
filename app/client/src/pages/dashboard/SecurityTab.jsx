@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import EncryptionKeySetup from '../../components/EncryptionKeySetup.jsx';
 import TwoFactorSetup from '../../components/TwoFactorSetup.jsx';
+import SignedInDevices from '../../components/SignedInDevices.jsx';
+import SecurityQuestionSetup from '../../components/SecurityQuestionSetup.jsx';
 
 // Two-factor authentication, and who has looked at what.
 //
@@ -169,6 +171,10 @@ export default function SecurityTab() {
           </div>
         )}
       </section>
+
+      <SignedInDevices />
+
+      <SecurityQuestionSetup />
 
       <section className="ess-group">
         <h3 className="ess-heading">Who has looked at your details</h3>

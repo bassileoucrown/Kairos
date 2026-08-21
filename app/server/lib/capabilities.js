@@ -131,6 +131,23 @@ function build() {
     state: 'soon',
   });
 
+  // ---- Settings: where a session is signed in from ---------------------
+  // The device, the address and the last-seen time are all real and shown.
+  // Turning that address into a city is what is missing, and it stays missing
+  // until there is a dataset on this machine to do it with — asking somebody
+  // else's lookup service would hand a third party a running log of where a
+  // principal has been, which is the one thing this screen exists to protect.
+  add({
+    id: 'session_location',
+    control: 'Approximate location',
+    screen: 'settings',
+    label: 'Where a device signed in from',
+    what: 'The city behind an address. The address itself, the device and the last-seen time are already shown.',
+    available: !!process.env.GEOIP_DB,
+    needs: ['GEOIP_DB'],
+    state: 'soon',
+  });
+
   // ---- Settings: the connectors, summarised ---------------------------
   const waiting = connectors.CONNECTORS.filter((c) => !connectors.isConfigured(c.id));
   add({

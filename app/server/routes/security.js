@@ -8,6 +8,9 @@ const { SCOPES, verifyStepUp } = require('../lib/stepUp');
 const totp = require('../lib/totp');
 const { BRAND_FULL } = require('../lib/brand');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
+const devices = require('../lib/devices');
+const securityQuestion = require('../lib/securityQuestion');
+const capabilities = require('../lib/capabilities');
 
 // Two-factor authentication, and the record of who looked at what.
 //
@@ -172,6 +175,118 @@ router.get('/access-log', async (req, res) => {
       isSelf: r.actor_id === req.user.id,
     })),
   });
+});
+
+
+
+// ---------------------------------------------------------------------------
+// Where this account is signed in.
+//
+// Multi-device always worked — a session is a row and nothing limited how many
+// — but there was no way to see them and no way to end one from anywhere but
+// the device itself. A lost phone therefore held a live session for the rest
+// of its thirty days, and the only lever was a password reset.
+// ---------------------------------------------------------------------------
+
+// Guessing the security question has to cost something too, or an unlocked
+// phone gets unlimited tries at evicting everybody else.
+// Setting the question is a separate bucket from using it. Sharing one meant
+// a principal who set a question and then signed two devices out had spent
+// most of a budget sized for guessing — the same trap as the login limiter,
+// where a success clears the account key and never the address key, so honest
+// use on a shared address quietly runs the counter down.
+const questionLimiter = limit({
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+  keys: (req) => [`question:${req.user.id}`, `question-ip:${clientIp(req)}`],
+  message: 'Too many attempts. Wait a few minutes and try again.',
+});
+
+const revokeLimiter = limit({
+  limit: 10,
+  windowMs: 15 * 60 * 1000,
+  keys: (req) => [`revoke:${req.user.id}`, `revoke-ip:${clientIp(req)}`],
+  message: 'Too many attempts. Wait a few minutes and try again.',
+});
+
+router.get('/sessions', async (req, res) => {
+  const question = await securityQuestion.state(req.user.id);
+  res.json({
+    sessions: await devices.list(req.user.id, req.sessionId),
+    // What the screen must ask for before it can revoke anything.
+    guard: question.isSet
+      ? { needs: 'answer', question: question.question }
+      : { needs: 'password', question: null },
+    // Named here rather than assumed, so the screen can say what it cannot do
+    // instead of quietly showing an address and calling it a place.
+    approximateLocation: capabilities.list('settings')
+      .find((c) => c.id === 'session_location') || null,
+  });
+});
+
+// End one device.
+router.post('/sessions/:handle/revoke', revokeLimiter, async (req, res) => {
+  const check = await securityQuestion.verify(req.user.id, {
+    answer: req.body?.answer,
+    password: req.body?.password,
+  });
+  if (!check.ok) return res.status(401).json({ error: check.error, needs: check.needs });
+
+  // Ending the session you are holding is Sign out, and it lives in the
+  // account menu. Refusing here means nobody signs themselves out by accident
+  // while trying to evict a stolen phone.
+  const target = await devices.findByHandle(req.user.id, req.params.handle);
+  if (target && target.id === req.sessionId) {
+    return res.status(400).json({ error: 'That is this device. Use Sign out instead.' });
+  }
+
+  // 404 rather than 403 for a handle that is not this account's: whether a
+  // given session exists is not something to confirm to somebody guessing.
+  if (!(await devices.revoke(req.user.id, req.params.handle))) {
+    return res.status(404).json({ error: 'No such session.' });
+  }
+  clear(`revoke:${req.user.id}`);
+  res.json({ sessions: await devices.list(req.user.id, req.sessionId) });
+});
+
+// End everything except this device.
+router.post('/sessions/revoke-others', revokeLimiter, async (req, res) => {
+  const check = await securityQuestion.verify(req.user.id, {
+    answer: req.body?.answer,
+    password: req.body?.password,
+  });
+  if (!check.ok) return res.status(401).json({ error: check.error, needs: check.needs });
+
+  const ended = await devices.revokeOthers(req.user.id, req.sessionId);
+  clear(`revoke:${req.user.id}`);
+  res.json({ ended, sessions: await devices.list(req.user.id, req.sessionId) });
+});
+
+// ---------------------------------------------------------------------------
+// The security question itself.
+// ---------------------------------------------------------------------------
+
+router.get('/question', async (req, res) => {
+  res.json({ question: await securityQuestion.state(req.user.id) });
+});
+
+// Setting or changing it costs the password. It guards a control, so it is a
+// security setting, and a security setting somebody can change just by having
+// the tab open protects nothing.
+router.post('/question', questionLimiter, async (req, res) => {
+  const { question, answer, password } = req.body || {};
+
+  const row = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  if (!password || !verifyPassword(String(password), row.password_hash)) {
+    return res.status(401).json({ error: 'Enter your password to change this.', needs: 'password' });
+  }
+
+  const problem = securityQuestion.problem(question, answer);
+  if (problem) return res.status(400).json({ error: problem });
+
+  await securityQuestion.set(req.user.id, question, answer);
+  clear(`question:${req.user.id}`);
+  res.json({ question: await securityQuestion.state(req.user.id) });
 });
 
 module.exports = router;
