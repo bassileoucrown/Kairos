@@ -215,12 +215,12 @@ td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-
   <div class="col">
     <h2>One process, two halves, no framework surprises</h2>
     <div class="stats">
-      <div class="stat"><span class="n">183</span><span class="k">API endpoints</span></div>
+      <div class="stat"><span class="n">188</span><span class="k">API endpoints</span></div>
       <div class="stat"><span class="n">30</span><span class="k">Route modules</span></div>
       <div class="stat"><span class="n">42</span><span class="k">Tables</span></div>
       <div class="stat"><span class="n">31</span><span class="k">Client routes</span></div>
-      <div class="stat"><span class="n">51</span><span class="k">Browser suites</span></div>
-      <div class="stat"><span class="n">~23k</span><span class="k">Lines of app code</span></div>
+      <div class="stat"><span class="n">54</span><span class="k">Browser suites</span></div>
+      <div class="stat"><span class="n">~24k</span><span class="k">Lines of app code</span></div>
     </div>
     <p>
       <strong>Server:</strong> Express 4, plain CommonJS, no ORM, no build step. Sessions are
@@ -446,6 +446,23 @@ await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></
       <li><b>Nobody's name is displayed in an arrivals hall.</b><span>The driver card shows the
         flight, the meeting point, the phrase and the signal — never the principal.
         <code>bsignal</code>, <code>btrip</code>.</span></li>
+
+      <li><b>Revoking a session kills it on that device's very next request.</b><span>This is
+        inherited, not added: every request re-reads the session row, so there is no cache and no
+        stateless token to outlive the delete. Swap sessions for JWTs and the property disappears
+        silently, which is why <code>bdevices</code> asserts the 401 rather than the row count.</span></li>
+
+      <li><b>Ending another device is guarded by something you know, never by the second
+        factor.</b><span>The emergency is a lost phone, and the authenticator was on it. Gating this
+        on TOTP makes the one case it exists for the one case it cannot serve. Falls back to the
+        account password where no question is set, so it never refuses for want of a setting.
+        <code>bdevices</code>, <code>bdevicesui</code>.</span></li>
+
+      <li><b>A revealed password is never remembered.</b><span>Show/Hide starts hidden on every
+        mount with nowhere to persist, so a password revealed on a shared laptop is not left
+        revealed for the next person. <code>bshow</code> reloads the page rather than re-rendering,
+        because a component-local reset passes a re-render and still fails the case that
+        matters.</span></li>
     </ul>
   </div>
 </section>
@@ -472,6 +489,8 @@ await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></
           <tr><td class="k">secretBox.js</td><td>AES-256-GCM. Key from the environment, never the database.</td></tr>
           <tr><td class="k">stepUp.js</td><td>Which factor to demand, and the short grace window.</td></tr>
           <tr><td class="k">totp.js</td><td>RFC 6238, written out. No dependency in the auth path.</td></tr>
+          <tr><td class="k">devices.js</td><td>Which devices an account is signed in on, and ending any of them.</td></tr>
+          <tr><td class="k">securityQuestion.js</td><td>The thing you know, for when the thing you have is the thing you lost.</td></tr>
           <tr><td class="k">household.js</td><td>Staff, structurally separate from assistants.</td></tr>
           <tr><td class="k">trips.js</td><td>Journeys, per-leg zones, arrangements.</td></tr>
           <tr><td class="k">pickup.js · pickupSignal.js</td><td>The phrase, and the HMAC'd colour-and-shape signal.</td></tr>
@@ -513,7 +532,7 @@ await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></
       and no CSS-in-JS; match the surrounding conventions rather than introducing a third way.
     </p>
 
-    <h3>Two client-side pieces worth knowing</h3>
+    <h3>Client-side pieces worth knowing</h3>
     <ul>
       <li><code>components/SoonButton.jsx</code> — the in-situ placeholder for an unbuilt
         capability. It fetches the registry once per page and renders <em>nothing</em> when the
@@ -522,6 +541,14 @@ await ensureIndex('idx_itin_pickup', 'itinerary_items (pickup_token)');</code></
       <li><code>components/TimezonePicker.jsx</code> — searchable over city, region, zone and
         offset, with an alias map for the cities people actually name, and five prominence bands so
         typing "lon" offers London before Longyearbyen.</li>
+      <li><code>components/PasswordField.jsx</code> — every password box in the app. Owns the
+        Show/Hide toggle, and the reasons it is <code>type="button"</code>, that its label and its
+        accessible name flip together, and that "shown" is never persisted anywhere.
+        <strong>Do not hand-roll another password input</strong>; the point of one component is that
+        those three decisions cannot drift apart.</li>
+      <li><code>components/SignedInDevices.jsx</code> — the session list and the revoke flow. Reads
+        <code>guard.needs</code> from the server rather than deciding for itself whether to ask for
+        an answer or a password.</li>
     </ul>
 
     <div class="why">
@@ -691,28 +718,23 @@ bash app/tests/sigmatrix.sh    # signal + trips across the Postgres configs</cod
   <div class="col">
     <h2>The real result of the last full run</h2>
     <p>
-      All 51 suites, run back to back on this machine: <strong>50 passed, 1 failed.</strong>
-      The one failure is named here rather than filed under "known environmental failure", which is
-      a phrase that hides bugs.
+      All 54 suites, run back to back on this machine: <strong>54 passed, 0 failed.</strong>
+      That is a statement about this machine on this date, not a permanent property, so re-run
+      before repeating it anywhere.
     </p>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>Suite</th><th>What happens</th><th>State</th></tr></thead>
-        <tbody>
-          <tr>
-            <td class="k">bfail</td>
-            <td>Six assertions about database failure modes — a wrong password, a missing database,
-              a garbled URL, a working one. Telling those apart needs a real Postgres at
-              <code>127.0.0.1:5432</code>, and this container has none, so every assertion in it is
-              unanswered rather than answered wrongly.</td>
-            <td><span class="tag soon">Needs Postgres</span></td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="why">
+      <b>The one that needs something you may not have</b>
+      <code>bfail</code> makes six assertions about database failure modes — a wrong password, a
+      missing database, a garbled URL, a working one — and telling those apart needs a real Postgres
+      at <code>127.0.0.1:5432</code>. Where there is none, its assertions are unanswered rather than
+      answered wrongly, and the honest report is <strong>53 of 54 with the one accounted for</strong>
+      rather than a failure. There is a Postgres on this machine, which is why the count above is
+      the full set.
     </div>
     <p>
-      Stand a local Postgres up and this is the fifty-first. Until then, describe the suite as
-      <strong>50 of 51 with the one accounted for</strong> — not as green.
+      Say the number you measured. "Green" is a claim about every suite, and the moment one of them
+      needs a service that is not running, it stops being true — which is exactly when somebody
+      quotes it in a deck.
     </p>
 
     <h3>Why every suite now owns its server</h3>
@@ -790,10 +812,16 @@ bash app/tests/sigmatrix.sh    # signal + trips across the Postgres configs</cod
         <thead><tr><th>Task</th><th>What already exists</th><th>What is missing</th><th></th></tr></thead>
         <tbody>
           <tr>
-            <td><strong>A local Postgres for <code>bfail</code></strong></td>
-            <td>The suite, and the six failure modes it asserts on. Everything else in the matrix already runs.</td>
-            <td>A Postgres at <code>127.0.0.1:5432</code>. Without one, <code>bfail</code> cannot tell a wrong password from a missing database, which is the entire thing it exists to check — and the four-configuration matrix cannot be run at all.</td>
-            <td><span class="tag no">First</span></td>
+            <td><strong>A local Postgres, wherever this is worked on</strong></td>
+            <td>The suite, and the six failure modes it asserts on. There is one on the machine this was last run from, which is why the count reads 54 of 54.</td>
+            <td>Nothing here — but a machine without a Postgres at <code>127.0.0.1:5432</code> cannot run <code>bfail</code> or the four-configuration matrix, and should say <strong>53 of 54</strong> rather than quietly dropping one.</td>
+            <td><span class="tag soon">Per machine</span></td>
+          </tr>
+          <tr>
+            <td><strong>Approximate location for a session</strong></td>
+            <td>The device, the address and the last-seen time, all shown. The capability row, and the inert placeholder on the screen it will appear on.</td>
+            <td>A geo-IP dataset on the machine, behind <code>GEOIP_DB</code>. Deliberately not an external lookup service: that would hand a third party a running log of where a principal has been, which is the thing this screen exists to protect.</td>
+            <td><span class="tag no">Refused as a service</span></td>
           </tr>
           <tr>
             <td><strong>Stop the remaining database wipes</strong></td>
@@ -902,6 +930,30 @@ bash app/tests/sigmatrix.sh    # signal + trips across the Postgres configs</cod
         commands more than once. Find the PID and kill that.</span></li>
       <li><b>A leftover stub server holds its port.</b><span>Suites that start a stub must stop it,
         or the next run fails with <code>EADDRINUSE</code> and looks like a hang.</span></li>
+
+      <li><b>An onboarding step needs two entries, not one.</b><span><code>App.jsx</code> keeps
+        <code>ONBOARDING_STEP_ROUTE</code> separate from the <code>&lt;Route&gt;</code> list. Adding
+        the route without the map entry sends the step to a default that redirects straight back — a
+        loop that renders as a blank page with an empty console and no error to search for. Retiring
+        a step needs the same care in reverse: map it to <code>done</code> in
+        <code>effectiveStep</code> so an account parked on it is not stranded.</span></li>
+
+      <li><b>A rate limiter shared between setting a secret and using it will punish the honest
+        user.</b><span>The security question and the revoke control shared one bucket, so setting a
+        question and then signing two devices out spent most of a budget sized for guessing. Same
+        shape as the login limiter, where a success clears the account key and never the address
+        key. Give each purpose its own bucket.</span></li>
+
+      <li><b>A toggle inside a form submits it.</b><span>A <code>&lt;button&gt;</code> with no
+        <code>type</code> defaults to submit, so a Show-password control would create the account.
+        Always <code>type="button"</code>, and assert you are still on the same page
+        afterwards.</span></li>
+
+      <li><b>A test that cannot fail is worse than no test.</b><span>Two here: grepping a PDF with
+        <code>strings</code> for a word that is inside a compressed stream, and a "fallback" branch
+        that printed a line claiming a case was covered elsewhere when it was covered nowhere. Both
+        reported success while proving nothing. If an assertion has an escape hatch, make the hatch
+        fail loudly.</span></li>
     </ul>
   </div>
 </section>

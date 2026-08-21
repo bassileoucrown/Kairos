@@ -178,7 +178,7 @@ td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-
       <li><span class="n">05</span><a href="#team">The team around a principal</a></li>
       <li><span class="n">06</span><a href="#codes">Pairing codes</a></li>
       <li><span class="n">07</span><a href="#essentials">The essentials vault</a></li>
-      <li><span class="n">08</span><a href="#stepup">Step-up and two-factor</a></li>
+      <li><span class="n">08</span><a href="#stepup">Step-up, two-factor, devices</a></li>
       <li><span class="n">09</span><a href="#trips">Trips</a></li>
       <li><span class="n">10</span><a href="#pickup">Meeting a car</a></li>
       <li><span class="n">11</span><a href="#visas">Visas</a></li>
@@ -560,7 +560,7 @@ td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-
 
 <!-- 08 -->
 <section class="leaf" id="stepup">
-  <div class="rail"><b>08</b>Step-up<br><span class="dim">Two-factor</span></div>
+  <div class="rail"><b>08</b>Step-up<br><span class="dim">Two-factor · Devices</span></div>
   <div class="col">
     <h2>Proving it is still you, at the moment you ask for something sensitive</h2>
     <p>
@@ -610,6 +610,54 @@ td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-
       <li><strong>Sessions</strong> as cookies, with scrypt password hashing.</li>
       <li><strong>An access log</strong>: every reveal of a sensitive field, recorded.</li>
     </ul>
+
+    <h3>More than one device, and getting one back</h3>
+    <p>
+      Sign in on a phone and a laptop and both work; a session is a row, and nothing has ever
+      limited how many an account has. What was missing until recently was any way to
+      <em>see</em> them. "Sign out" ended the browser it was pressed in, so a phone left in a
+      taxi kept a working session for the rest of its thirty days, and the only remedy was a
+      password reset — a sledgehammer, and not one anybody reaches for in an airport.
+    </p>
+    <p>
+      Every live session is now listed with the device, the address it was last used from, and
+      when. The one in your hand is labelled and sorted first so it cannot be ended by mistake,
+      and any of the others can be ended from any of them. It takes effect on that device's very
+      next request rather than at expiry, because a session is a row that every request re-reads
+      — not a token that stays good until its clock runs out.
+    </p>
+    <div class="why">
+      <b>The guard here is a question, not a code</b>
+      Gating this on two-factor would have meant the emergency it exists for — a lost phone — is
+      the one emergency in which it cannot be used, because the authenticator was on the phone.
+      So the principal writes their own question and answer, prompted from the dashboard, and
+      that is what ending another device asks for. It also closes a hole: somebody holding an
+      unlocked phone can no longer evict every other device and buy themselves quiet time.
+    </div>
+    <p>
+      Security questions are rightly distrusted for account <em>recovery</em>, where a guessable
+      answer hands over the account. This one grants nothing — it ends sessions. Guessing it is
+      an irritation, never a breach, and it can never be used to read a passport number. The
+      answer is stored hashed like a password, never shown, and matched after ignoring capitals
+      and stray spaces: nobody should fail their own security question at a gate on a capital
+      letter. Where none is set it falls back to the account password, so the control never
+      refuses for want of a setting.
+    </p>
+    <p class="small dim">
+      The address a device signed in from is shown; the city is not. That needs a geo-IP dataset
+      we do not ship, and asking somebody else's lookup service would hand a third party a
+      running log of where a principal has been — the opposite of what the screen is for. It is
+      named on the screen as a thing that does not work yet.
+    </p>
+
+    <h3>Being able to see what you are typing</h3>
+    <p>
+      Every password box has a Show. Typing a long password blind, one-handed, with somebody
+      waiting, is how people end up choosing short ones — or locking themselves out and
+      resetting, which costs more than it saves. It starts hidden every time and is never
+      remembered, so a password revealed on a borrowed laptop is not left revealed for whoever
+      sits down next.
+    </p>
   </div>
 </section>
 
@@ -1184,6 +1232,7 @@ td.num { font-family: var(--machine); font-variant-numeric: tabular-nums; white-
           <tr><td>Transcribe a voice note</td><td>Needs a route that does not hand the audio to a third party. When it lands, the text becomes the durable artifact and the thirty-day expiry stops costing anything.</td><td><span class="tag soon">Build</span></td></tr>
           <tr><td>Whether a visa is required</td><td>Refused until there is a maintained ruleset. A wrong "no" strands somebody.</td><td><span class="tag no">Refused</span></td></tr>
           <tr><td>The concierge desk</td><td>Contracted, vetted people. There is no key that turns this on.</td><td><span class="tag no">People</span></td></tr>
+          <tr><td>Approximate location for a signed-in device</td><td>Needs a geo-IP dataset on the machine. Refused as an external lookup — that would hand a third party a running log of where a principal has been. The device, the address and the last-seen time are already shown.</td><td><span class="tag no">Refused as a service</span></td></tr>
           <tr><td>Calendar sync, WhatsApp, Zoom, Teams, SMS, and the rest</td><td>Catalogued and placed on plans; every one currently returns not-implemented.</td><td><span class="tag soon">Credential</span></td></tr>
           <tr><td>Billing</td><td>The plan layer exists and is switched off. There is no payment integration.</td><td><span class="tag soon">Build</span></td></tr>
         </tbody>
