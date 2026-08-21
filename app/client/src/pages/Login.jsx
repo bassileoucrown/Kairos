@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
+import PasswordField from '../components/PasswordField.jsx';
 
 export default function Login() {
   const { login } = useAuth();
@@ -81,13 +82,15 @@ export default function Login() {
             <label htmlFor="email">Email</label>
             <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </div>
-          <div className="field">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label htmlFor="password">Password</label>
-              <Link to="/forgot-password" style={{ fontSize: '0.82rem' }}>Forgot password?</Link>
-            </div>
-            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
-          </div>
+          <PasswordField
+            id="password"
+            label="Password"
+            labelAside={<Link to="/forgot-password" style={{ fontSize: '0.82rem' }}>Forgot password?</Link>}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
           {needsCode && (
             <div className="field totp-login">
               <label htmlFor="login-code">

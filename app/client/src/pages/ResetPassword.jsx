@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import PasswordField from '../components/PasswordField.jsx';
 
 export default function ResetPassword() {
   const { token } = useParams();
@@ -56,15 +57,24 @@ export default function ResetPassword() {
         {valid === true && !done && (
           <form onSubmit={handleSubmit}>
             {error && <div className="alert alert-error">{error}</div>}
-            <div className="field">
-              <label htmlFor="password">New password</label>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
-              <p className="hint">At least 8 characters.</p>
-            </div>
-            <div className="field">
-              <label htmlFor="confirm-password">Confirm new password</label>
-              <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required autoComplete="new-password" />
-            </div>
+            <PasswordField
+              id="password"
+              label="New password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+              hint="At least 8 characters."
+            />
+            <PasswordField
+              id="confirm-password"
+              label="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
             <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
               {submitting ? 'Saving…' : 'Set new password'}
             </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import PasswordField from './PasswordField.jsx';
 
 // Setting, or changing, the question that guards signing other devices out.
 //
@@ -95,16 +96,13 @@ export default function SecurityQuestionSetup() {
             />
             <small className="hint">Capitals and extra spaces do not matter.</small>
           </label>
-          <label className="field">
-            <span>Your password, to confirm</span>
-            <input
-              id="sq-set-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField
+            id="sq-set-password"
+            label="Your password, to confirm"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
           <p className="hint">
             Write your own rather than picking a familiar one. A question anybody could look up
             is one anybody could answer — and remember this can only ever end a session, never

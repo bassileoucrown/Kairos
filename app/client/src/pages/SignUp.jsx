@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { detectTimezone } from '../lib/timezones.js';
 import { stashPostOnboardingRedirect } from '../lib/postAuthRedirect.js';
 import { BRAND_FULL, BRAND_SHORT } from '../lib/brand.js';
+import PasswordField from '../components/PasswordField.jsx';
 
 const CATEGORIES = [
   { value: 'principal', label: 'Principal', hint: "It's my own calendar — clients or contacts book me directly." },
@@ -78,11 +79,16 @@ export default function SignUp() {
             <label htmlFor="email">Email</label>
             <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
-            <p className="hint">At least 8 characters.</p>
-          </div>
+          <PasswordField
+            id="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            hint="At least 8 characters."
+          />
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
             {submitting ? 'Creating account…' : 'Create account'}
           </button>

@@ -1504,3 +1504,40 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .ess-row.is-current-device {
   border-left: 2px solid var(--accent, #3E6357);
 }
+
+/* A password box with a Show/Hide beside it. See components/PasswordField.jsx.
+   The button sits inside the box's own border rather than beside it, so the
+   field still reads as one control and the layout does not shift when the word
+   changes length. */
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.password-field { position: relative; display: block; }
+.password-field input {
+  /* Room for the widest label the button can show, plus its padding. */
+  padding-right: 68px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.password-toggle:hover:not(:disabled) { color: var(--accent); }
+.password-toggle:disabled { cursor: default; opacity: 0.5; }
+.password-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

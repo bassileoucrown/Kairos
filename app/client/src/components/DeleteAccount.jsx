@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { setActivePrincipal } from './AppShell.jsx';
+import PasswordField from './PasswordField.jsx';
 
 // Closing an account.
 //
@@ -119,17 +120,14 @@ export default function DeleteAccount() {
       )}
 
       <form onSubmit={handleDelete}>
-        <div className="field">
-          <label htmlFor="delete-password">Enter your password to confirm</label>
-          <input
-            id="delete-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
+        <PasswordField
+          id="delete-password"
+          label="Enter your password to confirm"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+        />
         <div className="danger-actions">
           <button className="btn btn-danger" type="submit" disabled={working || !password}>
             {working ? 'Deleting…' : 'Delete my account permanently'}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import SoonButton from './SoonButton.jsx';
+import PasswordField from './PasswordField.jsx';
 
 // Everywhere this account is signed in, and the way to end any of it.
 //
@@ -139,16 +140,29 @@ export default function SignedInDevices() {
                 + 'Set one below and it will ask that instead — useful when the missing '
                 + 'device is the one your authenticator lives on.'}
           </p>
-          <label className="field">
-            <span>{asks ? 'Your answer' : 'Your password'}</span>
-            <input
+          {/* The answer to a security question is already in the clear — it is
+              not a credential anywhere else, and hiding it would only make it
+              harder to type. Only the password fallback gets a Show. */}
+          {asks ? (
+            <label className="field">
+              <span>Your answer</span>
+              <input
+                id="revoke-secret"
+                type="text"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+          ) : (
+            <PasswordField
               id="revoke-secret"
-              type={asks ? 'text' : 'password'}
+              label="Your password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
-              autoComplete={asks ? 'off' : 'current-password'}
+              autoComplete="current-password"
             />
-          </label>
+          )}
           <div className="code-actions">
             <button className="btn" type="button" onClick={run} disabled={!secret || !!busy}>
               {busy ? 'Ending…' : 'Sign out'}
