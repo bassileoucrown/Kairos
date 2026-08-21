@@ -175,6 +175,33 @@ const ANSWER = 'Ojuelegba Road';
       (await laptop('GET', '/auth/me')).s === 200);
     ok('and only it remains listed', r.d.sessions.length === 1 && r.d.sessions[0].isCurrent);
 
+    // ---- Keeping this device signed in -----------------------------------
+    head('Staying signed in on a device you trust:');
+    r = await laptop('GET', '/security/sessions');
+    const before = r.d.sessions.find((x) => x.isCurrent);
+    ok('a device is not trusted to begin with', before.trusted === false);
+
+    r = await laptop('POST', '/security/sessions/trust', { trusted: true });
+    ok('trusting it without the answer is refused', r.s === 401, String(r.s));
+
+    r = await laptop('POST', '/security/sessions/trust', { trusted: true, answer: ANSWER });
+    ok('with the answer it is accepted', r.s === 200, JSON.stringify(r.d).slice(0, 120));
+    const after = r.d.sessions.find((x) => x.isCurrent);
+    ok('and the device says so', after.trusted === true);
+    ok('its clock is pushed well past the ordinary thirty days',
+      new Date(after.expiresAt) - new Date(before.expiresAt) > 60 * 86400000,
+      `${before.expiresAt} -> ${after.expiresAt}`);
+
+    // The property that makes the long life safe to offer at all.
+    ok('a trusted device is still listed like any other', !!after.id);
+
+    r = await laptop('POST', '/security/sessions/trust', { trusted: false });
+    ok('withdrawing trust needs no answer — it only ever reduces', r.s === 200);
+    ok('and the device is ordinary again',
+      r.d.sessions.find((x) => x.isCurrent).trusted === false);
+    ok('but is still signed in — that was not a sign-out',
+      (await laptop('GET', '/auth/me')).s === 200);
+
     // ---- Guessing costs something ----------------------------------------
     head('Guessing the answer:');
     let throttled = false;

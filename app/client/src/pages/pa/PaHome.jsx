@@ -13,6 +13,7 @@ import RelationshipsTab from './RelationshipsTab.jsx';
 import AiAssistTab from './AiAssistTab.jsx';
 import AvailabilityTab from '../dashboard/AvailabilityTab.jsx';
 import MeetingTypesTab from '../dashboard/MeetingTypesTab.jsx';
+import Tabs from '../../components/Tabs.jsx';
 
 // Scheduling tabs only appear when the principal has delegated them, so an
 // assistant is never shown a door that will 403.
@@ -102,18 +103,7 @@ export default function PaHome() {
             </div>
           )}
 
-          <div className="tabs">
-            {visibleTabs.map((t) => (
-              <button
-                key={t.id}
-                className={'tab-btn' + (tab === t.id ? ' is-active' : '')}
-                onClick={() => setTab(t.id)}
-                type="button"
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <Tabs tabs={visibleTabs} active={tab} onChange={setTab} label="Desk sections" />
 
           {tab === 'availability' && (canSchedule
             ? <AvailabilityTab ownerId={ownerId} principalName={current.role === 'owner' ? null : current.name} />

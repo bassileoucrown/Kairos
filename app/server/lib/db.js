@@ -374,6 +374,10 @@ function ready() {
       // authenticator was on it. See lib/securityQuestion.js.
       await ensureColumn('users', 'security_question', 'TEXT');
       await ensureColumn('users', 'security_answer_hash', 'TEXT');
+      // A device the principal has vouched for stays signed in, on a sliding
+      // window, instead of being turned out every thirty days. See
+      // lib/devices.js.
+      await ensureColumn('sessions', 'trusted_at', 'TEXT');
 
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.

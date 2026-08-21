@@ -13,6 +13,7 @@ import EssentialsTab from './dashboard/EssentialsTab.jsx';
 import SecurityTab from './dashboard/SecurityTab.jsx';
 import OutboxTab from './dashboard/OutboxTab.jsx';
 import SettingsTab from './dashboard/SettingsTab.jsx';
+import Tabs from '../components/Tabs.jsx';
 
 const TABS = [
   { id: 'calendar', label: 'Calendar' },
@@ -122,18 +123,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={'tab-btn' + (tab === t.id ? ' is-active' : '')}
-            onClick={() => setTab(t.id)}
-            type="button"
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} active={tab} onChange={setTab} label="Account sections" />
 
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'bookings' && <BookingsTab />}

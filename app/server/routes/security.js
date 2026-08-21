@@ -262,6 +262,31 @@ router.post('/sessions/revoke-others', revokeLimiter, async (req, res) => {
   res.json({ ended, sessions: await devices.list(req.user.id, req.sessionId) });
 });
 
+// Keeping this device signed in.
+//
+// Guarded by the same question as revoking, and for a reason that is not
+// obvious: somebody holding an unlocked phone already has the session, so
+// trusting it grants them no new reach — but it would turn thirty days of
+// access into an indefinite amount, which is exactly the move an intruder
+// wants. Withdrawing trust needs no guard, because it only ever reduces.
+router.post('/sessions/trust', revokeLimiter, async (req, res) => {
+  const wanted = req.body?.trusted !== false;
+
+  if (wanted) {
+    const check = await securityQuestion.verify(req.user.id, {
+      answer: req.body?.answer,
+      password: req.body?.password,
+    });
+    if (!check.ok) return res.status(401).json({ error: check.error, needs: check.needs });
+    clear(`revoke:${req.user.id}`);
+  }
+
+  if (!(await devices.setTrust(req.user.id, req.sessionId, wanted))) {
+    return res.status(400).json({ error: 'There is no session to trust.' });
+  }
+  res.json({ sessions: await devices.list(req.user.id, req.sessionId) });
+});
+
 // ---------------------------------------------------------------------------
 // The security question itself.
 // ---------------------------------------------------------------------------

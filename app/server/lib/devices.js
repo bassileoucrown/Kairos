@@ -33,6 +33,22 @@ const { clientIp } = require('./rateLimit');
 // the same thing to the person deciding whether to end a session.
 const TOUCH_EVERY_MS = Number(process.env.SESSION_TOUCH_MS || 5 * 60 * 1000);
 
+// How long a vouched-for device stays signed in, and the fact that it slides.
+//
+// An ordinary session gets thirty days from the moment it was created and then
+// ends, whatever you were in the middle of. That is right for a borrowed laptop
+// and wrong for the phone in somebody's pocket — which is why people tick the
+// remember-me box on every site that offers one. Being signed out of your own
+// diary every month is not security; it is an interruption you learn to resent.
+//
+// So a trusted session is renewed each time it is used. Stop using it and it
+// still lapses; keep using it and it does not.
+//
+// The reason this is safe to offer at all is that revocation now exists and is
+// instant. A longer life is only a liability when you cannot end it, and this
+// one can be ended from any other device you are holding.
+const TRUSTED_TTL_MS = Number(process.env.TRUSTED_SESSION_TTL_MS || 180 * 24 * 60 * 60 * 1000);
+
 /**
  * A device in the words somebody would use for it, from the user agent.
  *
@@ -70,18 +86,26 @@ function describe(userAgent) {
 async function touch(sessionId, req) {
   if (!sessionId) return;
   try {
-    const row = await db.prepare('SELECT last_seen_at FROM sessions WHERE id = ?').get(sessionId);
+    const row = await db.prepare('SELECT last_seen_at, trusted_at FROM sessions WHERE id = ?').get(sessionId);
     if (!row) return;
     if (row.last_seen_at && Date.now() - new Date(row.last_seen_at).getTime() < TOUCH_EVERY_MS) {
       return;
     }
+    const now = new Date();
     await db.prepare('UPDATE sessions SET last_seen_at = ?, last_ip = ?, user_agent = ? WHERE id = ?')
       .run(
-        new Date().toISOString(),
+        now.toISOString(),
         clientIp(req),
         String(req.headers['user-agent'] || '').slice(0, 400),
         sessionId,
       );
+
+    // A trusted device's clock is pushed forward every time it is used, so it
+    // lapses after it stops being used rather than on a fixed date.
+    if (row.trusted_at) {
+      await db.prepare('UPDATE sessions SET expires_at = ? WHERE id = ?')
+        .run(new Date(now.getTime() + TRUSTED_TTL_MS).toISOString(), sessionId);
+    }
   } catch {
     // Recording where somebody signed in is never worth failing their request
     // over. A missing last-seen is a cosmetic gap; a 500 on every page is not.
@@ -105,7 +129,7 @@ async function stamp(sessionId, req) {
 /** Every live session on this account, the current one marked and first. */
 async function list(userId, currentSessionId) {
   const rows = await db.prepare(`
-    SELECT id, created_at, expires_at, last_seen_at, last_ip, user_agent
+    SELECT id, created_at, expires_at, last_seen_at, last_ip, user_agent, trusted_at
     FROM sessions
     WHERE user_id = ? AND expires_at > ?
     ORDER BY COALESCE(last_seen_at, created_at) DESC
@@ -122,6 +146,7 @@ async function list(userId, currentSessionId) {
     lastSeenAt: r.last_seen_at || r.created_at,
     signedInAt: r.created_at,
     expiresAt: r.expires_at,
+    trusted: !!r.trusted_at,
   })).sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
 }
 
@@ -159,4 +184,35 @@ async function revokeOthers(userId, keepSessionId) {
   return before?.n || 0;
 }
 
-module.exports = { describe, touch, stamp, list, revoke, revokeOthers, handleFor, findByHandle };
+/**
+ * Vouch for the device in your hand, or stop vouching for it.
+ *
+ * Only ever the current session. You cannot declare somebody else's device
+ * trustworthy, and the phone you have lost is not there to be untrusted from —
+ * that one gets revoked instead, which is stronger.
+ */
+async function setTrust(userId, sessionId, trusted) {
+  if (!sessionId) return false;
+  const row = await db.prepare('SELECT id FROM sessions WHERE id = ? AND user_id = ?')
+    .get(sessionId, userId);
+  if (!row) return false;
+
+  if (trusted) {
+    await db.prepare('UPDATE sessions SET trusted_at = ?, expires_at = ? WHERE id = ?')
+      .run(
+        new Date().toISOString(),
+        new Date(Date.now() + TRUSTED_TTL_MS).toISOString(),
+        sessionId,
+      );
+  } else {
+    // Withdrawing trust does not end the session — it puts it back on the
+    // ordinary clock. Ending it is Sign out, and that is a different button.
+    await db.prepare('UPDATE sessions SET trusted_at = NULL WHERE id = ?').run(sessionId);
+  }
+  return true;
+}
+
+module.exports = {
+  describe, touch, stamp, list, revoke, revokeOthers, handleFor, findByHandle, setTrust,
+  TRUSTED_TTL_MS,
+};

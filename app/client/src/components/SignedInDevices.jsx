@@ -49,13 +49,17 @@ export default function SignedInDevices() {
     setNotice('');
     const body = data.guard.needs === 'answer' ? { answer: secret } : { password: secret };
     try {
-      const d = pending.handle
-        ? await api.post(`/security/sessions/${pending.handle}/revoke`, body)
-        : await api.post('/security/sessions/revoke-others', body);
+      const d = pending.kind === 'trust'
+        ? await api.post('/security/sessions/trust', { ...body, trusted: true })
+        : pending.handle
+          ? await api.post(`/security/sessions/${pending.handle}/revoke`, body)
+          : await api.post('/security/sessions/revoke-others', body);
       setData((prev) => ({ ...prev, sessions: d.sessions }));
-      setNotice(pending.handle
-        ? 'That device has been signed out.'
-        : `${d.ended} other ${d.ended === 1 ? 'session' : 'sessions'} ended.`);
+      setNotice(pending.kind === 'trust'
+        ? 'This device will stay signed in.'
+        : pending.handle
+          ? 'That device has been signed out.'
+          : `${d.ended} other ${d.ended === 1 ? 'session' : 'sessions'} ended.`);
       setSecret('');
       setPending(null);
     } catch (e) {
@@ -63,6 +67,16 @@ export default function SignedInDevices() {
     } finally {
       setBusy('');
     }
+  }
+
+  async function untrust() {
+    setBusy('untrust');
+    setError('');
+    try {
+      const d = await api.post('/security/sessions/trust', { trusted: false });
+      setData((prev) => ({ ...prev, sessions: d.sessions }));
+      setNotice('This device is back on the ordinary thirty-day clock. It is still signed in.');
+    } catch (e) { setError(e.message); } finally { setBusy(''); }
   }
 
   if (error && !data) return <div className="alert alert-error">{error}</div>;
@@ -77,6 +91,8 @@ export default function SignedInDevices() {
       <p className="hint">
         Signing in on another device does not disturb this one. If a device is lost, end its
         session here — it stops working on that device immediately, not when it expires.
+        A device you keep signed in stays that way while you use it, instead of turning you
+        out every thirty days; it can still be ended from anywhere, like any other.
       </p>
 
       {notice && <div className="alert alert-success">{notice}</div>}
@@ -88,6 +104,7 @@ export default function SignedInDevices() {
             <div className="ess-label">
               {s.device}
               {s.isCurrent && <span className="pill" style={{ marginLeft: 8 }}>This device</span>}
+              {s.trusted && <span className="pill" style={{ marginLeft: 8 }}>Stays signed in</span>}
             </div>
             <div className="ess-meta">
               <span className="hint">
@@ -97,7 +114,21 @@ export default function SignedInDevices() {
               </span>
             </div>
           </div>
-          {!s.isCurrent && (
+          {s.isCurrent ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              disabled={!!busy}
+              onClick={() => {
+                if (s.trusted) return untrust();
+                setPending({ key: 'trust', kind: 'trust', handle: null });
+                setSecret(''); setNotice('');
+                return undefined;
+              }}
+            >
+              {s.trusted ? 'Stop staying signed in' : 'Keep me signed in here'}
+            </button>
+          ) : (
             <button
               className="btn btn-secondary btn-sm"
               type="button"
@@ -131,7 +162,9 @@ export default function SignedInDevices() {
       {pending && (
         <div className="card key-setup revoke-panel" style={{ marginTop: 14 }}>
           <div className="ess-label">
-            {pending.handle ? 'Sign this device out' : 'Sign out every other device'}
+            {pending.kind === 'trust'
+              ? 'Keep this device signed in'
+              : pending.handle ? 'Sign this device out' : 'Sign out every other device'}
           </div>
           <p className="hint">
             {asks
@@ -165,7 +198,7 @@ export default function SignedInDevices() {
           )}
           <div className="code-actions">
             <button className="btn" type="button" onClick={run} disabled={!secret || !!busy}>
-              {busy ? 'Ending…' : 'Sign out'}
+              {busy ? 'Saving…' : pending.kind === 'trust' ? 'Keep me signed in' : 'Sign out'}
             </button>
             <button
               className="btn btn-secondary"

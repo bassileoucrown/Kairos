@@ -500,7 +500,54 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .booking-link-box code { background: var(--surface); padding: 3px 8px; border-radius: 6px; font-size: 0.85rem; }
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+/* Tabs: a row where there is room, a menu where there is not.
+   See components/Tabs.jsx for why this is a menu rather than a scrolling strip. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  /* Ten tabs come to roughly 500px. Without this the row simply makes the page
+     that wide and every screen behind it scrolls sideways. */
+  flex-wrap: wrap;
+}
+.tabs-menu { display: none; }
+
+@media (max-width: 760px) {
+  .tabs { display: none; }
+  .tabs-menu { display: block; position: relative; margin-bottom: 20px; }
+  .tabs-current {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font: inherit; font-size: 0.95rem; font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .tabs-current-caret { color: var(--text-muted); font-size: 0.75rem; }
+  .tabs-list {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+    z-index: 50;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(28,33,39,0.12);
+    padding: 6px;
+    max-height: 60vh; overflow-y: auto;
+  }
+  .tabs-list-item {
+    display: block; width: 100%; text-align: left;
+    padding: 10px 12px;
+    background: none; border: 0; border-radius: var(--radius);
+    font: inherit; font-size: 0.92rem; color: var(--text);
+    cursor: pointer;
+  }
+  .tabs-list-item:hover { background: var(--bg); }
+  .tabs-list-item.is-active { color: var(--accent); font-weight: 600; }
+}
 .tab-btn {
   padding: 10px 4px;
   margin-right: 20px;
@@ -1010,7 +1057,7 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .ess-heading { font-size: 0.9rem; font-weight: 600; margin: 0 0 8px; }
 .ess-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .ess-main { min-width: 0; flex: 1; }
-.ess-label { font-weight: 600; font-size: 0.9rem; }
+.ess-label { font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
 .ess-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.95rem;
@@ -1541,3 +1588,17 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Long strings, and the flex rule that lets one of them widen a whole page.
+   ------------------------------------------------------------------------
+   A flex child defaults to min-width:auto, which means it refuses to shrink
+   below its own content. One contact with a long email address therefore made
+   its card wider than the phone, and the page scrolled sideways to fit it —
+   the same shape of bug wherever a row holds something unbreakable.
+   Two halves to the fix: let the box shrink, and let the text break. */
+.meeting-type-card > * { min-width: 0; }
+.meeting-type-card .name,
+.meeting-type-card .meta { overflow-wrap: anywhere; }
+
+.ess-main, .ess-meta { min-width: 0; }
+.ess-meta > * { overflow-wrap: anywhere; }
