@@ -3,10 +3,25 @@ import { api } from '../../lib/api.js';
 
 // What the second gate asks for. A code where two-factor is on, because the
 // attacker this vault has to survive already knows the password.
-function stepUpPrompt(factor, what = 'reveal this') {
+// What the step-up asks for, as a proper question in the app. It used to be a
+// window.prompt, which showed a password in the clear to whoever was in the
+// room and could not be filled by a password manager — on the one screen in
+// Kairos that holds passport numbers.
+function stepUpAsk(factor, what = 'reveal this') {
   return factor === 'code'
-    ? `Enter the code from your authenticator app to ${what}. The principal can see that you did.`
-    : `Enter your password to ${what}. The principal can see that you did.`;
+    ? {
+      title: 'Confirm it is you',
+      label: 'Code from your authenticator',
+      hint: `Needed to ${what}. The principal can see that you did.`,
+      confirmLabel: 'Confirm',
+    }
+    : {
+      title: 'Confirm it is you',
+      label: 'Your password',
+      hint: `Needed to ${what}. The principal can see that you did.`,
+      secret: true,
+      confirmLabel: 'Confirm',
+    };
 }
 
 function stepUpBody(factor, answer) {
@@ -47,8 +62,11 @@ function StalePill({ essential }) {
 }
 
 import SoonButton from '../../components/SoonButton.jsx';
+import { useAsk } from '../../components/Ask.jsx';
 
 export default function EssentialsTab({ ownerId }) {
+  // Replaces window.prompt; see components/Ask.jsx.
+  const [ask, askDialog] = useAsk();
   const [data, setData] = useState(null);
   const [catalogue, setCatalogue] = useState([]);
   const [error, setError] = useState('');
@@ -81,7 +99,7 @@ export default function EssentialsTab({ ownerId }) {
     } catch (err) {
       if (err.status !== 401) { setError(err.message); return; }
     }
-    const answer = window.prompt(stepUpPrompt(data?.stepUpFactor));
+    const answer = await ask(stepUpAsk(data?.stepUpFactor));
     if (!answer) return;
     try {
       const d = await api.post(`/essentials/${ownerId}/${id}/reveal`, stepUpBody(data?.stepUpFactor, answer));
@@ -111,7 +129,7 @@ export default function EssentialsTab({ ownerId }) {
       d = await api.post(`/essentials/${ownerId}/travel-block`, {});
     } catch (err) {
       if (err.status !== 401) { setError(err.message); return; }
-      const answer = window.prompt(stepUpPrompt(data?.stepUpFactor, 'assemble the travel details'));
+      const answer = await ask(stepUpAsk(data?.stepUpFactor, 'assemble the travel details'));
       if (!answer) return;
       try {
         d = await api.post(`/essentials/${ownerId}/travel-block`, stepUpBody(data?.stepUpFactor, answer));
@@ -143,6 +161,7 @@ export default function EssentialsTab({ ownerId }) {
 
   return (
     <div>
+      {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-success">{notice}</div>}
 

@@ -62,6 +62,15 @@ async function signup(browser, name, email, category, errors) {
     // sometimes does not, so wait for the nav itself rather than for the URL.
     await boss.waitForSelector('.nav-item', { timeout: 15000 });
     ok('principal has a Team link in the nav', await boss.locator('.nav-item:has-text("Team")').count() === 1);
+    // The rail is grouped now; the groups are what make eighteen entries
+    // readable, so their absence is a regression worth naming.
+    ok('and the rail is grouped rather than one long list',
+      await boss.locator('.nav-group-label').count() >= 4,
+      String(await boss.locator('.nav-group-label').count()));
+    ok('with the whole desk behind one entry',
+      await boss.locator('.nav-item:has-text("Desk")').count() === 1
+      && await boss.locator('.nav-item:has-text("Briefs")').count() === 0,
+      `desk ${await boss.locator('.nav-item:has-text("Desk")').count()}`);
     ok('principal has no Workspace link', await boss.locator('.nav-item:has-text("Workspace")').count() === 0);
 
     // Appoint the Chief of Staff.
@@ -137,8 +146,14 @@ async function signup(browser, name, email, category, errors) {
     await cos.fill('#itin-start', '19:00');
     await cos.click('button:has-text("Add to the day")');
     await cos.waitForSelector('button:has-text("Ask them")');
-    cos.once('dialog', (d) => d.accept('Clashes with the flight home — your call.'));
     await cos.click('button:has-text("Ask them")');
+    // The note is asked for in the app now rather than by window.prompt, so
+    // there is a real field to fill and a real button to press.
+    await cos.waitForSelector('.ask-card #ask-input', { timeout: 15000 });
+    ok('the note is asked for in the app, not by the browser',
+      (await cos.locator('.ask-card h2').innerText()).includes('approval'));
+    await cos.fill('.ask-card #ask-input', 'Clashes with the flight home — your call.');
+    await cos.click('.ask-card button:has-text("Send it")');
     await cos.waitForSelector('.pill:has-text("Waiting on them")', { timeout: 15000 });
     ok('assistant can send it for approval', true);
 

@@ -4,6 +4,7 @@ import EncryptionKeySetup from '../../components/EncryptionKeySetup.jsx';
 import TwoFactorSetup from '../../components/TwoFactorSetup.jsx';
 import SignedInDevices from '../../components/SignedInDevices.jsx';
 import SecurityQuestionSetup from '../../components/SecurityQuestionSetup.jsx';
+import { useAsk } from '../../components/Ask.jsx';
 
 // Two-factor authentication, and who has looked at what.
 //
@@ -13,6 +14,8 @@ import SecurityQuestionSetup from '../../components/SecurityQuestionSetup.jsx';
 // put a passport in at all.
 
 export default function SecurityTab() {
+  // Replaces window.prompt; see components/Ask.jsx.
+  const [ask, askDialog] = useAsk();
   const [state, setState] = useState(null);
   const [log, setLog] = useState([]);
   const [setup, setSetup] = useState(null);
@@ -58,16 +61,32 @@ export default function SecurityTab() {
     } catch (err) {
       if (err.status !== 401) { setError(err.message); return; }
     }
-    const code = window.prompt('Enter a code from your authenticator app to change this.');
+    const code = await ask({
+      title: 'Confirm it is you',
+      label: 'Code from your authenticator',
+      hint: 'Changing what two-factor covers needs a live code.',
+      confirmLabel: 'Change',
+    });
     if (!code) return;
     try { await api.post('/security/2fa/scope', { scope, code: code.trim() }); load(); }
     catch (err) { setError(err.message); }
   }
 
   async function disable() {
-    const password = window.prompt('Enter your password');
+    const password = await ask({
+      title: 'Turn two-factor off',
+      label: 'Your password',
+      hint: 'Both your password and a live code, so a borrowed screen cannot do this alone.',
+      secret: true,
+      confirmLabel: 'Continue',
+    });
     if (!password) return;
-    const c = window.prompt('And a current code from your authenticator');
+    const c = await ask({
+      title: 'And a code',
+      label: 'Code from your authenticator',
+      hint: 'The last one it will ask you for.',
+      confirmLabel: 'Turn it off',
+    });
     if (!c) return;
     setError('');
     try { await api.post('/security/2fa/disable', { password, code: c }); load(); }
@@ -78,6 +97,7 @@ export default function SecurityTab() {
 
   return (
     <div>
+      {askDialog}
       {/* While the setup form is open it shows the error itself, next to the
           box being typed into. */}
       {error && !setup && <div className="alert alert-error">{error}</div>}

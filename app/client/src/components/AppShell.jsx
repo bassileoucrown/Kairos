@@ -13,34 +13,60 @@ import TimeUp from './TimeUp.jsx';
 // rail everywhere, one active state, and the principal switcher in a fixed
 // place so "who am I doing this for" is never a guess.
 
+// Five groups, not one list of eighteen.
+//
+// The rail grew an entry per feature until it was a filing cabinet — which is
+// the thing this component's own comment says it exists to prevent. Two
+// changes, and neither hides a screen: every URL that worked still works.
+//
+// THE GROUPS. An eighteen-item list is read by scanning all eighteen. Five
+// labelled groups of three or four are read by picking the group first, which
+// is how anybody thinks about where a thing lives — the day, the desk, the
+// work, the house, the account.
+//
+// AND THE DESK IS ONE ENTRY. Approvals, People, Briefs and Scheduling were
+// four rail entries pointing at four tabs of the same page. The tabs already
+// do that job, and doing it twice meant the rail listed the inside of a screen
+// instead of the screen. One entry, carrying the badge that mattered.
+const GROUPS = [
+  { id: 'day', label: 'The day' },
+  { id: 'desk', label: 'The desk' },
+  { id: 'work', label: 'Work' },
+  { id: 'house', label: 'The house' },
+  { id: 'account', label: 'Account' },
+];
+
 // `assistantOnly` / `principalOnly` keep each role's rail to what that role
 // actually does. An assistant has no Team screen to manage (appointing people
 // is the principal's), and a principal has no workspace of principals.
 const NAV = [
-  { to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
-  { to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
-  { to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
-  { to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
+  { group: 'day', to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
+  { group: 'day', to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
+  { group: 'day', to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
+  { group: 'day', to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
   // Marked in the rail rather than only on the page: somebody deciding whether
   // to rely on this should learn it is not open before they click, not after.
-  { to: '/concierge', label: 'Concierge', icon: '☏', principalScoped: true, soon: true },
-  { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
-  { to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },
-  { to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
-  { to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },
-  { to: '/connections', label: 'Connections', icon: '@' },
-  { to: '/notices', label: 'Notices', icon: '✦', badge: 'notices' },
-  { to: '/household', label: 'Household', icon: '⌂', principalScoped: true, fullAccessOnly: true, notForStaff: true },
-  { to: '/pa?tab=contacts', match: '/pa', label: 'People', icon: '☺', principalScoped: true },
-  { to: '/pa?tab=approvals', match: '/pa', label: 'Approvals', icon: '!', principalScoped: true, badge: 'approvals' },
-  { to: '/pa?tab=briefs', match: '/pa', label: 'Briefs', icon: '❋', principalScoped: true },
-  { to: '/pa?tab=availability', match: '/pa', label: 'Scheduling', icon: '◷', principalScoped: true, needsScheduling: true },
-  { to: '/dashboard?tab=members', match: '/dashboard', label: 'Team', icon: '⚉', principalOnly: true },
-  { to: '/dashboard?tab=settings', match: '/dashboard', label: 'Settings', icon: '⚙' },
-  // Last in the rail, deliberately. It is a roadmap rather than a place to
-  // work, and somebody being shown the product should be able to find it
-  // without it competing with anything they actually use.
-  { to: '/coming', label: 'Coming', icon: '◷' },
+  { group: 'day', to: '/concierge', label: 'Concierge', icon: '☏', principalScoped: true, soon: true },
+
+  { group: 'desk', to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
+  // One door to the whole desk. What used to be four rail entries is four tabs
+  // behind this one, which is where they already were.
+  { group: 'desk', to: '/pa?tab=approvals', match: '/pa', label: 'Desk', icon: '☰', principalScoped: true, badge: 'approvals' },
+
+  { group: 'work', to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
+  { group: 'work', to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },
+
+  { group: 'house', to: '/household', label: 'Household', icon: '⌂', principalScoped: true, fullAccessOnly: true, notForStaff: true },
+  { group: 'house', to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },
+  { group: 'house', to: '/connections', label: 'Connections', icon: '@' },
+
+  { group: 'account', to: '/dashboard?tab=settings', match: '/dashboard', label: 'Settings', icon: '⚙' },
+  { group: 'account', to: '/dashboard?tab=members', match: '/dashboard', label: 'Team', icon: '⚉', principalOnly: true },
+  { group: 'account', to: '/notices', label: 'Notices', icon: '✦', badge: 'notices' },
+  // Last, deliberately. It is a roadmap rather than a place to work, and
+  // somebody being shown the product should be able to find it without it
+  // competing with anything they actually use.
+  { group: 'account', to: '/coming', label: 'Coming', icon: '◷' },
 ];
 
 const ASSISTANT_CATEGORIES = new Set(['pa', 'ea', 'chief_of_staff']);
@@ -232,6 +258,26 @@ export default function AppShell({ children, title, actions, active }) {
   const actingForSomeoneElse = current && current.role !== 'owner';
   const viewerIsAssistant = ASSISTANT_CATEGORIES.has(user?.accountCategory);
 
+  const visible = NAV.filter((item) => {
+    if (item.needsScheduling && current?.canManageScheduling === false) return false;
+    if (item.assistantOnly && !viewerIsAssistant) return false;
+    // Only shown to somebody who actually has a household post — for everyone
+    // else it is a screen about nothing.
+    if (item.householdOnly && !user?.isHouseholdStaff) return false;
+    // The household is not the diary, so a delegate's scheduling-only remit
+    // does not reach it.
+    if (item.fullAccessOnly && current && current.role === 'delegate') return false;
+    // Somebody who is only household staff has no household of their own to
+    // run, and offering them the screen for it is the app talking about
+    // itself. If they ever support anyone, it returns.
+    if (item.notForStaff && user?.isHouseholdStaff && principals.length <= 1) return false;
+    // Team stays visible to anyone who is not purely someone's assistant — a
+    // principal always needs it, and someone who is both still has their own
+    // account to staff.
+    if (item.principalOnly && viewerIsAssistant && principals.length > 1) return false;
+    return true;
+  });
+
   return (
     <div className="app">
       <aside className={'app-nav' + (navOpen ? ' is-open' : '')}>
@@ -265,48 +311,41 @@ export default function AppShell({ children, title, actions, active }) {
         )}
 
         <nav>
-          {NAV.filter((item) => {
-            if (item.needsScheduling && current?.canManageScheduling === false) return false;
-            if (item.assistantOnly && !viewerIsAssistant) return false;
-            // Only shown to somebody who actually has a household post — for
-            // everyone else it is a screen about nothing.
-            if (item.householdOnly && !user?.isHouseholdStaff) return false;
-            // The household is not the diary, so a delegate's scheduling-only
-            // remit does not reach it.
-            if (item.fullAccessOnly && current && current.role === 'delegate') return false;
-            // Somebody who is only household staff has no household of their
-            // own to run, and offering them the screen for it is the app
-            // talking about itself. If they ever support anyone, it returns.
-            if (item.notForStaff && user?.isHouseholdStaff && principals.length <= 1) return false;
-            // Team stays visible to anyone who is not purely someone's
-            // assistant — a principal always needs it, and someone who is both
-            // still has their own account to staff.
-            if (item.principalOnly && viewerIsAssistant && principals.length > 1) return false;
-            return true;
-          }).map((item) => {
-            // Only pin a principal into the URL once the list has actually
-            // loaded. Before that, activeId is a guess (your own id), and a
-            // fast click would open your own account instead of the person you
-            // support. Linking to bare /pa lets PaHome resolve the right
-            // principal itself, preserving the tab.
-            const to = item.principalScoped && item.to.startsWith('/pa')
-              ? (principals.length > 0 && activeId
-                ? `/pa/${activeId}?tab=${item.to.split('tab=')[1]}`
-                : item.to)
-              : item.to;
-            const count = item.badge ? badges[item.badge] : 0;
+          {/* Filtered once, then grouped: a group with nothing left in it for
+              this reader shows no heading rather than an empty one. */}
+          {GROUPS.map((group) => {
+            const items = visible.filter((item) => item.group === group.id);
+            if (items.length === 0) return null;
             return (
-              <NavLink
-                key={item.label}
-                to={to}
-                className={() => 'nav-item' + (active === item.label.toLowerCase() ? ' is-active' : '')}
-                onClick={() => setNavOpen(false)}
-              >
-                <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-                <span className="nav-label">{item.label}</span>
-                {count > 0 && <span className="nav-badge">{count}</span>}
-                {item.soon && <span className="nav-soon">Soon</span>}
-              </NavLink>
+              <div className="nav-group" key={group.id}>
+                <div className="nav-group-label">{group.label}</div>
+                {items.map((item) => {
+                  // Only pin a principal into the URL once the list has actually
+                  // loaded. Before that, activeId is a guess (your own id), and a
+                  // fast click would open your own account instead of the person
+                  // you support. Linking to bare /pa lets PaHome resolve the right
+                  // principal itself, preserving the tab.
+                  const to = item.principalScoped && item.to.startsWith('/pa')
+                    ? (principals.length > 0 && activeId
+                      ? `/pa/${activeId}?tab=${item.to.split('tab=')[1]}`
+                      : item.to)
+                    : item.to;
+                  const count = item.badge ? badges[item.badge] : 0;
+                  return (
+                    <NavLink
+                      key={item.label}
+                      to={to}
+                      className={() => 'nav-item' + (active === item.label.toLowerCase() ? ' is-active' : '')}
+                      onClick={() => setNavOpen(false)}
+                    >
+                      <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                      <span className="nav-label">{item.label}</span>
+                      {count > 0 && <span className="nav-badge">{count}</span>}
+                      {item.soon && <span className="nav-soon">Soon</span>}
+                    </NavLink>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>

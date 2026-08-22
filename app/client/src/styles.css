@@ -2004,3 +2004,41 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 @media (max-width: 560px) {
   .rhythm-bar-label { flex-basis: 96px; }
 }
+
+/* ---- Asking for one thing ----
+   Replaces window.prompt. Styled as part of Kairos rather than by the
+   operating system, because the moment it appears is the moment somebody is
+   deciding whether to type a password — and an unfamiliar grey box asking for
+   one is the shape of every phishing dialog ever built. */
+.ask-scrim {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(15, 20, 18, 0.45);
+}
+.ask-card {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  min-width: 0;
+}
+.ask-card h2 { font-size: 1.05rem; margin: 0 0 6px; }
+.ask-card .hint { margin-bottom: 12px; }
+.ask-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ---- The rail, in groups ----
+   Headings so eighteen entries are read as five decisions rather than
+   eighteen. Quiet enough that they organise without competing. */
+.nav-group + .nav-group { margin-top: 14px; }
+.nav-group-label {
+  padding: 0 10px 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.75;
+}

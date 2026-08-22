@@ -119,9 +119,10 @@ const badgeOn = (p, label) => p.locator(`.nav-item:has-text("${label}") .nav-bad
     head('Once somebody asks for time:');
     await p.goto(`${BASE}/today`);
     await p.waitForSelector('.nav-item', { timeout: 15000 });
-    await p.waitForSelector('.nav-item:has-text("Approvals") .nav-badge', { timeout: 15000 });
-    ok('the rail marks Approvals', (await badgeOn(p, 'Approvals').innerText()).trim() === '1',
-      (await badgeOn(p, 'Approvals').innerText()).trim());
+    // The four desk entries became one, so the approvals count is on Desk.
+    await p.waitForSelector('.nav-item:has-text("Desk") .nav-badge', { timeout: 15000 });
+    ok('the rail marks the desk', (await badgeOn(p, 'Desk').innerText()).trim() === '1',
+      (await badgeOn(p, 'Desk').innerText()).trim());
     ok('and marks nothing else', (await p.locator('.nav-badge').count()) === 1,
       String(await p.locator('.nav-badge').count()));
 

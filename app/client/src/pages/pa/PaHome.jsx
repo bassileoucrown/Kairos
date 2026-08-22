@@ -100,11 +100,9 @@ export default function PaHome() {
   const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule)
     .map((t) => (t.id === 'approvals' ? { ...t, attention: waiting > 0 } : t));
   const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.id, t.label]));
-  const activeNav = {
-    contacts: 'people', relationships: 'people', approvals: 'approvals', briefs: 'briefs',
-    bookings: 'approvals', calendar: 'calendar',
-    availability: 'scheduling', meeting_types: 'scheduling',
-  }[tab] || 'people';
+  // Every tab of this page is behind one rail entry now, so they all light
+  // the same one. Which section you are in is the tab strip's job.
+  const activeNav = tab === 'calendar' ? 'calendar' : 'desk';
 
   return (
     <AppShell title={TAB_LABEL[tab] || 'PA Home'} active={activeNav}>

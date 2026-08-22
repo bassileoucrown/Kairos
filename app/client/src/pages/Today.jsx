@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import RunningLate from '../components/RunningLate.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
+import { useAsk } from '../components/Ask.jsx';
 
 export const KIND_ICON = {
   flight: '✈', train: '🚆', car: '🚗', hotel: '🛎', meeting: '👥',
@@ -101,6 +102,8 @@ export function DirectLine({ line, isSelf, principalName }) {
 }
 
 export default function Today() {
+  // Replaces window.prompt; see components/Ask.jsx.
+  const [ask, askDialog] = useAsk();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -117,7 +120,15 @@ export default function Today() {
   async function decideItinerary(id, approve) {
     // A decline without a reason is just a dead end for whoever arranged it,
     // so ask — but never block on it.
-    const note = approve ? '' : (window.prompt('Anything they should know? (optional)') ?? '');
+    const note = approve ? '' : await ask({
+      title: 'Decline this',
+      label: 'Anything they should know',
+      hint: 'It goes back to their drafts rather than away, so a reason saves a round trip.',
+      multiline: true,
+      optional: true,
+      confirmLabel: 'Decline',
+    });
+    if (!approve && note === null) return;
     try {
       await api.post(`/itinerary/${data.principal.id}/items/${id}/decide`, { approve, note });
       load();
@@ -144,6 +155,7 @@ export default function Today() {
       active="today"
       actions={<Link className="btn btn-primary btn-sm" to="/itinerary">Plan the day</Link>}
     >
+      {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
 
       <p className="today-date">{friendlyDate(data.date)} · {data.timezone.replace('_', ' ')}</p>

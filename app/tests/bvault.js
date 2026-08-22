@@ -64,8 +64,17 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
       /days left/i.test(await p.locator('.ess-row').first().innerText()),
       await p.locator('.ess-row').first().innerText());
 
-    p.once('dialog', (d) => d.accept(PW));
     await p.click('button:has-text("Reveal")');
+    // The step-up asks in the app now rather than through window.prompt, which
+    // showed the password in the clear and could not be filled by a password
+    // manager — on the one screen that holds a passport number.
+    await p.waitForSelector('.ask-card', { timeout: 15000 });
+    ok('the step-up asks inside Kairos, not in a browser box',
+      (await p.locator('.ask-card h2').innerText()).includes('Confirm it is you'));
+    ok('and the password is masked while it is typed',
+      (await p.locator('.ask-card input').first().getAttribute('type')) === 'password');
+    await p.fill('.ask-card input', PW);
+    await p.click('.ask-card button:has-text("Confirm")');
     await p.waitForFunction((v) => document.body.innerText.includes(v), PASSPORT, { timeout: 15000 });
     ok('revealing with a password shows it', true);
 

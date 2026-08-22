@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppShell, { setActivePrincipal } from '../components/AppShell.jsx';
 import { api } from '../lib/api.js';
 import JoinWithCode from '../components/JoinWithCode.jsx';
+import { useAsk } from '../components/Ask.jsx';
 
 // The assistant's own dashboard — not the principal's screen relabelled.
 //
@@ -50,6 +51,8 @@ function ItemLine({ item, tz, children }) {
 }
 
 export default function Workspace() {
+  // Replaces window.prompt; see components/Ask.jsx.
+  const [ask, askDialog] = useAsk();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(null);
@@ -86,6 +89,7 @@ export default function Workspace() {
 
   return (
     <AppShell title="Workspace">
+      {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
       {!data && <p className="hint">Loading…</p>}
 
@@ -189,8 +193,15 @@ export default function Workspace() {
                     className="btn btn-sm"
                     type="button"
                     disabled={busy === i.id}
-                    onClick={() => {
-                      const note = window.prompt(`What should ${i.principalName} know about this?`) ?? null;
+                    onClick={async () => {
+                      const note = await ask({
+                        title: `Send this to ${i.principalName}`,
+                        label: 'Anything they should know',
+                        hint: 'Goes to them with the item. Leave it empty if it speaks for itself.',
+                        multiline: true,
+                        optional: true,
+                        confirmLabel: 'Send it',
+                      });
                       if (note === null) return;
                       act(i.principalId, i.id, 'propose', { note });
                     }}

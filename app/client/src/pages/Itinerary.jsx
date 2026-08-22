@@ -7,6 +7,7 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
+import { useAsk } from '../components/Ask.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -201,6 +202,8 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
 }
 
 export default function Itinerary() {
+  // Replaces window.prompt; see components/Ask.jsx.
+  const [ask, askDialog] = useAsk();
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -260,6 +263,7 @@ export default function Itinerary() {
       active="itinerary"
       actions={
         <>
+      {askDialog}
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => window.print()}>
             Print day sheet
           </button>
@@ -340,8 +344,15 @@ export default function Itinerary() {
                 <button className="btn btn-primary btn-sm no-print" type="button"
                   onClick={() => act(e.id, 'publish')}>Publish</button>
                 <button className="btn btn-sm no-print" type="button"
-                  onClick={() => {
-                    const note = window.prompt('What should they know about this?') ?? null;
+                  onClick={async () => {
+                    const note = await ask({
+                      title: 'Send this for approval',
+                      label: 'Anything they should know',
+                      hint: 'Goes to them with the item. Leave it empty if it speaks for itself.',
+                      multiline: true,
+                      optional: true,
+                      confirmLabel: 'Send it',
+                    });
                     if (note === null) return;
                     act(e.id, 'propose', { note });
                   }}>Ask them</button>
@@ -355,7 +366,18 @@ export default function Itinerary() {
                 <button className="btn btn-primary btn-sm no-print" type="button"
                   onClick={() => act(e.id, 'decide', { approve: true })}>Approve</button>
                 <button className="btn btn-sm no-print" type="button"
-                  onClick={() => act(e.id, 'decide', { approve: false, note: window.prompt('Anything they should know? (optional)') ?? '' })}>Decline</button>
+                  onClick={async () => {
+                    const note = await ask({
+                      title: 'Decline this',
+                      label: 'Anything they should know',
+                      hint: 'It goes back to their drafts rather than away, so a reason saves a round trip.',
+                      multiline: true,
+                      optional: true,
+                      confirmLabel: 'Decline',
+                    });
+                    if (note === null) return;
+                    act(e.id, 'decide', { approve: false, note });
+                  }}>Decline</button>
               </>
             )}
             {e.source === 'itinerary' && e.status !== 'draft' && (

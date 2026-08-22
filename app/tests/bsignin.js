@@ -75,10 +75,12 @@ let SECRET = '';
 
     // This suite is about the return journey through the login page, and the
     // code is spent on the vault by default — so it is moved to the front door
-    // deliberately here. Moving it costs a step-up of its own, which the screen
-    // asks for in a prompt; Playwright dismisses dialogs unless told otherwise.
-    p.on('dialog', (d) => d.accept(now()));
+    // deliberately here. Moving it costs a step-up of its own, asked for in the
+    // app rather than by window.prompt.
     await p.selectOption('#totp-scope', 'login_and_vault');
+    await p.waitForSelector('.ask-card #ask-input', { timeout: 15000 });
+    await p.fill('.ask-card #ask-input', now());
+    await p.click('.ask-card button:has-text("Change")');
     await p.waitForFunction(
       () => /sign in/i.test(document.querySelector('.ess-group')?.textContent || ''),
       null, { timeout: 15000 },
