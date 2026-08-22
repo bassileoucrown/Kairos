@@ -1,6 +1,6 @@
-// Does the app fit on a phone?
+// Does the app fit on a phone, and can it be read once it does?
 //
-// Two separate failures, and they need different measurements.
+// Three separate failures, and they need different measurements.
 //
 // SIDEWAYS SCROLL is the page being wider than the window. Somebody has to
 // drag the whole layout left to reach a button, which on a phone means they
@@ -11,8 +11,17 @@
 // looks like from the inside. Measured per element, and only where the box is
 // not allowed to scroll — a table inside a scroller is doing what it should.
 //
-// Both are reported with the offending element named, because "the page is too
-// wide" is not something anybody can act on.
+// SQUEEZING is the opposite of spilling, and it was invented by the fix for
+// it. min-width:0 plus overflow-wrap:anywhere lets a box shrink and lets its
+// text break anywhere; put that box in a row beside buttons that will not
+// shrink, and it collapses instead of overflowing. The itinerary title was
+// measured at eleven pixels holding forty-seven characters over thirty-nine
+// lines — one letter per line. The page fitted the phone perfectly, so the two
+// measurements above both passed it. Measured as text in a box too narrow to
+// hold a word.
+//
+// All three are reported with the offending element named, because "the page is
+// too wide" is not something anybody can act on.
 const ROOT = require('path').join(__dirname, '..', '..');
 const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 const { spawn } = require('child_process');
@@ -84,6 +93,7 @@ const MEASURE = () => {
 
   const wide = [];
   const spilling = [];
+  const squeezed = [];
 
   for (const el of document.querySelectorAll('body *')) {
     const cs = getComputedStyle(el);
@@ -94,6 +104,28 @@ const MEASURE = () => {
     // Pushing the page wider than the window.
     if (r.right > limit + 1 && !insideAScroller(el)) {
       wide.push({ what: describe(el), right: Math.round(r.right), over: Math.round(r.right - limit) });
+    }
+
+    // Crushed into a column too narrow to set a word in. Leaf elements only:
+    // a wrapper is narrow because its child is, and naming both is noise.
+    if (el.children.length === 0) {
+      const words = (el.textContent || '').trim();
+      if (words.length >= 12) {
+        const size = parseFloat(cs.fontSize) || 14;
+        // Roughly half the font size per character, which is close enough for
+        // "is there room for a word here" and needs no font metrics.
+        const perLine = r.width / (size * 0.5);
+        const lines = Math.round(r.height / (parseFloat(cs.lineHeight) || size * 1.4));
+        if (perLine < 6 && lines > 3) {
+          squeezed.push({
+            what: describe(el),
+            width: Math.round(r.width),
+            chars: words.length,
+            lines,
+            text: words.slice(0, 40),
+          });
+        }
+      }
     }
 
     // Wider than its own box, with nowhere to scroll — this is the text that
@@ -119,6 +151,7 @@ const MEASURE = () => {
     overflow: de.scrollWidth - limit,
     wide: deepest(wide).slice(0, 6),
     spilling: spilling.slice(0, 6),
+    squeezed: squeezed.slice(0, 6),
   };
 };
 
@@ -139,11 +172,24 @@ const MEASURE = () => {
     }
 
     // ---- Seed enough that the screens are not empty ----------------------
-    // An empty page never overflows. Every screen measured below is given the
-    // kind of content that makes it wide in real use: long names, long
-    // locations, a full week of hours, several rows.
+    // An empty page never overflows and never crushes anything either, so this
+    // suite is worth exactly as much as its seeding. That is not a figure of
+    // speech: every itinerary item below was being POSTed to /itinerary/:id
+    // when the route is /itinerary/:id/items, so the calls 404ed, nobody
+    // looked at the status, and the Itinerary and Today screens were measured
+    // empty for months. The screen was catastrophically broken at every phone
+    // width and the suite reported it green.
+    //
+    // So `must` now reads the status of every seeding call and throws. A suite
+    // that cannot set up its own subject must fail loudly rather than quietly
+    // measure nothing.
     const jar = {};
     const call = api(jar);
+    const must = async (m, p, b) => {
+      const r = await call(m, p, b);
+      if (r.s >= 400) throw new Error(`seeding failed: ${m} ${p} → ${r.s} ${JSON.stringify(r.d)}`);
+      return r;
+    };
     const up = await call('POST', '/auth/signup', { name: 'Adaeze Okonkwo-Abubakar', email: EMAIL, password: PW });
     if (up.s !== 201) throw new Error('signup failed: ' + up.s + ' ' + JSON.stringify(up.d));
     const who = await call('GET', '/auth/me');
@@ -152,35 +198,36 @@ const MEASURE = () => {
     await call('PATCH', '/profile', { slug: `adaeze-${ID}`, timezone: 'Africa/Lagos' });
     await call('POST', '/profile/onboarding-step', { step: 'done' });
 
-    for (const day of [1, 2, 3, 4, 5]) {
-      await call('POST', '/availability', { rules: [{ dayOfWeek: day, startTime: '09:00', endTime: '17:30' }] });
-    }
-    await call('POST', '/meeting-types', {
+    await must('PUT', '/availability', {
+      rules: [1, 2, 3, 4, 5].map((dayOfWeek) => ({ dayOfWeek, startTime: '09:00', endTime: '17:30' })),
+    });
+    await must('POST', '/meeting-types', {
       name: 'Quarterly portfolio review with the investment committee',
       durationMinutes: 60, locationType: 'video',
       description: 'A long description of the sort somebody actually writes when they are explaining what the meeting is for.',
     });
 
     const soon = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
-    for (const [title, place, hrs] of [
-      ['Board pre-read with the Chief Financial Officer', 'Ikoyi, Lagos — 14 Kingsway Road, 3rd floor', 2],
-      ['Call with counsel about the Mauritius structure', 'Video — dial in from anywhere', 5],
-      ['Lunch, Eko Hotel and Suites, Victoria Island', 'Plot 1415 Adetokunbo Ademola Street', 8],
-      ['Car to Murtala Muhammed International Airport', 'Departing from the Ikoyi residence', 26],
+    for (const [title, place, kind, hrs] of [
+      ['Board pre-read with the Chief Financial Officer', 'Ikoyi, Lagos — 14 Kingsway Road, 3rd floor', 'meeting', 2],
+      ['Call with counsel about the Mauritius structure', 'Video — dial in from anywhere', 'call', 5],
+      ['Lunch, Eko Hotel and Suites, Victoria Island', 'Plot 1415 Adetokunbo Ademola Street', 'meal', 8],
+      ['Car to Murtala Muhammed International Airport', 'Departing from the Ikoyi residence', 'car', 26],
+      ['BA75 to London Heathrow, Terminal 5', 'Murtala Muhammed International, Terminal 1', 'flight', 28],
     ]) {
-      await call('POST', `/itinerary/${me.id}`, {
-        title, kind: 'meeting', location: place,
+      await must('POST', `/itinerary/${me.id}/items`, {
+        title, kind, location: place,
         startAt: soon(hrs), endAt: soon(hrs + 1), status: 'confirmed',
       });
     }
 
-    await call('POST', `/essentials/${me.id}`, {
+    await must('POST', `/essentials/${me.id}`, {
       category: 'travel_identity', field: 'passport_number', value: 'A01234821', expiresOn: '2027-03-01',
     });
-    await call('POST', `/essentials/${me.id}`, {
+    await must('POST', `/essentials/${me.id}`, {
       category: 'preferences', field: 'seat_preference', value: 'Aisle, front of cabin, away from the galley',
     });
-    await call('POST', `/pa/${me.id}/contacts`, {
+    await must('POST', `/pa/${me.id}/contacts`, {
       name: 'Oluwaseun Adebayo-Williams', email: 'oluwaseun.adebayo.williams@averylongdomainname.com',
       company: 'Adebayo Williams Capital Partners Limited', tier: 'inner_circle',
     });
@@ -249,6 +296,14 @@ const MEASURE = () => {
           console.log(`  ✗ ${name} has content spilling its box`);
           for (const el of m.spilling) console.log(`      ${el.what}  (+${el.by}px)  "${el.text}"`);
         }
+        if (m.squeezed.length) {
+          bad++;
+          problems.push({ width: w, screen: name, kind: 'squeezed', who: m.squeezed });
+          console.log(`  ✗ ${name} has text crushed too narrow to read`);
+          for (const el of m.squeezed) {
+            console.log(`      ${el.what}  ${el.width}px, ${el.chars} chars over ${el.lines} lines  "${el.text}"`);
+          }
+        }
       }
 
       ok(`nothing overflows at ${w}px`, bad === 0, `${bad} screens`);
@@ -263,7 +318,7 @@ const MEASURE = () => {
   }
 
   console.log(fails === 0
-    ? '\nEvery screen fits the phone it is held in.'
+    ? '\nEvery screen fits the phone it is held in, and can be read on it.'
     : `\n${fails} FAILED — ${problems.length} problems listed above.`);
   process.exit(fails === 0 ? 0 : 1);
 })();
