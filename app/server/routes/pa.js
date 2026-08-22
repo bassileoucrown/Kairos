@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const formats = require('../lib/meetingFormats');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess, requireSchedulingAccess } = require('../lib/paAccess');
 const {
@@ -82,13 +83,26 @@ function serializeBooking(b) {
     startAt: b.start_at,
     endAt: b.end_at,
     status: b.status,
+    // What the booker asked for, and whether anybody has agreed to it yet.
+    format: b.format || null,
+    formatLabel: b.format ? formats.label(b.format) : null,
+    formatNote: b.format_note || null,
+    formatState: b.format_state || 'agreed',
+    counterFormat: b.counter_format || null,
+    counterFormatLabel: b.counter_format ? formats.label(b.counter_format) : null,
+    counterFormatNote: b.counter_format_note || null,
+    // The principal's own format, so the screen can say what is unusual
+    // about this request rather than making somebody remember.
+    usualFormat: b.location_type || null,
+    usualFormatLabel: b.location_type ? formats.label(b.location_type) : null,
+    formats: formats.offer(b.location_type),
     createdAt: b.created_at,
   };
 }
 
 router.get('/:ownerId/approvals', requirePaAccess, async (req, res) => {
   const rows = await db.prepare(`
-    SELECT b.*, mt.name as meeting_type_name, mt.access_tier
+    SELECT b.*, mt.name as meeting_type_name, mt.access_tier, mt.location_type
     FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id
     WHERE b.owner_id = ? AND b.status = 'pending'
@@ -106,13 +120,68 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (re
   if (!booking) return res.status(404).json({ error: 'Request not found.' });
   if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
 
-  await db.prepare("UPDATE bookings SET status = 'confirmed' WHERE id = ?").run(booking.id);
+  // Approving settles both questions at once. The office is looking at the
+  // request and saying yes to it — asking them to agree the format in a
+  // second click would be ceremony, not consent.
+  //
+  // A video room is created here rather than at booking time, because until
+  // now nobody knew whether this meeting would be a video call at all.
+  const room = booking.format === 'video' && !booking.video_room
+    ? `kairos-${crypto.randomBytes(8).toString('hex')}`
+    : booking.video_room;
+  await db.prepare(
+    "UPDATE bookings SET status = 'confirmed', format_state = 'agreed', video_room = ?,"
+    + ' counter_format = NULL, counter_format_note = NULL WHERE id = ?',
+  ).run(room, booking.id);
 
   await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Confirmed: ${booking.meeting_type_name} with ${req.principal.name}`,
     body: `Hi ${booking.booker_name},\n\nYou're confirmed for ${formatForEmail(booking.start_at, booking.booker_timezone)} (${booking.booker_timezone}).\n\nManage this booking: /book/manage/${booking.id}`,
+  });
+
+  res.json({ ok: true });
+});
+
+// Suggest a different way of meeting.
+//
+// Accept-or-decline is a poor pair of choices when the real answer is
+// usually 'not video, come in' — so the office can answer with a format of
+// its own and the booker replies. The booking stays pending and keeps its
+// slot while that happens: releasing the time on a counter-offer would mean
+// the booker accepts and finds it gone.
+router.post('/:ownerId/approvals/:bookingId/counter', requirePaAccess, async (req, res) => {
+  const booking = await db.prepare(`
+    SELECT b.*, mt.name as meeting_type_name FROM bookings b
+    JOIN meeting_types mt ON mt.id = b.meeting_type_id
+    WHERE b.id = ? AND b.owner_id = ?
+  `).get(req.params.bookingId, req.principal.id);
+  if (!booking) return res.status(404).json({ error: 'Request not found.' });
+  if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
+
+  const { format, formatNote } = req.body || {};
+  if (!formats.isFormat(format)) return res.status(400).json({ error: 'Choose a way of meeting.' });
+  const problem = formats.problem(format, formatNote);
+  if (problem) return res.status(400).json({ error: problem });
+  if (format === booking.format) {
+    return res.status(400).json({ error: 'That is what they already asked for. Approve it instead.' });
+  }
+
+  const note = String(formatNote || '').trim() || null;
+  await db.prepare(
+    "UPDATE bookings SET format_state = 'countered', counter_format = ?, counter_format_note = ? WHERE id = ?",
+  ).run(format, note, booking.id);
+
+  await sendEmail({
+    ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email,
+    relatedBookingId: booking.id, category: 'transactional',
+    subject: `A suggestion about your ${booking.meeting_type_name} with ${req.principal.name}`,
+    body: `Hi ${booking.booker_name},\n\nYou asked to meet by ${formats.label(booking.format)}`
+      + `${booking.format_note ? ` (${booking.format_note})` : ''}.`
+      + ` ${req.principal.name}'s office suggests ${formats.label(format)} instead`
+      + `${note ? ` — ${note}` : ''}.`
+      + `\n\nThe time is still held for you. Accept or withdraw here: /book/manage/${booking.id}`,
   });
 
   res.json({ ok: true });

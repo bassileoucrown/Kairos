@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const formats = require('../lib/meetingFormats');
 const { getOpenSlots } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
@@ -35,6 +36,7 @@ router.get('/:slug', async (req, res) => {
       durationMinutes: mt.duration_minutes,
       description: mt.description,
       locationType: mt.location_type,
+      formats: formats.offer(mt.location_type),
     })),
   });
 });
@@ -88,17 +90,36 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
   const id = crypto.randomUUID();
   const cleanEmail = String(email).trim().toLowerCase();
   const cleanName = String(name).trim();
-  const needsApproval = meetingType.access_tier >= 3;
+
+  // How the booker would like to meet. Left out entirely, the principal's own
+  // format stands and nothing about this booking is new.
+  const chosen = formats.isFormat(req.body?.format) ? req.body.format : meetingType.location_type;
+  const noteProblem = formats.problem(chosen, req.body?.formatNote);
+  if (noteProblem) return res.status(400).json({ error: noteProblem });
+  const formatNote = String(req.body?.formatNote || '').trim() || null;
+
+  // Two separate reasons a booking might not go straight on the diary, and
+  // they are independent: the meeting type's access tier, and whether the
+  // booker asked for a format other than the usual one. Either is enough.
+  const tierNeedsApproval = meetingType.access_tier >= 3;
+  const formatNeedsAgreement = formats.needsAgreement(chosen, meetingType.location_type);
+  const needsApproval = tierNeedsApproval || formatNeedsAgreement;
   const status = needsApproval ? 'pending' : 'confirmed';
-  const videoRoom = meetingType.location_type === 'video'
+  const formatState = formatNeedsAgreement ? formats.STATES.proposed : formats.STATES.agreed;
+
+  // The room follows the format that will actually be used, not the one the
+  // meeting type happens to name. Creating one for a booking that turns out to
+  // be in person would put a dead video link in a confirmation email.
+  const videoRoom = (chosen === 'video' && formatState === formats.STATES.agreed)
     ? `kairos-${crypto.randomBytes(8).toString('hex')}`
     : null;
 
   await db.prepare(`
-    INSERT INTO bookings (id, meeting_type_id, owner_id, booker_name, booker_email, booker_timezone, start_at, end_at, status, video_room, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO bookings (id, meeting_type_id, owner_id, booker_name, booker_email, booker_timezone, start_at, end_at, status, video_room, format, format_note, format_state, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, meetingType.id, owner.id, cleanName, cleanEmail, bookerTimezone,
-    start.toISOString(), end.toISOString(), status, videoRoom, new Date().toISOString());
+    start.toISOString(), end.toISOString(), status, videoRoom,
+    chosen, formatNote, formatState, new Date().toISOString());
 
   // Upsert a lightweight contact record so Contact Intelligence has
   // something to show even before a PA has added notes.
@@ -120,7 +141,11 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
     await sendEmail({
       ownerId: owner.id, toEmail: owner.email, relatedBookingId: id, category: 'transactional',
       subject: `Approval needed: ${cleanName} wants to book ${meetingType.name}`,
-      body: `${cleanName} (${cleanEmail}) requested ${when} (${bookerTimezone}) for ${meetingType.name}. This meeting type requires approval — review it in your Approval Queue.`,
+      body: `${cleanName} (${cleanEmail}) requested ${when} (${bookerTimezone}) for ${meetingType.name}.`
+        + (formatNeedsAgreement
+          ? ` They asked to meet by ${formats.label(chosen)}${formatNote ? ` — ${formatNote}` : ''}, rather than the usual ${formats.label(meetingType.location_type)}.`
+          : '')
+        + ' Review it in your Approval Queue.',
     });
   } else {
     await sendEmail({
@@ -147,7 +172,8 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
 async function getBookingDetail(id) {
   return await db.prepare(`
     SELECT
-      b.id, b.status, b.start_at, b.end_at, b.booker_name, b.booker_email, b.booker_timezone, b.video_room,
+      b.id, b.owner_id, b.status, b.start_at, b.end_at, b.booker_name, b.booker_email, b.booker_timezone, b.video_room,
+      b.format, b.format_note, b.format_state, b.counter_format, b.counter_format_note,
       mt.name as meeting_type_name, mt.slug as meeting_type_slug, mt.duration_minutes, mt.location_type,
       u.name as owner_name, u.slug as owner_slug, u.timezone as owner_timezone
     FROM bookings b
@@ -167,6 +193,13 @@ function serializeBookingDetail(b) {
     bookerEmail: b.booker_email,
     bookerTimezone: b.booker_timezone,
     videoRoom: b.video_room,
+    format: b.format || b.location_type,
+    formatLabel: formats.label(b.format || b.location_type),
+    formatNote: b.format_note || null,
+    formatState: b.format_state || 'agreed',
+    counterFormat: b.counter_format || null,
+    counterFormatLabel: b.counter_format ? formats.label(b.counter_format) : null,
+    counterFormatNote: b.counter_format_note || null,
     meetingTypeName: b.meeting_type_name,
     meetingTypeSlug: b.meeting_type_slug,
     durationMinutes: b.duration_minutes,
@@ -185,6 +218,58 @@ router.get('/bookings/:id', async (req, res) => {
   const booking = await getBookingDetail(req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
   res.json({ booking: serializeBookingDetail(booking) });
+});
+
+// The booker's half of the negotiation.
+//
+// Withdrawing is just cancelling, which already exists — so the only new verb
+// is accepting what the office suggested. Refusing to accept anything other
+// than a live counter-offer keeps this from becoming a way to change the
+// format of a booking that was already settled.
+router.post('/bookings/:id/accept-format', async (req, res) => {
+  const booking = await getBookingDetail(req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  if (booking.format_state !== formats.STATES.countered || !booking.counter_format) {
+    return res.status(400).json({ error: 'There is nothing to accept on this booking.' });
+  }
+
+  // Accepting the office's suggestion settles the thing the booking was
+  // waiting on, so it goes on the diary — unless the meeting type's own tier
+  // still wants a human, in which case it stays pending for that reason and
+  // the queue shows it with the format already agreed.
+  const mt = await db.prepare('SELECT access_tier FROM meeting_types WHERE id = (SELECT meeting_type_id FROM bookings WHERE id = ?)')
+    .get(booking.id);
+  const stillNeedsApproval = (mt?.access_tier || 1) >= 3;
+  const room = booking.counter_format === 'video' && !booking.video_room
+    ? `kairos-${crypto.randomBytes(8).toString('hex')}`
+    : booking.video_room;
+
+  await db.prepare(
+    'UPDATE bookings SET format = ?, format_note = ?, format_state = ?, status = ?,'
+    + ' video_room = ?, counter_format = NULL, counter_format_note = NULL WHERE id = ?',
+  ).run(
+    booking.counter_format,
+    booking.counter_format_note,
+    formats.STATES.agreed,
+    stillNeedsApproval ? 'pending' : 'confirmed',
+    room,
+    booking.id,
+  );
+
+  const fresh = await getBookingDetail(booking.id);
+  await sendEmail({
+    ownerId: booking.owner_id,
+    toEmail: booking.booker_email, relatedBookingId: booking.id, category: 'transactional',
+    subject: `Agreed: ${booking.meeting_type_name} with ${booking.owner_name}`,
+    body: `Hi ${booking.booker_name},\n\nYou have accepted ${formats.label(booking.counter_format)}`
+      + `${booking.counter_format_note ? ` — ${booking.counter_format_note}` : ''}.`
+      + (stillNeedsApproval
+        ? ' The office still has to confirm the time itself.'
+        : ` You're confirmed for ${formatForEmail(booking.start_at, booking.booker_timezone)} (${booking.booker_timezone}).`)
+      + `\n\nManage this booking: /book/manage/${booking.id}`,
+  });
+
+  res.json({ booking: serializeBookingDetail(fresh) });
 });
 
 router.post('/bookings/:id/cancel', async (req, res) => {

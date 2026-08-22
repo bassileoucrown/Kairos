@@ -379,6 +379,15 @@ function ready() {
       // lib/devices.js.
       await ensureColumn('sessions', 'trusted_at', 'TEXT');
 
+      // How a meeting happens, asked for by the booker and agreed by the
+      // office. The format lived only on the meeting type before this, so a
+      // booking had no way to differ from it. See lib/meetingFormats.js.
+      await ensureColumn('bookings', 'format', 'TEXT');
+      await ensureColumn('bookings', 'format_note', 'TEXT');
+      await ensureColumn('bookings', 'format_state', "TEXT NOT NULL DEFAULT 'agreed'");
+      await ensureColumn('bookings', 'counter_format', 'TEXT');
+      await ensureColumn('bookings', 'counter_format_note', 'TEXT');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');
