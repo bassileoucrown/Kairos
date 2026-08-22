@@ -11,16 +11,18 @@
 // and declined — and a search, and it is shared by both paths so the principal
 // and their office are never looking at differently-shaped truth.
 //
-// WHAT THIS IS NOT. The bookings table records a booking's state, not its
-// story: there is no column saying when it was cancelled or who cancelled it,
-// and a reschedule overwrites start_at in place, so the time it was first
-// booked for is gone. What survives is the correspondence — every transition
-// sends an email, and those rows are dated and attributed. That is the trail
-// this exposes, and it is honest about being a trail of what was said rather
-// than a ledger of what was done.
+// WHERE THE STORY COMES FROM. The bookings row records state, not story: it
+// says a meeting is confirmed for Thursday and cannot say it was booked for
+// Tuesday and moved twice. Two other tables hold what happened —
+// booking_events, which records the doing, and emails, which records the
+// telling. The trail below merges them, because what somebody wants is the
+// sequence, and separating the doing from the telling makes that sequence
+// something the reader has to reassemble in their head.
 
 const db = require('./db');
 const formats = require('./meetingFormats');
+const events = require('./bookingEvents');
+const { formatForEmail } = require('./format');
 
 // Every field both callers need, in one place, so the principal's list and the
 // assistant's cannot drift into showing different things about one booking.
@@ -28,7 +30,8 @@ const SELECT = `
   SELECT b.*, mt.name AS meeting_type_name, mt.color AS meeting_type_color,
     mt.access_tier, mt.location_type,
     (SELECT 1 FROM briefs br WHERE br.booking_id = b.id) AS has_brief,
-    (SELECT COUNT(*) FROM emails e WHERE e.related_booking_id = b.id) AS letters
+    (SELECT COUNT(*) FROM emails e WHERE e.related_booking_id = b.id)
+      + (SELECT COUNT(*) FROM booking_events ev WHERE ev.booking_id = b.id) AS trail_length
   FROM bookings b
   JOIN meeting_types mt ON mt.id = b.meeting_type_id
 `;
@@ -62,7 +65,7 @@ function serialize(b) {
     usualFormatLabel: formats.label(b.location_type),
     wasUnusual: !!b.format && b.format !== b.location_type,
     hasBrief: !!b.has_brief,
-    letters: Number(b.letters || 0),
+    trailLength: Number(b.trail_length || 0),
     createdAt: b.created_at,
   };
 }
@@ -123,34 +126,67 @@ async function get(ownerId, bookingId) {
 }
 
 /**
- * What was said about one booking, and by whom.
+ * Everything that happened to one booking, and everything that was said about
+ * it, in one order.
  *
- * Subjects only — never the bodies. A confirmation email carries the booker's
- * manage link, which is that booking's access capability: anybody holding it
- * can move or cancel the meeting as the booker. An assistant has their own,
- * attributed way to do both, so handing them the booker's would only blur who
- * did what. The subject line answers the question that gets asked.
+ * Two sources, deliberately merged rather than shown as two lists. What a
+ * person wants is the sequence — booked, we wrote to them, the office
+ * suggested a video call, we wrote again, they agreed — and splitting the
+ * doing from the telling makes that sequence something the reader has to
+ * reassemble in their head.
+ *
+ * Email lines carry subjects only, never bodies. A confirmation email holds
+ * the booker's manage link, which is that booking's access capability:
+ * anybody with it can move or cancel the meeting as the booker. An assistant
+ * has their own attributed way to do both, so handing them the booker's would
+ * only blur who did what.
  */
 async function trail(ownerId, bookingId) {
-  const rows = await db.prepare(`
+  const owner = await db.prepare('SELECT timezone FROM users WHERE id = ?').get(ownerId);
+  const tz = owner?.timezone || 'UTC';
+  const whenLabel = (iso) => (iso ? formatForEmail(iso, tz) : 'an unknown time');
+
+  const letters = await db.prepare(`
     SELECT e.id, e.subject, e.to_email, e.category, e.created_at, u.name AS sent_by_name
     FROM emails e
     LEFT JOIN users u ON u.id = e.sent_by_user_id
     WHERE e.related_booking_id = ? AND e.owner_id = ?
-    ORDER BY e.created_at ASC
   `).all(bookingId, ownerId);
 
-  return rows.map((e) => ({
-    id: e.id,
-    subject: e.subject,
-    toEmail: e.to_email,
-    category: e.category,
-    at: e.created_at,
-    // A null sender is Kairos acting on its own — a booking confirmation, a
-    // reminder. Saying "Kairos" is more use than saying nobody.
-    by: e.sent_by_name || 'Kairos',
-    byPerson: !!e.sent_by_name,
-  }));
+  const happenings = await events.forBooking(ownerId, bookingId);
+
+  const lines = [
+    ...happenings.map((e) => ({
+      id: e.id,
+      source: 'event',
+      kind: e.kind,
+      at: e.at,
+      headline: events.headline(e, { formatLabel: formats.label, whenLabel }),
+      detail: e.note || '',
+      // An office member has an account and is named from it. The booker has
+      // no account and is named by what they typed. Kairos is neither.
+      by: e.actor_name || e.actor_label || 'Kairos',
+      byPerson: !!(e.actor_name || e.actor_label),
+      byOffice: !!e.actor_user_id,
+    })),
+    ...letters.map((e) => ({
+      id: e.id,
+      source: 'email',
+      kind: 'sent',
+      at: e.created_at,
+      headline: e.subject,
+      detail: `to ${e.to_email}`,
+      by: e.sent_by_name || 'Kairos',
+      byPerson: !!e.sent_by_name,
+      byOffice: !!e.sent_by_name,
+    })),
+  ];
+
+  // Same instant, event before the letter about it: the thing happened, then
+  // we wrote. Ties are common because both are written in the same handler.
+  lines.sort((a, b) => (new Date(a.at) - new Date(b.at))
+    || (a.source === b.source ? 0 : (a.source === 'event' ? -1 : 1)));
+  return lines;
 }
 
 module.exports = { list, get, trail, SCOPES };

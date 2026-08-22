@@ -882,3 +882,36 @@ CREATE TABLE IF NOT EXISTS visas (
   created_at         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_visas_owner ON visas(owner_id, country);
+
+-- What actually happened to a booking, in order.
+--
+-- The bookings row holds state, not story. It says a meeting is confirmed for
+-- Thursday; it cannot say that it was booked for Tuesday, moved twice, that
+-- the office suggested a video call and the booker agreed, or who called it
+-- off. Rescheduling in particular overwrote start_at in place, so the time
+-- first agreed was simply gone — which for a custody product is the wrong
+-- default: a principal asking "when did we originally say?" deserves an
+-- answer.
+--
+-- Append-only by convention. Nothing here is ever updated or deleted; a
+-- correction is another row. See lib/bookingEvents.js for the vocabulary.
+CREATE TABLE IF NOT EXISTS booking_events (
+  id            TEXT PRIMARY KEY,
+  booking_id    TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  -- Denormalised so a principal's trail can be scoped without joining through
+  -- bookings, and so it goes when the account does.
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL,
+  -- The office member who did it. NULL when it was the booker, who has no
+  -- account, or Kairos acting on its own.
+  actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  -- Who it was when there is no account to point at: the booker's name as
+  -- given, frozen at the time, because they may rename themselves later.
+  actor_label   TEXT NOT NULL DEFAULT '',
+  from_value    TEXT,
+  to_value      TEXT,
+  note          TEXT NOT NULL DEFAULT '',
+  at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_booking_events_booking ON booking_events(booking_id, at);
+CREATE INDEX IF NOT EXISTS idx_booking_events_owner ON booking_events(owner_id, at);

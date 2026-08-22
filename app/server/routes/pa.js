@@ -16,6 +16,7 @@ const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
+const events = require('../lib/bookingEvents');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -142,6 +143,19 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (re
     + ' counter_format = NULL, counter_format_note = NULL WHERE id = ?',
   ).run(room, booking.id);
 
+  // Two things happened in one click when a format was in question, and the
+  // trail says both rather than making somebody infer the second.
+  if (booking.format_state && booking.format_state !== 'agreed') {
+    await events.record({
+      bookingId: booking.id, ownerId: req.principal.id, kind: events.KINDS.format_agreed,
+      actorUserId: req.user.id, toValue: booking.format,
+    });
+  }
+  await events.record({
+    bookingId: booking.id, ownerId: req.principal.id, kind: events.KINDS.approved,
+    actorUserId: req.user.id, fromValue: 'pending', toValue: 'confirmed',
+  });
+
   await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
@@ -181,6 +195,11 @@ router.post('/:ownerId/approvals/:bookingId/counter', requirePaAccess, async (re
     "UPDATE bookings SET format_state = 'countered', counter_format = ?, counter_format_note = ? WHERE id = ?",
   ).run(format, note, booking.id);
 
+  await events.record({
+    bookingId: booking.id, ownerId: req.principal.id, kind: events.KINDS.format_countered,
+    actorUserId: req.user.id, fromValue: booking.format, toValue: format, note,
+  });
+
   await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email,
     relatedBookingId: booking.id, category: 'transactional',
@@ -201,6 +220,11 @@ router.post('/:ownerId/approvals/:bookingId/decline', requirePaAccess, async (re
   if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
 
   await db.prepare("UPDATE bookings SET status = 'declined' WHERE id = ?").run(booking.id);
+  await events.record({
+    bookingId: booking.id, ownerId: req.principal.id, kind: events.KINDS.declined,
+    actorUserId: req.user.id, fromValue: 'pending', toValue: 'declined',
+    note: String(req.body?.note || '').trim(),
+  });
 
   await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
@@ -624,6 +648,14 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, async (req, res) => {
     INSERT INTO bookings (id, meeting_type_id, owner_id, booker_name, booker_email, booker_timezone, start_at, end_at, status, video_room, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)
   `).run(id, meetingType.id, req.principal.id, cleanName, cleanEmail, req.principal.timezone, start.toISOString(), end.toISOString(), videoRoom, new Date().toISOString());
+
+  // Booked from inside the office, so the office member is the actor — the
+  // contact did not ask for this, somebody put it in for them.
+  await events.record({
+    bookingId: id, ownerId: req.principal.id, kind: events.KINDS.booked,
+    actorUserId: req.user.id, toValue: meetingType.location_type,
+    note: `on behalf of ${cleanName}`,
+  });
 
   const existingContact = await db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
   if (!existingContact) {

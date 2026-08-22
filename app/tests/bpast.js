@@ -145,21 +145,82 @@ const anon = sess();
     ok('a wildcard is searched for, not obeyed', r.d.bookings.length === 0,
       String(r.d.bookings.length));
 
-    // ---- What was said --------------------------------------------------------
-    head('What was sent about one booking:');
+    // ---- What happened, and what was said ---------------------------------------
+    head('The trail of one booking:');
     r = await boss('GET', `/bookings/${dropped.id}/trail`);
-    ok('the correspondence is there', r.d.trail.length >= 2, String(r.d.trail.length));
+    const line = (re) => r.d.trail.find((t) => re.test(t.headline));
+    ok('both what was done and what was sent are in it',
+      r.d.trail.some((t) => t.source === 'event') && r.d.trail.some((t) => t.source === 'email'),
+      JSON.stringify(r.d.trail.map((t) => t.source)));
     ok('oldest first, so it reads as a story',
       new Date(r.d.trail[0].at) <= new Date(r.d.trail[r.d.trail.length - 1].at));
-    ok('the cancellation is attributed to the person who sent it',
-      r.d.trail.some((t) => /cancel/i.test(t.subject) && t.by === 'Ada Boss' && t.byPerson === true),
-      JSON.stringify(r.d.trail.map((t) => [t.subject, t.by])));
-    ok('and the booking that was made by itself is not attributed to anybody',
-      r.d.trail.some((t) => t.byPerson === false));
+    ok('it opens with the booking itself', r.d.trail[0].headline === 'Booked',
+      r.d.trail[0].headline);
+    ok('credited to the person who booked, who has no account',
+      r.d.trail[0].by === 'Gets Cancelled' && r.d.trail[0].byOffice === false,
+      `${r.d.trail[0].by} / office:${r.d.trail[0].byOffice}`);
+    ok('the cancellation is recorded as a thing that happened',
+      !!line(/^Cancelled$/), JSON.stringify(r.d.trail.map((t) => t.headline)));
+    ok('attributed to the office member who did it',
+      line(/^Cancelled$/).by === 'Ada Boss' && line(/^Cancelled$/).byOffice === true);
+    ok('and the letter that went out is marked as a letter, not as an act',
+      r.d.trail.some((t) => t.source === 'email' && /cancel/i.test(t.headline)));
+    ok('a letter nobody pressed send on is not credited to anybody',
+      r.d.trail.some((t) => t.source === 'email' && t.byPerson === false));
 
     // The reason only subjects come across.
     ok('no letter body is handed over', !JSON.stringify(r.d.trail).includes('/book/manage/'),
       JSON.stringify(r.d.trail).slice(0, 160));
+
+    // ---- The reason the table exists ---------------------------------------------
+    head('A meeting that moves:');
+    const wasAt = kept.startAt;
+    let free = await slots(open.slug);
+    const moveTo = free.find((s) => s.startAt !== wasAt);
+    r = await anon('POST', `/public/bookings/${kept.id}/reschedule`, { startAt: moveTo.startAt });
+    ok('it can be moved', r.s === 200, JSON.stringify(r.d).slice(0, 120));
+    ok('and the row now holds only the new time', r.d.booking.startAt === moveTo.startAt);
+
+    r = await boss('GET', `/bookings/${kept.id}/trail`);
+    const moved = r.d.trail.filter((t) => t.kind === 'rescheduled');
+    ok('but the move is on the record', moved.length === 1,
+      JSON.stringify(r.d.trail.map((t) => t.headline)));
+    ok('naming the time first agreed, which the booking itself has forgotten',
+      /^Moved from .+ to .+$/.test(moved[0].headline), moved[0].headline);
+    ok('and who moved it', moved[0].by === 'Stays Booked');
+
+    // Twice, because one move is the easy case.
+    free = await slots(open.slug);
+    const again = free.find((s) => s.startAt !== moveTo.startAt);
+    await anon('POST', `/public/bookings/${kept.id}/reschedule`, { startAt: again.startAt });
+    r = await boss('GET', `/bookings/${kept.id}/trail`);
+    ok('a second move does not overwrite the first',
+      r.d.trail.filter((t) => t.kind === 'rescheduled').length === 2,
+      String(r.d.trail.filter((t) => t.kind === 'rescheduled').length));
+
+    // ---- A whole negotiation, read back -------------------------------------------
+    head('A negotiation, read back afterwards:');
+    r = await book(open.slug, { name: 'Talked It Over', email: `talk${ID}@x.com`, format: 'in_person' });
+    const talked = r.d.booking.id;
+    await boss('POST', `/pa/${me.id}/approvals/${talked}/counter`,
+      { format: 'video', formatNote: 'The grounds are being resurfaced' });
+    await anon('POST', `/public/bookings/${talked}/accept-format`);
+
+    r = await boss('GET', `/bookings/${talked}/trail`);
+    const kinds = r.d.trail.filter((t) => t.source === 'event').map((t) => t.kind);
+    ok('every turn of it is there, in the order it happened',
+      JSON.stringify(kinds) === JSON.stringify(['booked', 'format_proposed', 'format_countered', 'format_agreed']),
+      JSON.stringify(kinds));
+    const proposed = r.d.trail.find((t) => t.kind === 'format_proposed');
+    ok('the ask says what was wanted and what it replaced',
+      /in person/i.test(proposed.headline) && /video call/i.test(proposed.headline),
+      proposed.headline);
+    const countered = r.d.trail.find((t) => t.kind === 'format_countered');
+    ok('the office\'s answer carries its reason',
+      countered.detail === 'The grounds are being resurfaced', String(countered.detail));
+    ok('and is credited to the office, not to the booker', countered.byOffice === true);
+    ok('while the booker\'s agreement is credited to them',
+      r.d.trail.find((t) => t.kind === 'format_agreed').by === 'Talked It Over');
 
     // ---- The assistant sees the same thing --------------------------------------
     head('Through an assistant:');
@@ -178,8 +239,11 @@ const anon = sess();
       String(r.d.bookings?.length));
     r = await pa('GET', `/pa/${me.id}/bookings`);
     ok('and with no scope asked for, gets the upcoming ones the briefs screen wants',
-      r.d.bookings.length === 1 && r.d.bookings[0].id === kept.id,
+      r.d.bookings.length > 0 && r.d.bookings.every((b) => b.status === 'confirmed'
+        && new Date(b.startAt) > new Date()),
       JSON.stringify(r.d.bookings.map((b) => b.status)));
+    ok('including the one that was never in doubt',
+      r.d.bookings.some((b) => b.id === kept.id));
     ok('with the brief flag that screen reads', r.d.bookings[0].hasBrief === false);
 
     r = await pa('GET', `/pa/${me.id}/bookings/${dropped.id}/trail`);

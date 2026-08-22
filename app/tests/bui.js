@@ -57,6 +57,10 @@ async function signup(browser, name, email, category, errors) {
     const boss = await signup(browser, 'Ada Boss', bossEmail, 'principal', errors);
     await boss.waitForURL('**/today', { timeout: 15000 });
     ok('principal lands on Today', boss.url().endsWith('/today'));
+    // The URL changes before the shell has painted. Counting nav items at that
+    // instant is a race that a quiet machine always wins and a busy one
+    // sometimes does not, so wait for the nav itself rather than for the URL.
+    await boss.waitForSelector('.nav-item', { timeout: 15000 });
     ok('principal has a Team link in the nav', await boss.locator('.nav-item:has-text("Team")').count() === 1);
     ok('principal has no Workspace link', await boss.locator('.nav-item:has-text("Workspace")').count() === 0);
 

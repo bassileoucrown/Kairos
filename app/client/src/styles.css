@@ -1724,7 +1724,22 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .trail-what { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .trail-what strong { display: block; font-weight: 600; }
+.trail-detail { display: block; color: var(--text); margin-top: 1px; }
 .trail-who { display: block; color: var(--text-muted); margin-top: 1px; }
+.trail-line.is-sent .trail-what strong { font-weight: 500; }
+.trail-tag {
+  display: inline-block;
+  margin-right: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
 
 @media (max-width: 560px) {
   /* The two-column reading falls apart below this; stacked stays legible. */

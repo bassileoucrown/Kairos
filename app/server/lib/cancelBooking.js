@@ -14,6 +14,7 @@
 const db = require('./db');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
+const events = require('./bookingEvents');
 
 /**
  * Cancel a booking and tell whoever made it.
@@ -25,6 +26,11 @@ async function cancelBooking({ booking, cancelledByUserId = null, note = '' }) {
   if (booking.status === 'cancelled') return false;
 
   await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
+  await events.record({
+    bookingId: booking.id, ownerId: booking.owner_id, kind: events.KINDS.cancelled,
+    actorUserId: cancelledByUserId, fromValue: booking.status, toValue: 'cancelled',
+    note: String(note || '').trim(),
+  });
 
   const owner = await db.prepare('SELECT * FROM users WHERE id = ?').get(booking.owner_id);
   const meetingType = await db.prepare('SELECT name FROM meeting_types WHERE id = ?')

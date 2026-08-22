@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const formats = require('../lib/meetingFormats');
+const events = require('../lib/bookingEvents');
 const { getOpenSlots } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
@@ -120,6 +121,19 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
   `).run(id, meetingType.id, owner.id, cleanName, cleanEmail, bookerTimezone,
     start.toISOString(), end.toISOString(), status, videoRoom,
     chosen, formatNote, formatState, new Date().toISOString());
+
+  // The booker has no account, so they are recorded by the name they gave.
+  await events.record({
+    bookingId: id, ownerId: owner.id, kind: events.KINDS.booked,
+    actorLabel: cleanName, toValue: chosen,
+  });
+  if (formatNeedsAgreement) {
+    await events.record({
+      bookingId: id, ownerId: owner.id, kind: events.KINDS.format_proposed,
+      actorLabel: cleanName, fromValue: meetingType.location_type, toValue: chosen,
+      note: formatNote || '',
+    });
+  }
 
   // Upsert a lightweight contact record so Contact Intelligence has
   // something to show even before a PA has added notes.
@@ -264,6 +278,13 @@ router.post('/bookings/:id/accept-format', async (req, res) => {
     booking.id,
   );
 
+  await events.record({
+    bookingId: booking.id, ownerId: booking.owner_id, kind: events.KINDS.format_agreed,
+    actorLabel: booking.booker_name,
+    fromValue: booking.format, toValue: booking.counter_format,
+    note: booking.counter_format_note || '',
+  });
+
   const fresh = await getBookingDetail(booking.id);
   await sendEmail({
     ownerId: booking.owner_id,
@@ -287,6 +308,10 @@ router.post('/bookings/:id/cancel', async (req, res) => {
     return res.json({ booking: serializeBookingDetail(booking) });
   }
   await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
+  await events.record({
+    bookingId: booking.id, ownerId: booking.owner_id, kind: events.KINDS.cancelled,
+    actorLabel: booking.booker_name, fromValue: booking.status, toValue: 'cancelled',
+  });
 
   const owner = await db.prepare('SELECT * FROM users WHERE slug = ?').get(booking.owner_slug);
   await sendEmail({
@@ -327,6 +352,13 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
   }
 
   const end = new Date(start.getTime() + meetingType.duration_minutes * 60000);
+  // Recorded before the update, because after it the old time no longer
+  // exists anywhere — which is the loss booking_events was added to stop.
+  await events.record({
+    bookingId: booking.id, ownerId: owner.id, kind: events.KINDS.rescheduled,
+    actorLabel: booking.booker_name,
+    fromValue: booking.start_at, toValue: start.toISOString(),
+  });
   await db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
     .run(start.toISOString(), end.toISOString(), booking.id);
 

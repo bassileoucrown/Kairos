@@ -134,9 +134,9 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {b.status === 'confirmed' && b.videoRoom && scope === 'upcoming' && <VideoJoinLink room={b.videoRoom} />}
-              {b.letters > 0 && (
+              {b.trailLength > 0 && (
                 <button className="btn btn-secondary btn-sm" type="button" onClick={() => showTrail(b)}>
-                  {openTrail === b.id ? 'Hide' : `What we sent (${b.letters})`}
+                  {openTrail === b.id ? 'Hide' : `History (${b.trailLength})`}
                 </button>
               )}
               {scope === 'upcoming' && (
@@ -150,13 +150,22 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
           {openTrail === b.id && (
             <div className="trail">
               {trail === null && <p className="hint">Loading…</p>}
-              {trail && trail.length === 0 && <p className="hint">Nothing was sent about this one.</p>}
+              {trail && trail.length === 0 && <p className="hint">Nothing is recorded against this one.</p>}
               {trail && trail.map((t) => (
-                <div className="trail-line" key={t.id}>
+                <div className={'trail-line' + (t.source === 'email' ? ' is-sent' : '')} key={t.id}>
                   <span className="trail-when">{dayLabelInZone(t.at, zone)} · {timeLabelInZone(t.at, zone)}</span>
                   <span className="trail-what">
-                    <strong>{t.subject}</strong>
-                    <span className="trail-who">to {t.toEmail} · {t.byPerson ? `sent by ${t.by}` : 'sent automatically'}</span>
+                    <strong>
+                      {/* What was done reads as itself; what was said is
+                          marked as a letter, so the two are never confused. */}
+                      {t.source === 'email' && <span className="trail-tag">Sent</span>}
+                      {t.headline}
+                    </strong>
+                    {t.detail && <span className="trail-detail">{t.detail}</span>}
+                    <span className="trail-who">
+                      {t.byPerson ? `by ${t.by}` : 'automatically'}
+                      {t.byOffice ? ' · the office' : ''}
+                    </span>
                   </span>
                 </div>
               ))}
