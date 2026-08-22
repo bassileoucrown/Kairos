@@ -13,7 +13,9 @@ router.use(requireAuth);
 
 router.get('/', async (req, res) => {
   res.json({
-    bookings: await history.list(req.user.id, { scope: req.query.scope, q: req.query.q }),
+    bookings: await history.list(req.user.id, {
+      scope: req.query.scope, q: req.query.q, from: req.query.from, to: req.query.to,
+    }),
   });
 });
 

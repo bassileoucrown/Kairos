@@ -36,7 +36,7 @@ const SELECT = `
   JOIN meeting_types mt ON mt.id = b.meeting_type_id
 `;
 
-const SCOPES = new Set(['upcoming', 'past', 'cancelled', 'pending', 'all']);
+const SCOPES = new Set(['upcoming', 'past', 'cancelled', 'pending', 'all', 'range']);
 
 function serialize(b) {
   const format = b.format || b.location_type;
@@ -83,8 +83,13 @@ function likeTerm(q) {
  * Cancelled and declined are deliberately one scope. To the office they are
  * the same event — a meeting that is not going to happen — and separating them
  * would mean checking two lists to answer one question.
+ *
+ * `range` is the calendar's scope, and the only one that takes dates: whatever
+ * falls between `from` and `to`, forwards or backwards, confirmed or still
+ * being asked for. A calendar is the one place that has to be able to look at
+ * the past, which is what makes a default of "upcoming" wrong for it.
  */
-async function list(ownerId, { scope = 'upcoming', q = '' } = {}) {
+async function list(ownerId, { scope = 'upcoming', q = '', from = null, to = null } = {}) {
   const chosen = SCOPES.has(scope) ? scope : 'upcoming';
   const now = new Date().toISOString();
   const where = ['b.owner_id = ?'];
@@ -100,6 +105,14 @@ async function list(ownerId, { scope = 'upcoming', q = '' } = {}) {
     where.push("b.status IN ('cancelled', 'declined')");
   } else if (chosen === 'pending') {
     where.push("b.status = 'pending'");
+  } else if (chosen === 'range') {
+    // Held time and agreed time both occupy the diary; a request nobody has
+    // answered is exactly the thing you need to see before agreeing to
+    // something else at the same hour. What is off is off: a cancelled
+    // meeting on a calendar is a meeting somebody plans around by mistake.
+    where.push("b.status IN ('confirmed', 'pending')");
+    if (from) { where.push('b.start_at >= ?'); params.push(String(from)); }
+    if (to) { where.push('b.start_at < ?'); params.push(String(to)); }
   }
 
   const term = String(q || '').trim();

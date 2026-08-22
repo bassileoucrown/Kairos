@@ -1773,3 +1773,121 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   .trail-when { width: auto; }
   .trail-line { gap: 2px; }
 }
+
+/* ---- The calendar, at whatever length was asked for ----
+   Three views share one set of rules so a booking looks like the same thing
+   whichever length you are looking at. */
+.cal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.cal-move, .cal-views { display: flex; gap: 6px; flex: none; }
+.cal-title { flex: 1 1 auto; min-width: 0; text-align: center; overflow-wrap: anywhere; }
+
+.cal-entry {
+  display: block;
+  font-size: 0.68rem;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: color-mix(in srgb, var(--entry-color) 14%, transparent);
+  color: var(--entry-color);
+  border-left: 2px solid var(--entry-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+/* A request nobody has answered occupies the time without owning it. */
+.cal-entry.is-held {
+  background: transparent;
+  border: 1px dashed var(--entry-color);
+  border-left-width: 2px;
+}
+.cal-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+/* ---- Month ---- */
+.cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cal-dow-head {
+  background: var(--bg-raised);
+  padding: 8px 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-muted);
+}
+.cal-cell {
+  background: var(--surface);
+  border: none;
+  border-top: 2px solid transparent;
+  min-height: 74px;
+  padding: 6px 5px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* Grid children default to min-width:auto, so one long booker name would
+     widen a column and take the whole page sideways with it. */
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+}
+.cal-cell.is-outside { opacity: 0.4; }
+.cal-cell.is-selected { border-top-color: var(--accent); }
+.cal-cell.is-today .cal-dom { color: var(--accent); font-weight: 700; }
+.cal-dom { font-size: 0.75rem; font-weight: 600; }
+.cal-more { font-size: 0.62rem; color: var(--text-muted); }
+
+/* ---- Week ---- */
+.cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cal-day { background: var(--surface); min-width: 0; display: flex; flex-direction: column; }
+.cal-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-dow { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+.cal-day.is-today .cal-dow, .cal-day.is-today .cal-dom { color: var(--accent); }
+.cal-day-body { padding: 6px; display: flex; flex-direction: column; gap: 3px; min-height: 90px; min-width: 0; }
+.cal-empty { color: var(--text-muted); font-size: 0.8rem; }
+
+@media (max-width: 760px) {
+  /* Seven columns of text on a phone is seven columns of nothing legible.
+     Same reasoning as the tab row: stop pretending it fits, and stack. */
+  .cal-week { grid-template-columns: 1fr; }
+  .cal-day-body { min-height: 0; }
+  .cal-entry { white-space: normal; overflow-wrap: anywhere; }
+  .cal-cell { min-height: 58px; }
+  .cal-title { flex-basis: 100%; order: -1; text-align: left; }
+}
+
+/* ---- Day ---- */
+.cal-hours { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.cal-hour { display: flex; gap: 12px; padding: 8px 12px; background: var(--surface); min-width: 0; }
+.cal-hour + .cal-hour { border-top: 1px solid var(--border); }
+.cal-hour-label { flex: none; width: 56px; font-size: 0.78rem; color: var(--text-muted); padding-top: 2px; }
+.cal-hour-body { flex: 1; min-width: 0; }
+.cal-hour-body:empty::after { content: ''; display: block; height: 20px; }

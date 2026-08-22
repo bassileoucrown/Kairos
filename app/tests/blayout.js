@@ -206,6 +206,7 @@ const MEASURE = () => {
       ['Settings', '/dashboard?tab=settings'],
       ['Approvals', '/pa?tab=approvals'],
       ['PA bookings', '/pa?tab=bookings'],
+      ['PA calendar', '/pa?tab=calendar'],
       ['Contacts', '/pa?tab=contacts'],
       ['Briefs', '/pa?tab=briefs'],
       ['Spaces', '/spaces'],

@@ -368,7 +368,9 @@ router.get('/:ownerId/relationships/upcoming', requirePaAccess, async (req, res)
 // from here and must keep getting without asking for it.
 router.get('/:ownerId/bookings', requirePaAccess, async (req, res) => {
   res.json({
-    bookings: await history.list(req.principal.id, { scope: req.query.scope, q: req.query.q }),
+    bookings: await history.list(req.principal.id, {
+      scope: req.query.scope, q: req.query.q, from: req.query.from, to: req.query.to,
+    }),
   });
 });
 
