@@ -17,15 +17,15 @@ import { BRAND_FULL } from '../lib/brand.js';
 // is the principal's), and a principal has no workspace of principals.
 const NAV = [
   { to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
-  { to: '/today', label: 'Today', icon: '◉', principalScoped: true },
+  { to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
   { to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
   { to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
   // Marked in the rail rather than only on the page: somebody deciding whether
   // to rely on this should learn it is not open before they click, not after.
   { to: '/concierge', label: 'Concierge', icon: '☏', principalScoped: true, soon: true },
   { to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
-  { to: '/tasks', label: 'Tasks', icon: '✓' },
-  { to: '/spaces', label: 'Spaces', icon: '❑' },
+  { to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },
+  { to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
   { to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },
   { to: '/connections', label: 'Connections', icon: '@' },
   { to: '/notices', label: 'Notices', icon: '✦', badge: 'notices' },
@@ -173,9 +173,15 @@ function AccountMenu({ user, onSignOut }) {
 export default function AppShell({ children, title, actions, active }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [principals, setPrincipals] = useState([]);
   const [activeId, setActiveId] = useState(getActivePrincipal() || user?.id || null);
-  const [badges, setBadges] = useState({ approvals: 0, notices: 0 });
+  // Everything waiting for you, in one shape. Zeroes rather than nulls so the
+  // rail never renders a badge it is about to take away again.
+  const [badges, setBadges] = useState({
+    approvals: 0, notices: 0, messages: 0, tasks: 0, requests: 0,
+  });
+  const [waiting, setWaiting] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -190,18 +196,22 @@ export default function AppShell({ children, title, actions, active }) {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    api.get('/announcements')
-      .then((d) => setBadges((b) => ({ ...b, notices: d.unread })))
-      .catch(() => {});
-  }, []);
-
+  // Refetched on every navigation, which is when it can have changed from the
+  // reader's point of view: they have just done something, or come back after
+  // being away. Deliberately not polled — a rail that quietly renumbers itself
+  // while somebody is reading it is a rail that makes them look twice.
   useEffect(() => {
     if (!activeId) return;
-    api.get(`/pa/${activeId}/approvals`)
-      .then((d) => setBadges((b) => ({ ...b, approvals: d.bookings.length })))
+    let live = true;
+    api.get(`/attention?principalId=${activeId}`)
+      .then((d) => {
+        if (!live) return;
+        setBadges(d.counts);
+        setWaiting(d.total);
+      })
       .catch(() => {});
-  }, [activeId]);
+    return () => { live = false; };
+  }, [activeId, location.pathname, location.search]);
 
   function switchPrincipal(id) {
     setActivePrincipal(id);
@@ -312,10 +322,14 @@ export default function AppShell({ children, title, actions, active }) {
           <button
             className="nav-toggle"
             type="button"
-            aria-label="Open menu"
+            /* The rail is off screen on a phone, so the only way to learn
+               there is something in it is to open it. The dot is what makes
+               opening it worth doing — and what makes not opening it safe. */
+            aria-label={waiting > 0 ? `Open menu — ${waiting} waiting` : 'Open menu'}
             onClick={() => setNavOpen(true)}
           >
             ☰
+            {waiting > 0 && <span className="nav-toggle-dot" aria-hidden="true" />}
           </button>
           <BackButton />
           <div className="app-header-title">

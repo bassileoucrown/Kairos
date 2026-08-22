@@ -8,14 +8,16 @@ import SlotGrid from '../components/SlotGrid.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
 import FormatChoice from '../components/FormatChoice.jsx';
 
-// The header used to state the format as a fact — "60 min · Video call". Now
-// that the booker can ask for something else, it says what is on offer rather
-// than what will happen, so the picker further down is not a contradiction.
-const USUAL_PHRASE = {
-  video: 'usually a video call',
-  phone: 'usually a phone call',
-  in_person: 'usually in person',
-};
+// The public page says nothing about format any more.
+//
+// It used to state it as a fact — "60 min · Video call" — and then, once the
+// booker could ask for something else, as "usually a video call". Both were
+// answering a question before it was asked, and both framed the booker's
+// choice as a departure from somebody else's plan. The choice is theirs to
+// make, so it is made where it is made: in the form, with the times and the
+// name and the email. What the principal usually does is still what the
+// picker opens on, and still what decides whether the office has to agree —
+// it is simply no longer advertised on the way in.
 
 function MeetingList({ owner, meetingTypes, slug }) {
   return (
@@ -32,7 +34,7 @@ function MeetingList({ owner, meetingTypes, slug }) {
               <Link key={mt.id} to={`/book/${slug}/${mt.slug}`} className="meeting-list-item">
                 <div>
                   <div className="name">{mt.name}</div>
-                  <div className="meta">{mt.durationMinutes} min · {USUAL_PHRASE[mt.locationType]}</div>
+                  <div className="meta">{mt.durationMinutes} min</div>
                 </div>
                 <span aria-hidden="true">→</span>
               </Link>
@@ -140,7 +142,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
         <div className="public-header">
           <div className="owner-name">{owner.name}</div>
           <h1>{meetingType.name}</h1>
-          <div className="meta">{meetingType.durationMinutes} min · {USUAL_PHRASE[meetingType.locationType]}</div>
+          <div className="meta">{meetingType.durationMinutes} min</div>
           {meetingType.description && <p style={{ marginTop: 10 }}>{meetingType.description}</p>}
         </div>
         <div className="public-body">
@@ -184,6 +186,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
                     onChange={setFormat}
                     note={formatNote}
                     onNote={setFormatNote}
+                    showUsual={false}
                   />
 
                   {differs && (

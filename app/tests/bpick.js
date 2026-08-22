@@ -126,8 +126,10 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
     await g.goto(link);
     await g.waitForSelector('.slot-btn', { timeout: 20000 });
     ok('it opens that meeting type directly', (await text(g, 'h1')) === 'Introduction, 45 minutes');
-    ok('the header says what is usual rather than what is fixed',
-      (await text(g, '.public-header .meta')).includes('usually a video call'),
+    // The page used to say "usually a video call" here, and before that
+    // "Video call". Both answered a question the booker had not asked yet.
+    ok('the page says nothing about format before it is asked',
+      !/video|phone|person/i.test(await text(g, '.public-header .meta')),
       await text(g, '.public-header .meta'));
     ok('nothing to choose about format before a time is picked',
       !(await seen(g, '.format-choice')));
@@ -138,9 +140,10 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
     await g.waitForSelector('.format-choice', { timeout: 15000 });
     ok('every format is offered', (await g.locator('.format-option').count()) === 4,
       String(await g.locator('.format-option').count()));
-    ok('the principal\'s own is marked as the usual one',
-      (await text(g, '.format-option:has(.pill)')).includes('Video call'));
-    ok('and it is what is already chosen',
+    ok('and none of them is labelled as somebody else\'s preference',
+      (await g.locator('.format-choice .pill').count()) === 0,
+      String(await g.locator('.format-choice .pill').count()));
+    ok('though the principal\'s own is still what it opens on',
       await g.locator('#book-video').isChecked());
     ok('so the button still offers to confirm, not to ask',
       (await text(g, 'button[type="submit"]')) === 'Confirm booking');

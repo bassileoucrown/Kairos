@@ -38,6 +38,7 @@ export default function PaHome() {
   const { user } = useAuth();
   const [principals, setPrincipals] = useState(null);
   const [error, setError] = useState('');
+  const [waiting, setWaiting] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') || 'approvals';
   const setTab = (t) => setSearchParams({ tab: t }, { replace: true });
@@ -78,13 +79,24 @@ export default function PaHome() {
     }).catch((err) => setError(err.message));
   }, [ownerId, navigate]);
 
+  useEffect(() => {
+    if (!ownerId) return;
+    api.get(`/attention?principalId=${ownerId}`)
+      .then((d) => setWaiting(d.counts.approvals))
+      .catch(() => {});
+  }, [ownerId, tab]);
+
   if (error) return <div className="spinner-page">{error}</div>;
   if (!principals || !ownerId) return <div className="spinner-page">Loading…</div>;
 
   const current = principals.find((p) => p.id === ownerId);
 
   const canSchedule = !!current?.canManageScheduling;
-  const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule);
+  // The rail already says this principal has requests waiting; the tab strip
+  // is where somebody standing on this page finds out which section they are
+  // in. Both read from the same endpoint, so they cannot disagree.
+  const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule)
+    .map((t) => (t.id === 'approvals' ? { ...t, attention: waiting > 0 } : t));
   const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.id, t.label]));
   const activeNav = {
     contacts: 'people', relationships: 'people', approvals: 'approvals', briefs: 'briefs',

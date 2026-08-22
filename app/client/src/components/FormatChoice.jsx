@@ -22,6 +22,14 @@ export default function FormatChoice({
   // vanished option looks like a bug.
   alreadyAskedId = null,
   noteLabel = 'What do you have in mind?',
+  // Whether to mark the principal's own format as the usual one.
+  //
+  // True in the approval queue, where the office is choosing among its own
+  // habits and knowing which is which helps. False on the public page, where
+  // it would tell a booker their choice is a departure from somebody else's
+  // plan before they have even made it. The default still opens on it either
+  // way; only the label differs.
+  showUsual = true,
 }) {
   if (!formats || formats.length === 0) return null;
   const chosen = formats.find((f) => f.id === value);
@@ -49,7 +57,7 @@ export default function FormatChoice({
             <span className="format-body">
               <span className="format-label">
                 {f.label}
-                {f.isUsual && <span className="pill">usual</span>}
+                {f.isUsual && showUsual && <span className="pill">usual</span>}
               </span>
               <span className="format-hint">
                 {isTaken ? 'This is what they asked for — approve it instead.' : f.hint}

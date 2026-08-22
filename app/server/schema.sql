@@ -915,3 +915,22 @@ CREATE TABLE IF NOT EXISTS booking_events (
 );
 CREATE INDEX IF NOT EXISTS idx_booking_events_booking ON booking_events(booking_id, at);
 CREATE INDEX IF NOT EXISTS idx_booking_events_owner ON booking_events(owner_id, at);
+
+-- How far each person has read in each thread.
+--
+-- message_acks, which already exists, is a different thing: a deliberate
+-- acknowledgement of a record, which somebody presses on purpose and which
+-- means "I have seen this and I am accountable for having seen it". This is
+-- the ordinary one — the high-water mark of having looked at a thread, written
+-- without being asked, so the rail can say where there is something new.
+--
+-- Absent means never opened, which counts every message in the thread as
+-- unread. That is right: a thread somebody has never looked at is entirely new
+-- to them.
+CREATE TABLE IF NOT EXISTS thread_reads (
+  thread_id    TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at TEXT NOT NULL,
+  PRIMARY KEY (thread_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_thread_reads_user ON thread_reads(user_id);

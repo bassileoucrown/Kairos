@@ -3,7 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
-const { resolveAccess } = require('../lib/spaceAccess');
+const { resolveAccess, markThreadRead } = require('../lib/spaceAccess');
 const { syncStageFromRecords } = require('../lib/stageStatus');
 const voice = require('../lib/voiceNotes');
 
@@ -62,6 +62,11 @@ function serializeMessage(m, acks, voiceByMessage) {
 }
 
 router.get('/:threadId/messages', loadThread, async (req, res) => {
+  // Opening a thread is what reading it means. Stamped before the rows are
+  // read so a message that lands mid-request is still counted as unread next
+  // time rather than being marked seen by somebody who never saw it.
+  await markThreadRead(req.thread.id, req.user.id);
+
   const rows = await db.prepare(`
     SELECT m.*, u.name AS author_name, p.name AS promoted_by_name,
            d.name AS done_by_name

@@ -15,11 +15,18 @@ import { useEffect, useRef, useState } from 'react';
 // target.
 //
 // The row is untouched above the breakpoint, because there it works.
+//
+// A tab may carry `attention: true`, which puts a dot on it. On the narrow
+// layout the dot also goes on the closed menu button when it belongs to a tab
+// the button is currently hiding — otherwise the one place a phone can show
+// this is the one place it would not.
 
 export default function Tabs({ tabs, active, onChange, label = 'Sections' }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const current = tabs.find((t) => t.id === active) || tabs[0];
+  // Not counting the tab you are looking at: you are already there.
+  const hiddenAttention = tabs.some((t) => t.attention && t.id !== current?.id);
 
   // Close on anything that means "I am done here": a click elsewhere, or Escape.
   useEffect(() => {
@@ -53,6 +60,7 @@ export default function Tabs({ tabs, active, onChange, label = 'Sections' }) {
             aria-selected={t.id === active}
           >
             {t.label}
+            {t.attention && <span className="tab-dot" aria-label="needs attention" />}
           </button>
         ))}
       </div>
@@ -66,7 +74,11 @@ export default function Tabs({ tabs, active, onChange, label = 'Sections' }) {
           aria-expanded={open}
           aria-haspopup="true"
         >
-          <span className="tabs-current-label">{current?.label}</span>
+          <span className="tabs-current-label">
+            {current?.label}
+            {current?.attention && <span className="tab-dot" aria-label="needs attention" />}
+          </span>
+          {hiddenAttention && <span className="tab-dot" aria-label="another section needs attention" />}
           <span className="tabs-current-caret" aria-hidden="true">▾</span>
         </button>
         {open && (
@@ -80,6 +92,7 @@ export default function Tabs({ tabs, active, onChange, label = 'Sections' }) {
                 onClick={() => pick(t.id)}
               >
                 {t.label}
+                {t.attention && <span className="tab-dot" aria-label="needs attention" />}
               </button>
             ))}
           </div>

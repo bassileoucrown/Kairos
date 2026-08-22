@@ -81,6 +81,59 @@ async function listVisibleSpaces(userId) {
   `).all(userId, userId, userId);
 }
 
+// The same visibility rule as listVisibleSpaces, as a subquery.
+//
+// Written once and shared rather than restated, because anything that counts
+// across spaces has to obey exactly the isolation rule that governs reading
+// them. A count is a leak like any other: telling somebody there are four
+// unread messages in a private space they cannot open still tells them the
+// space exists and that something is happening in it.
+//
+// Takes the user id three times, in that order.
+const VISIBLE_SPACE_IDS = `
+  SELECT s.id FROM spaces s WHERE s.owner_id = ?
+  UNION
+  SELECT s.id FROM spaces s
+  JOIN space_members sm ON sm.space_id = s.id
+  WHERE sm.user_id = ? AND s.owner_id != ? AND s.context != 'private'
+`;
+
+/**
+ * How many messages this person has not seen, across every thread they can
+ * reach.
+ *
+ * Their own messages never count. Somebody writing into a thread is not owed a
+ * mark against their own name for it, and a rail that lit up when you spoke
+ * would be lit permanently for the people who use the product most.
+ */
+async function unreadMessageCount(userId) {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS n
+    FROM messages m
+    JOIN threads t ON t.id = m.thread_id
+    LEFT JOIN thread_reads r ON r.thread_id = t.id AND r.user_id = ?
+    WHERE t.space_id IN (${VISIBLE_SPACE_IDS})
+      AND m.author_id != ?
+      AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
+  `).get(userId, userId, userId, userId, userId);
+  return Number(row?.n || 0);
+}
+
+/**
+ * Note that this person has now seen everything in this thread.
+ *
+ * Stamped from the server's clock rather than from the newest message, so a
+ * message written during the same request is not marked read before it has
+ * been rendered.
+ */
+async function markThreadRead(threadId, userId) {
+  await db.prepare(`
+    INSERT INTO thread_reads (thread_id, user_id, last_read_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT (thread_id, user_id) DO UPDATE SET last_read_at = ?
+  `).run(threadId, userId, new Date().toISOString(), new Date().toISOString());
+}
+
 /**
  * Seeds membership for a newly created space from the owner's active
  * assistants, filtered by the space's auto_delegate_roles. Private spaces are
@@ -148,6 +201,8 @@ module.exports = {
   roleCanDelegate,
   resolveAccess,
   listVisibleSpaces,
+  unreadMessageCount,
+  markThreadRead,
   applyRoleDefaults,
   requireSpaceAccess,
   requireSpaceWrite,
