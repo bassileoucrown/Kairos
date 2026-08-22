@@ -165,6 +165,14 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
       endAt: end.toISOString(),
       bookerTimezone,
       videoRoom,
+      // The confirmation screen says back what was asked for, and whether
+      // anybody still has to agree to it — otherwise "Request sent" leaves the
+      // booker guessing which part of their request was the unusual one.
+      format: chosen,
+      formatLabel: formats.label(chosen),
+      formatNote,
+      formatState,
+      usualFormatLabel: formats.label(meetingType.location_type),
     },
   });
 });

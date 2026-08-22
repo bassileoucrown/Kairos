@@ -6,8 +6,6 @@ import { useOpenSlots } from '../lib/useOpenSlots.js';
 import SlotGrid from '../components/SlotGrid.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
 
-const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
-
 function RescheduleForm({ booking, onDone, onError }) {
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +78,20 @@ export default function ManageBooking() {
     }
   }
 
+  // Accepting what the office suggested. Withdrawing is the cancel above —
+  // there was never a reason to invent a second verb for it.
+  async function handleAcceptFormat() {
+    setError('');
+    setJustUpdated(false);
+    try {
+      const data = await api.post(`/public/bookings/${id}/accept-format`);
+      setBooking(data.booking);
+      setJustUpdated(true);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function handleRescheduled(updated) {
     setBooking(updated);
     setMode('view');
@@ -103,7 +115,9 @@ export default function ManageBooking() {
         <div className="public-header">
           <div className="owner-name">{booking.ownerName}</div>
           <h1>{booking.meetingTypeName}</h1>
-          <div className="meta">{booking.durationMinutes} min · {LOCATION_LABELS[booking.locationType]}</div>
+          {/* The format as this booking actually stands, not as the meeting
+              type describes it — those are no longer the same thing. */}
+          <div className="meta">{booking.durationMinutes} min · {booking.formatLabel}</div>
         </div>
         <div className="public-body">
           {error && <div className="alert alert-error">{error}</div>}
@@ -127,17 +141,54 @@ export default function ManageBooking() {
                 {timeLabelInZone(booking.startAt, booking.bookerTimezone)} ({booking.bookerTimezone})
                 <br />
                 <span className="tz-note">Booked as {booking.bookerName} ({booking.bookerEmail})</span>
-                {booking.status === 'pending' && <><br /><span className="tz-note">Awaiting {booking.ownerName}'s approval.</span></>}
+                {/* Pending on the format is a different thing from pending on
+                    the tier, and the box below says which. Only say "awaiting
+                    approval" when that is genuinely all that is happening. */}
+                {booking.status === 'pending' && booking.formatState === 'agreed' && (
+                  <><br /><span className="tz-note">Awaiting {booking.ownerName}'s approval.</span></>
+                )}
               </p>
+
+              {booking.formatState === 'proposed' && (
+                <div className="format-note-box">
+                  <strong>You asked to meet {booking.formatLabel.toLowerCase()}</strong>
+                  {booking.formatNote && <span className="said">“{booking.formatNote}”</span>}
+                  <span className="said">
+                    {booking.ownerName}'s office has to agree to that, so this is a request rather
+                    than a confirmed booking. Your time is held while they decide.
+                  </span>
+                </div>
+              )}
+
+              {booking.formatState === 'countered' && (
+                <div className="format-note-box">
+                  <strong>{booking.ownerName}'s office suggests {booking.counterFormatLabel.toLowerCase()}</strong>
+                  {booking.counterFormatNote && <span className="said">“{booking.counterFormatNote}”</span>}
+                  <span className="said">
+                    You asked to meet {booking.formatLabel.toLowerCase()}
+                    {booking.formatNote ? ` (${booking.formatNote})` : ''}. Your time is still held —
+                    accept the suggestion, or withdraw and pick something else.
+                  </span>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    type="button"
+                    style={{ marginTop: 10 }}
+                    onClick={handleAcceptFormat}
+                  >
+                    Accept {booking.counterFormatLabel.toLowerCase()}
+                  </button>
+                </div>
+              )}
+
               {booking.status === 'confirmed' && booking.videoRoom && (
                 <div style={{ marginBottom: 16 }}><VideoJoinLink room={booking.videoRoom} /></div>
               )}
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button className="btn btn-secondary" type="button" onClick={() => setMode('reschedule')}>
                   Reschedule
                 </button>
                 <button className="btn btn-danger" type="button" onClick={handleCancel}>
-                  Cancel booking
+                  {booking.status === 'pending' ? 'Withdraw request' : 'Cancel booking'}
                 </button>
               </div>
             </>

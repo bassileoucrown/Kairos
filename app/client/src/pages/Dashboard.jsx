@@ -116,8 +116,16 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* The front door, which lists every active meeting type. It is rarely
+          the link you want to send someone — that one is on the meeting type
+          itself, under Meeting Types, so whoever you send it to lands on the
+          one meeting you meant rather than choosing from your whole menu. */}
       <div className="booking-link-box">
-        Your booking page: <code>{bookingUrl}</code>
+        <span style={{ flex: 1, minWidth: 200 }}>
+          Everything you offer: <code>{bookingUrl}</code>
+          <br />
+          <span className="tz-note">Each meeting type has its own link too — see Meeting Types.</span>
+        </span>
         <button className="btn btn-secondary btn-sm" type="button" onClick={handleCopy}>
           {copied ? 'Copied!' : 'Copy link'}
         </button>
@@ -128,7 +136,7 @@ export default function Dashboard() {
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'bookings' && <BookingsTab />}
       {tab === 'availability' && <AvailabilityTab />}
-      {tab === 'meeting_types' && <MeetingTypesTab />}
+      {tab === 'meeting_types' && <MeetingTypesTab ownerSlug={user.slug} />}
       {tab === 'members' && <MembersTab />}
       {tab === 'essentials' && <EssentialsTab ownerId={user?.id} />}
       {tab === 'security' && <SecurityTab />}

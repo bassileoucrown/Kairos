@@ -111,7 +111,7 @@ export default function PaHome() {
                 {current.name} hasn't given you access to their availability.
               </div>)}
           {tab === 'meeting_types' && (canSchedule
-            ? <MeetingTypesTab ownerId={ownerId} />
+            ? <MeetingTypesTab ownerId={ownerId} ownerSlug={current.slug} />
             : <div className="empty-state">
                 {current.name} hasn't given you access to their meeting types.
               </div>)}

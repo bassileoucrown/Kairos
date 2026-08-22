@@ -498,7 +498,16 @@ textarea { resize: vertical; min-height: 70px; }
   font-size: 0.88rem;
   flex-wrap: wrap;
 }
-.booking-link-box code { background: var(--surface); padding: 3px 8px; border-radius: 6px; font-size: 0.85rem; }
+/* A URL is one unbreakable word. Left alone it sets the width of its box and
+   the phone scrolls sideways to fit it, so it is told to break anywhere. */
+.booking-link-box > * { min-width: 0; }
+.booking-link-box code {
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
 
 /* Tabs: a row where there is room, a menu where there is not.
    See components/Tabs.jsx for why this is a menu rather than a scrolling strip. */
@@ -1602,3 +1611,92 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 
 .ess-main, .ess-meta { min-width: 0; }
 .ess-meta > * { overflow-wrap: anywhere; }
+
+/* ---- Choosing how a meeting happens ----
+   Used on the public booking form and again in the approval queue, where the
+   office answers with a format of its own. One set of rules for both, so the
+   two halves of the conversation never drift apart visually. */
+.format-choice {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+  min-width: 0;
+}
+.format-choice legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.format-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  /* Without this the longest hint sets the width of the whole card, which on a
+     360px phone is how a booking page starts scrolling sideways. */
+  min-width: 0;
+}
+.format-option:hover { border-color: var(--accent); }
+.format-option.is-chosen { border-color: var(--accent); background: var(--accent-soft); }
+.format-option.is-taken { cursor: default; opacity: 0.55; }
+.format-option.is-taken:hover { border-color: var(--border); }
+.format-option input { margin-top: 3px; flex: none; width: auto; }
+.format-body { display: block; min-width: 0; }
+.format-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.format-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* What was asked for, and what the office said back. */
+.format-note-box {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 0.86rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.format-note-box strong { display: block; margin-bottom: 2px; }
+.format-note-box .said { display: block; color: var(--text-muted); margin-top: 2px; }
+
+/* One link per meeting type, which is the link people actually send. */
+.mt-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 0;
+}
+.mt-link code {
+  background: var(--accent-soft);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

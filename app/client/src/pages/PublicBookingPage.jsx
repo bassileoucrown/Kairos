@@ -6,8 +6,16 @@ import TimezonePicker from '../components/TimezonePicker.jsx';
 import { useOpenSlots } from '../lib/useOpenSlots.js';
 import SlotGrid from '../components/SlotGrid.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
+import FormatChoice from '../components/FormatChoice.jsx';
 
-const LOCATION_LABELS = { video: 'Video call', phone: 'Phone call', in_person: 'In person' };
+// The header used to state the format as a fact — "60 min · Video call". Now
+// that the booker can ask for something else, it says what is on offer rather
+// than what will happen, so the picker further down is not a contradiction.
+const USUAL_PHRASE = {
+  video: 'usually a video call',
+  phone: 'usually a phone call',
+  in_person: 'usually in person',
+};
 
 function MeetingList({ owner, meetingTypes, slug }) {
   return (
@@ -24,7 +32,7 @@ function MeetingList({ owner, meetingTypes, slug }) {
               <Link key={mt.id} to={`/book/${slug}/${mt.slug}`} className="meeting-list-item">
                 <div>
                   <div className="name">{mt.name}</div>
-                  <div className="meta">{mt.durationMinutes} min · {LOCATION_LABELS[mt.locationType]}</div>
+                  <div className="meta">{mt.durationMinutes} min · {USUAL_PHRASE[mt.locationType]}</div>
                 </div>
                 <span aria-hidden="true">→</span>
               </Link>
@@ -44,8 +52,16 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  // Starts on the principal's own format, so a booker who has no opinion
+  // submits exactly what they would have submitted before this existed.
+  const [format, setFormat] = useState(meetingType.locationType);
+  const [formatNote, setFormatNote] = useState('');
 
   const { slots, ownerTimezone, reload } = useOpenSlots({ ownerSlug: slug, meetingSlug });
+
+  // Asking for something other than the usual turns the booking into a
+  // request, whatever the tier — so the button has to stop saying "Confirm".
+  const differs = format !== meetingType.locationType;
 
   async function handleConfirm(e) {
     e.preventDefault();
@@ -54,6 +70,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
     try {
       const data = await api.post(`/public/${slug}/${meetingSlug}/book`, {
         name, email, timezone: bookerTimezone, startAt: selected.startAt,
+        format, formatNote,
       });
       setConfirmation(data.booking);
     } catch (err) {
@@ -82,8 +99,26 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
               <strong>{dayLabelInZone(confirmation.startAt, confirmation.bookerTimezone)} · {timeLabelInZone(confirmation.startAt, confirmation.bookerTimezone)}</strong>
               <br />
               <span className="tz-note">({confirmation.bookerTimezone})</span>
+              {confirmation.formatLabel && (
+                <>
+                  <br />
+                  <span className="tz-note">
+                    {confirmation.formatLabel}
+                    {confirmation.formatNote ? ` — ${confirmation.formatNote}` : ''}
+                  </span>
+                </>
+              )}
             </p>
-            {confirmation.status === 'pending' && (
+            {/* Two different reasons a booking can be pending, and the booker
+                is owed the one that actually applies to them. */}
+            {confirmation.status === 'pending' && confirmation.formatState === 'proposed' && (
+              <p className="tz-note">
+                You asked to meet {confirmation.formatLabel.toLowerCase()} rather than
+                the usual {confirmation.usualFormatLabel.toLowerCase()}, so {confirmation.ownerName}'s
+                office has to agree. Your time is held while they do. You'll get an email either way.
+              </p>
+            )}
+            {confirmation.status === 'pending' && confirmation.formatState !== 'proposed' && (
               <p className="tz-note">This meeting type requires approval — you'll get an email once it's confirmed.</p>
             )}
             {confirmation.status !== 'pending' && confirmation.videoRoom && (
@@ -105,7 +140,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
         <div className="public-header">
           <div className="owner-name">{owner.name}</div>
           <h1>{meetingType.name}</h1>
-          <div className="meta">{meetingType.durationMinutes} min · {LOCATION_LABELS[meetingType.locationType]}</div>
+          <div className="meta">{meetingType.durationMinutes} min · {USUAL_PHRASE[meetingType.locationType]}</div>
           {meetingType.description && <p style={{ marginTop: 10 }}>{meetingType.description}</p>}
         </div>
         <div className="public-body">
@@ -137,8 +172,31 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
                     <label htmlFor="booker-email">Your email</label>
                     <input id="booker-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   </div>
+
+                  {/* Below the name and email rather than above them: those two
+                      are what the booker came to type, and a question in front
+                      of them reads as an obstacle. Here it is unmissable
+                      anyway, because it sits between them and the button. */}
+                  <FormatChoice
+                    idPrefix="book"
+                    formats={meetingType.formats}
+                    value={format}
+                    onChange={setFormat}
+                    note={formatNote}
+                    onNote={setFormatNote}
+                  />
+
+                  {differs && (
+                    <p className="hint" style={{ marginBottom: 12 }}>
+                      That is not how {owner.name} usually takes this meeting, so this goes across
+                      as a request. Your time is held while the office answers.
+                    </p>
+                  )}
+
                   <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
-                    {submitting ? 'Confirming…' : 'Confirm booking'}
+                    {submitting
+                      ? (differs ? 'Sending…' : 'Confirming…')
+                      : (differs ? 'Send request' : 'Confirm booking')}
                   </button>
                 </form>
               )}
