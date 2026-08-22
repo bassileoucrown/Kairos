@@ -13,12 +13,14 @@ import RelationshipsTab from './RelationshipsTab.jsx';
 import AiAssistTab from './AiAssistTab.jsx';
 import AvailabilityTab from '../dashboard/AvailabilityTab.jsx';
 import MeetingTypesTab from '../dashboard/MeetingTypesTab.jsx';
+import BookingsTab from '../dashboard/BookingsTab.jsx';
 import Tabs from '../../components/Tabs.jsx';
 
 // Scheduling tabs only appear when the principal has delegated them, so an
 // assistant is never shown a door that will 403.
 const TABS = [
   { id: 'approvals', label: 'Approvals' },
+  { id: 'bookings', label: 'Bookings' },
   { id: 'availability', label: 'Availability', scheduling: true },
   { id: 'meeting_types', label: 'Meeting Types', scheduling: true },
   { id: 'contacts', label: 'Contacts' },
@@ -86,6 +88,7 @@ export default function PaHome() {
   const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.id, t.label]));
   const activeNav = {
     contacts: 'people', relationships: 'people', approvals: 'approvals', briefs: 'briefs',
+    bookings: 'approvals',
     availability: 'scheduling', meeting_types: 'scheduling',
   }[tab] || 'people';
 
@@ -116,6 +119,7 @@ export default function PaHome() {
                 {current.name} hasn't given you access to their meeting types.
               </div>)}
           {tab === 'approvals' && <ApprovalsTab ownerId={ownerId} />}
+          {tab === 'bookings' && <BookingsTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'contacts' && <ContactsTab ownerId={ownerId} />}
           {tab === 'relationships' && <RelationshipsTab ownerId={ownerId} />}
           {tab === 'briefs' && <BriefsTab ownerId={ownerId} />}

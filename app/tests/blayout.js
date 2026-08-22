@@ -205,6 +205,7 @@ const MEASURE = () => {
       ['Outbox', '/dashboard?tab=outbox'],
       ['Settings', '/dashboard?tab=settings'],
       ['Approvals', '/pa?tab=approvals'],
+      ['PA bookings', '/pa?tab=bookings'],
       ['Contacts', '/pa?tab=contacts'],
       ['Briefs', '/pa?tab=briefs'],
       ['Spaces', '/spaces'],

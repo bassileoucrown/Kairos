@@ -1700,3 +1700,34 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* What was sent about one booking. Not the letters themselves — see
+   lib/bookingHistory.js for why only the subject lines come across. */
+.trail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.trail-line {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 7px 0;
+  font-size: 0.83rem;
+  min-width: 0;
+}
+.trail-line + .trail-line { border-top: 1px dashed var(--border); }
+.trail-when {
+  flex: none;
+  width: 150px;
+  color: var(--text-muted);
+}
+.trail-what { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.trail-what strong { display: block; font-weight: 600; }
+.trail-who { display: block; color: var(--text-muted); margin-top: 1px; }
+
+@media (max-width: 560px) {
+  /* The two-column reading falls apart below this; stacked stays legible. */
+  .trail-when { width: auto; }
+  .trail-line { gap: 2px; }
+}

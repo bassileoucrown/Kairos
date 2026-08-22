@@ -20,10 +20,17 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
 
 /**
  * Boots, waits until the server has reached a verdict, and returns everything
- * it said plus what /api/status reports. `settleMs` is how long to watch — the
- * point is that it is still up at the end of it.
+ * it said plus what /api/status reports.
+ *
+ * This used to sleep for a fixed six seconds and then read the status once,
+ * which was a stopwatch racing a connection handshake. Alone it always won;
+ * inside the full run, straight after a suite that had just been driving
+ * Chromium, it sometimes did not — and every assertion that depends on the
+ * verdict having been reached failed at once, which reads like six product
+ * faults rather than one impatient test. So it now waits for the verdict
+ * itself: ready, or an error to report. `settleMs` is only the deadline.
  */
-function boot(env, { settleMs = 6000 } = {}) {
+function boot(env, { settleMs = 25000 } = {}) {
   return new Promise((resolve) => {
     const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
       cwd: CWD,
@@ -42,13 +49,20 @@ function boot(env, { settleMs = 6000 } = {}) {
     let exited = null;
     proc.on('exit', (code) => { exited = code; });
 
-    setTimeout(async () => {
+    (async () => {
+      const deadline = Date.now() + settleMs;
       let status = null;
-      try { status = await (await fetch(`${BASE}/api/status`)).json(); }
-      catch { /* not listening */ }
+      for (;;) {
+        try { status = await (await fetch(`${BASE}/api/status`)).json(); }
+        catch { status = null; /* not listening yet */ }
+        // A verdict is either "serving" or "here is why I am not".
+        if (status && (status.databaseReady === true || status.databaseError)) break;
+        if (Date.now() > deadline) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
       proc.kill();
       resolve({ out, status, exited });
-    }, settleMs);
+    })();
   });
 }
 

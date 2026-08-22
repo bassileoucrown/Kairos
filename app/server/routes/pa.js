@@ -14,6 +14,8 @@ const { formatForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
+const history = require('../lib/bookingHistory');
+const { cancelBooking } = require('../lib/cancelBooking');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,9 +25,12 @@ const router = asyncRouter();
 router.use(requireAuth);
 
 router.get('/principals', async (req, res) => {
-  const self = await db.prepare('SELECT id, name, slug FROM users WHERE id = ?').get(req.user.id);
+  // Timezone travels with the principal because their diary is read in it. An
+  // assistant in Lagos looking at a principal in London must see the
+  // principal's day, not their own clock applied to it.
+  const self = await db.prepare('SELECT id, name, slug, timezone FROM users WHERE id = ?').get(req.user.id);
   const memberships = await db.prepare(`
-    SELECT u.id, u.name, u.slug, m.role, m.can_manage_scheduling
+    SELECT u.id, u.name, u.slug, u.timezone, m.role, m.can_manage_scheduling
     FROM memberships m
     JOIN users u ON u.id = m.owner_id
     WHERE m.member_user_id = ? AND m.status = 'active'
@@ -33,9 +38,12 @@ router.get('/principals', async (req, res) => {
 
   res.json({
     principals: [
-      { id: self.id, name: self.name, slug: self.slug, role: 'owner', canManageScheduling: true },
+      {
+        id: self.id, name: self.name, slug: self.slug, timezone: self.timezone,
+        role: 'owner', canManageScheduling: true,
+      },
       ...memberships.map((m) => ({
-        id: m.id, name: m.name, slug: m.slug, role: m.role,
+        id: m.id, name: m.name, slug: m.slug, timezone: m.timezone, role: m.role,
         canManageScheduling: !!m.can_manage_scheduling,
       })),
     ],
@@ -331,27 +339,35 @@ router.get('/:ownerId/relationships/upcoming', requirePaAccess, async (req, res)
 
 // Upcoming confirmed bookings for this principal — used by the Briefs tab's
 // picker (and generally useful to a PA who wants a quick agenda glance).
+// The principal's bookings, in whatever scope is asked for. Defaults to the
+// upcoming confirmed ones, which is what the Brief Builder has always read
+// from here and must keep getting without asking for it.
 router.get('/:ownerId/bookings', requirePaAccess, async (req, res) => {
-  const now = new Date().toISOString();
-  const rows = await db.prepare(`
-    SELECT b.id, b.booker_name, b.booker_email, b.start_at, mt.name as meeting_type_name,
-      (SELECT 1 FROM briefs br WHERE br.booking_id = b.id) as has_brief
-    FROM bookings b
-    JOIN meeting_types mt ON mt.id = b.meeting_type_id
-    WHERE b.owner_id = ? AND b.status = 'confirmed' AND b.start_at >= ?
-    ORDER BY b.start_at ASC
-  `).all(req.principal.id, now);
-
   res.json({
-    bookings: rows.map((b) => ({
-      id: b.id,
-      bookerName: b.booker_name,
-      bookerEmail: b.booker_email,
-      startAt: b.start_at,
-      meetingTypeName: b.meeting_type_name,
-      hasBrief: !!b.has_brief,
-    })),
+    bookings: await history.list(req.principal.id, { scope: req.query.scope, q: req.query.q }),
   });
+});
+
+// What was said about one booking, and by whom. See lib/bookingHistory.js for
+// why this returns subject lines and not the letters themselves.
+router.get('/:ownerId/bookings/:bookingId/trail', requirePaAccess, async (req, res) => {
+  const booking = await history.get(req.principal.id, req.params.bookingId);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  res.json({ trail: await history.trail(req.principal.id, req.params.bookingId) });
+});
+
+// Calling off a meeting that was already confirmed. Declining, in the approval
+// queue, is the answer to something still being asked; this is the answer to
+// something already agreed, and the person who booked has to be told.
+router.post('/:ownerId/bookings/:bookingId/cancel', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.bookingId, req.principal.id);
+  if (!row) return res.status(404).json({ error: 'Booking not found.' });
+  if (row.status === 'declined') {
+    return res.status(400).json({ error: 'That request was declined — there is nothing to cancel.' });
+  }
+  await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  res.json({ booking: await history.get(req.principal.id, row.id) });
 });
 
 function emptySections() {
