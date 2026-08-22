@@ -77,7 +77,17 @@ const daysBetween = (a, b) =>
     await boss('PATCH', '/profile', { slug: SLUG, timezone: 'UTC' });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
-    const week = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: '09:00', endTime: '17:00' }));
+    // Open all day, every day, deliberately.
+    //
+    // With office hours this suite passed in the morning and failed in the
+    // evening: a 09:00–17:00 day contributes no slots once it is gone, so
+    // "the page reaches a fortnight" measured thirteen days instead of
+    // fourteen depending on what time the suite happened to run. A window is
+    // being tested here, not a working day, so the working day is taken out
+    // of it.
+    const week = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      dayOfWeek, startTime: '00:00', lengthMinutes: 23 * 60 + 59,
+    }));
     await boss('PUT', '/availability', { rules: week });
     let r = await boss('POST', '/meeting-types', {
       name: 'Intro', durationMinutes: 60, locationType: 'video', accessTier: 1,
@@ -85,8 +95,19 @@ const daysBetween = (a, b) =>
     const mt = r.d.meetingType;
 
     const slots = async () => (await anon('GET', `/public/${SLUG}/${mt.slug}/slots`)).d;
-    const reach = (list) => (list.length === 0 ? 0
-      : daysBetween(dayKey(list[0].startAt), dayKey(list[list.length - 1].startAt)) + 1);
+    const today = () => new Date().toISOString().slice(0, 10);
+
+    // How far out the furthest offered time is, counted from today rather than
+    // from the first slot.
+    //
+    // Counting the span between first and last slot looked equivalent and was
+    // not: run this suite at half past eleven at night and today has no room
+    // left for an hour-long meeting, so the first slot is tomorrow and a
+    // fourteen-day window measures thirteen. That is the product being right
+    // and the test being wrong. The window's far edge is the thing under test,
+    // so that is what is measured.
+    const furthest = (list) => (list.length === 0 ? -1
+      : daysBetween(today(), dayKey(list[list.length - 1].startAt)));
 
     // ---- What an account that has never chosen gets -----------------------
     head('An account that has never touched this:');
@@ -99,7 +120,8 @@ const daysBetween = (a, b) =>
     ok('its hours are still there too', r.d.rules.length === 7, String(r.d.rules?.length));
 
     let s = await slots();
-    ok('the booking page reaches a fortnight', reach(s.slots) === 14, String(reach(s.slots)));
+    ok('the booking page reaches the fourteenth day and no further',
+      furthest(s.slots) === 13, String(furthest(s.slots)));
     ok('and says so to whoever asks', s.windowDays === 14, String(s.windowDays));
 
     // ---- Shortening it ------------------------------------------------------
@@ -107,13 +129,22 @@ const daysBetween = (a, b) =>
     r = await boss('PUT', '/availability', { rules: week, windowDays: 1 });
     ok('the choice is accepted', r.s === 200 && r.d.windowDays === 1, JSON.stringify(r.d.windowDays));
     s = await slots();
-    ok('and a stranger is offered one day of times', reach(s.slots) === 1,
-      `${reach(s.slots)} days: ${JSON.stringify(s.slots.map((x) => dayKey(x.startAt)))}`);
+    ok('and a stranger is offered nothing beyond today',
+      s.slots.every((x) => dayKey(x.startAt) === today()),
+      JSON.stringify(s.slots.map((x) => dayKey(x.startAt)).slice(0, 4)));
     ok('the page reports the shorter window', s.windowDays === 1);
 
     // The property that makes this a real setting rather than a label.
-    const beyond = new Date(Date.now() + 5 * 86400000);
-    beyond.setUTCHours(10, 0, 0, 0);
+    // A time five days out, on a slot boundary the generator actually emits:
+    // slots step by the meeting plus the account's breather, so an arbitrary
+    // 10:00 is not necessarily one of them.
+    const beyond = await (async () => {
+      await boss('PUT', '/availability', { rules: week, windowDays: 90 });
+      const wide = (await slots()).slots;
+      const target = wide.find((x) => daysBetween(dayKey(wide[0].startAt), dayKey(x.startAt)) >= 5);
+      await boss('PUT', '/availability', { rules: week, windowDays: 1 });
+      return new Date(target.startAt);
+    })();
     r = await anon('POST', `/public/${SLUG}/${mt.slug}/book`, {
       name: 'Too Far', email: `far${ID}@x.com`, timezone: 'UTC', startAt: beyond.toISOString(),
     });
@@ -124,7 +155,7 @@ const daysBetween = (a, b) =>
     head('Opening three months:');
     await boss('PUT', '/availability', { rules: week, windowDays: 90 });
     s = await slots();
-    ok('the times run the whole way out', reach(s.slots) === 90, String(reach(s.slots)));
+    ok('the times run the whole way out', furthest(s.slots) === 89, String(furthest(s.slots)));
     r = await anon('POST', `/public/${SLUG}/${mt.slug}/book`, {
       name: 'Well Ahead', email: `ahead${ID}@x.com`, timezone: 'UTC', startAt: beyond.toISOString(),
     });

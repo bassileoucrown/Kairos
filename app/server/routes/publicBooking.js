@@ -7,7 +7,7 @@ const events = require('../lib/bookingEvents');
 const { getOpenSlots, windowDaysFor } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
-const { formatForEmail } = require('../lib/format');
+const { formatForEmail, rangeForEmail } = require('../lib/format');
 
 const router = asyncRouter();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -149,7 +149,7 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
     `).run(crypto.randomUUID(), owner.id, cleanEmail, cleanName, new Date().toISOString(), new Date().toISOString());
   }
 
-  const when = formatForEmail(start.toISOString(), bookerTimezone);
+  const when = rangeForEmail(start.toISOString(), end.toISOString(), bookerTimezone);
   if (needsApproval) {
     await sendEmail({
       ownerId: owner.id, toEmail: cleanEmail, relatedBookingId: id, category: 'transactional',
@@ -298,7 +298,7 @@ router.post('/bookings/:id/accept-format', async (req, res) => {
       + `${booking.counter_format_note ? ` — ${booking.counter_format_note}` : ''}.`
       + (stillNeedsApproval
         ? ' The office still has to confirm the time itself.'
-        : ` You're confirmed for ${formatForEmail(booking.start_at, booking.booker_timezone)} (${booking.booker_timezone}).`)
+        : ` You're confirmed for ${rangeForEmail(booking.start_at, booking.end_at, booking.booker_timezone)} (${booking.booker_timezone}).`)
       + `\n\nManage this booking: /book/manage/${booking.id}`,
   });
 
@@ -321,7 +321,7 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   await sendEmail({
     ownerId: owner.id, toEmail: owner.email, relatedBookingId: booking.id, category: 'transactional',
     subject: `Cancelled: ${booking.booker_name} — ${booking.meeting_type_name}`,
-    body: `${booking.booker_name} (${booking.booker_email}) cancelled their ${formatForEmail(booking.start_at, owner.timezone)} booking for ${booking.meeting_type_name}.`,
+    body: `${booking.booker_name} (${booking.booker_email}) cancelled their ${rangeForEmail(booking.start_at, booking.end_at, owner.timezone)} booking for ${booking.meeting_type_name}.`,
   });
 
   res.json({ booking: serializeBookingDetail(await getBookingDetail(booking.id)) });
@@ -366,7 +366,7 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
   await db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
     .run(start.toISOString(), end.toISOString(), booking.id);
 
-  const when = formatForEmail(start.toISOString(), booking.booker_timezone);
+  const when = rangeForEmail(start.toISOString(), end.toISOString(), booking.booker_timezone);
   await sendEmail({
     ownerId: owner.id, toEmail: booking.booker_email, relatedBookingId: booking.id, category: 'transactional',
     subject: `Rescheduled: ${meetingType.name} with ${owner.name}`,
@@ -375,7 +375,7 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
   await sendEmail({
     ownerId: owner.id, toEmail: owner.email, relatedBookingId: booking.id, category: 'transactional',
     subject: `Rescheduled: ${booking.booker_name} moved ${meetingType.name}`,
-    body: `${booking.booker_name} (${booking.booker_email}) moved their booking to ${formatForEmail(start.toISOString(), owner.timezone)} (${owner.timezone}).`,
+    body: `${booking.booker_name} (${booking.booker_email}) moved their booking to ${rangeForEmail(start.toISOString(), end.toISOString(), owner.timezone)} (${owner.timezone}).`,
   });
 
   res.json({ booking: serializeBookingDetail(await getBookingDetail(booking.id)) });

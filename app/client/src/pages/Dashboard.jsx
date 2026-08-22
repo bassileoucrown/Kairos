@@ -135,7 +135,7 @@ export default function Dashboard() {
 
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'bookings' && <BookingsTab />}
-      {tab === 'availability' && <AvailabilityTab />}
+      {tab === 'availability' && <AvailabilityTab selfId={user?.id} />}
       {tab === 'meeting_types' && <MeetingTypesTab ownerSlug={user.slug} />}
       {tab === 'members' && <MembersTab />}
       {tab === 'essentials' && <EssentialsTab ownerId={user?.id} />}

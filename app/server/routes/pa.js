@@ -6,11 +6,11 @@ const formats = require('../lib/meetingFormats');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess, requireSchedulingAccess } = require('../lib/paAccess');
 const {
-  replaceAvailability, getAvailability, setBookingWindow, listMeetingTypes,
+  replaceAvailability, getAvailability, setBookingWindow, setRhythm, listMeetingTypes,
   createMeetingType, updateMeetingType, deleteMeetingType, handle,
 } = require('../lib/scheduling');
 const { sendEmail } = require('../lib/email');
-const { formatForEmail } = require('../lib/format');
+const { formatForEmail, rangeForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
@@ -62,6 +62,7 @@ router.get('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, h
 
 router.put('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
   await setBookingWindow(req.principal.id, req.body?.windowDays);
+  await setRhythm(req.principal.id, req.body || {});
   await replaceAvailability(req.principal.id, req.body?.rules);
   res.json(await getAvailability(req.principal.id));
 }));
@@ -162,7 +163,7 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (re
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Confirmed: ${booking.meeting_type_name} with ${req.principal.name}`,
-    body: `Hi ${booking.booker_name},\n\nYou're confirmed for ${formatForEmail(booking.start_at, booking.booker_timezone)} (${booking.booker_timezone}).\n\nManage this booking: /book/manage/${booking.id}`,
+    body: `Hi ${booking.booker_name},\n\nYou're confirmed for ${rangeForEmail(booking.start_at, booking.end_at, booking.booker_timezone)} (${booking.booker_timezone}).\n\nManage this booking: /book/manage/${booking.id}`,
   });
 
   res.json({ ok: true });
@@ -232,7 +233,7 @@ router.post('/:ownerId/approvals/:bookingId/decline', requirePaAccess, async (re
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Update on your request with ${req.principal.name}`,
-    body: `Hi ${booking.booker_name},\n\n${req.principal.name} wasn't able to accept your request for ${formatForEmail(booking.start_at, booking.booker_timezone)} (${booking.booker_timezone}). Feel free to pick another time: /book/${req.principal.slug}`,
+    body: `Hi ${booking.booker_name},\n\n${req.principal.name} wasn't able to accept your request for ${rangeForEmail(booking.start_at, booking.end_at, booking.booker_timezone)} (${booking.booker_timezone}). Feel free to pick another time: /book/${req.principal.slug}`,
   });
 
   res.json({ ok: true });

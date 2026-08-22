@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
+import TimeUp from './TimeUp.jsx';
 
 // One navigation for the whole app.
 //
@@ -316,6 +317,10 @@ export default function AppShell({ children, title, actions, active }) {
       </aside>
 
       {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
+
+      {/* Wherever they are in Kairos, not only on Today: the point of a chime
+          is that it reaches somebody who is looking at something else. */}
+      <TimeUp principalId={activeId} />
 
       <main className="app-main">
         <header className="app-header">

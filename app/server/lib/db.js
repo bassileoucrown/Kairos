@@ -381,6 +381,16 @@ function ready() {
       // a week. The default is the old constant so nothing shifts under
       // anybody who has not chosen.
       await ensureColumn('users', 'booking_window_days', 'INTEGER NOT NULL DEFAULT 14');
+      // The longest meeting a block of hours will take. Null means "whatever
+      // the meeting type asks for", which is what every existing row meant
+      // before there was a way to say otherwise.
+      await ensureColumn('availability_rules', 'slot_minutes', 'INTEGER');
+      // A breather between one meeting and the next, so a day of them is not a
+      // day of walking out of one room into another. Ten minutes by default —
+      // enough to close a laptop, not enough to lose an hour a day to.
+      await ensureColumn('users', 'gap_minutes', 'INTEGER NOT NULL DEFAULT 10');
+      // How long before a meeting ends to say so.
+      await ensureColumn('users', 'warn_minutes', 'INTEGER NOT NULL DEFAULT 5');
       // A device the principal has vouched for stays signed in, on a sliding
       // window, instead of being turned out every thirty days. See
       // lib/devices.js.

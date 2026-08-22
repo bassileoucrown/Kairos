@@ -285,11 +285,15 @@ const shiftKey = (key, n) => {
     }
     await ph.click('.cal-views button:has-text("Week")');
     await ph.waitForSelector('.cal-week', { timeout: 15000 });
-    ok('and a week stacks rather than squeezing seven columns onto a phone',
-      (await ph.evaluate(() => {
-        const w = document.querySelector('.cal-week');
-        return w ? getComputedStyle(w).gridTemplateColumns.split(' ').length : 0;
-      })) === 1);
+    // Wait for the grid itself to settle rather than reading it the instant
+    // the element appears: on a loaded machine the first read can land before
+    // the stylesheet's media query has been applied, which fails for a reason
+    // that has nothing to do with the layout being wrong.
+    const stacked = await ph.waitForFunction(() => {
+      const w = document.querySelector('.cal-week');
+      return w && getComputedStyle(w).gridTemplateColumns.split(' ').length === 1;
+    }, { timeout: 15000 }).then(() => true).catch(() => false);
+    ok('and a week stacks rather than squeezing seven columns onto a phone', stacked);
     await phone.close();
 
     ok('no page threw along the way', errors.length === 0, JSON.stringify(errors).slice(0, 200));

@@ -1934,3 +1934,73 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
      button, Back, and the title — the three things that say where you are. */
   .app-header-actions { flex-basis: 100%; }
 }
+
+/* ---- A block of hours, said as a start and a length ---- */
+.time-block { flex-wrap: wrap; }
+.time-block select { width: auto; padding: 6px 8px; font-size: 0.85rem; }
+.block-ends { font-size: 0.82rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.block-cap {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.76rem; color: var(--text-muted);
+  /* Its own line under the block it belongs to, so the row above stays the
+     one thing being read: this time, for this long. */
+  flex-basis: 100%;
+}
+.block-cap select { font-size: 0.78rem; padding: 4px 6px; }
+
+/* ---- Time is nearly up ----
+   Fixed to the corner rather than in the page, because the person it is for is
+   in a meeting and looking at whatever they were already looking at. */
+.timeup {
+  position: fixed;
+  z-index: 60;
+  left: 16px; right: 16px; bottom: 16px;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.timeup-card {
+  pointer-events: auto;
+  display: flex; align-items: flex-start; gap: 12px;
+  max-width: 460px; width: 100%;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  min-width: 0;
+}
+.timeup-mark { color: var(--warn); font-size: 0.8rem; line-height: 1.6; flex: none; }
+.timeup-mark.is-over { color: var(--danger); }
+.timeup-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.timeup-what { font-size: 0.83rem; color: var(--text-muted); overflow-wrap: anywhere; }
+
+@media (min-width: 760px) {
+  .timeup { left: auto; right: 24px; bottom: 24px; }
+}
+
+/* ---- What the diary says about how somebody works ---- */
+.rhythm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rhythm-line {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 10px 12px;
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); background: var(--surface);
+  min-width: 0;
+}
+.rhythm-line.is-weak { border-left-color: var(--border); }
+.rhythm-text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+.rhythm-evidence {
+  flex: none; font-size: 0.74rem; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rhythm-bars { display: flex; flex-direction: column; gap: 5px; margin: 14px 0 4px; }
+.rhythm-bar { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; min-width: 0; }
+.rhythm-bar-label { flex: 0 0 130px; color: var(--text-muted); }
+.rhythm-bar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; min-width: 0; }
+.rhythm-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.rhythm-bar-n { flex: none; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+  .rhythm-bar-label { flex-basis: 96px; }
+}

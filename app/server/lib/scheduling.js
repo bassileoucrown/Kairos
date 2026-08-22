@@ -3,6 +3,7 @@ const db = require('./db');
 const { slugify } = require('./auth');
 const {
   windowDaysFor, windowProblem, WINDOW_CHOICES, MIN_WINDOW_DAYS, MAX_WINDOW_DAYS,
+  LENGTH_CHOICES, CAP_CHOICES, GAP_CHOICES, gapMinutesFor, warnMinutesFor,
 } = require('./availability');
 
 // Availability and meeting types, expressed as operations on an owner id
@@ -28,8 +29,39 @@ class SchedulingError extends Error {
 
 // ---------- Availability ----------
 
+// A block is stored as a start and an end because that is what a slot
+// calculation needs, and offered as a start and a *length* because that is
+// what a person has in their head. The two are the same fact; the arithmetic
+// belongs here rather than in somebody's morning.
+function minutesBetween(startTime, endTime) {
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
+// Null when the block would run past midnight, rather than a time clamped to
+// 23:59. Clamping is the quiet kind of wrong: somebody asks for two hours from
+// half past eleven at night and is given twenty-nine minutes without being
+// told, which is worse than being refused. A block belongs to the day it
+// starts on, so one that wrapped would be invisible on both.
+function addMinutes(startTime, minutes) {
+  const [h, m] = startTime.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  if (total > 23 * 60 + 59) return null;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 function serializeRule(r) {
-  return { id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time };
+  return {
+    id: r.id,
+    dayOfWeek: r.day_of_week,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    lengthMinutes: minutesBetween(r.start_time, r.end_time),
+    // Null means "as long as the meeting type asks for", which is what every
+    // block meant before there was a way to say otherwise.
+    slotMinutes: r.slot_minutes ?? null,
+  };
 }
 
 async function listAvailability(ownerId) {
@@ -45,13 +77,38 @@ async function listAvailability(ownerId) {
  * screen show a week of hours over a window it had not fetched.
  */
 async function getAvailability(ownerId) {
-  const owner = await db.prepare('SELECT booking_window_days FROM users WHERE id = ?').get(ownerId);
+  const owner = await db.prepare(
+    'SELECT booking_window_days, gap_minutes, warn_minutes FROM users WHERE id = ?',
+  ).get(ownerId);
   return {
     rules: await listAvailability(ownerId),
     windowDays: windowDaysFor(owner),
+    gapMinutes: gapMinutesFor(owner),
+    warnMinutes: warnMinutesFor(owner),
     windowChoices: WINDOW_CHOICES,
+    lengthChoices: LENGTH_CHOICES,
+    capChoices: CAP_CHOICES,
+    gapChoices: GAP_CHOICES,
     windowLimits: { min: MIN_WINDOW_DAYS, max: MAX_WINDOW_DAYS },
   };
+}
+
+/** The breather between meetings, and when to say time is nearly up. */
+async function setRhythm(ownerId, { gapMinutes, warnMinutes }) {
+  if (gapMinutes !== undefined && gapMinutes !== null && gapMinutes !== '') {
+    const n = Number(gapMinutes);
+    if (!Number.isInteger(n) || n < 0 || n > 120) {
+      throw new SchedulingError('A breather has to be between none and two hours.');
+    }
+    await db.prepare('UPDATE users SET gap_minutes = ? WHERE id = ?').run(n, ownerId);
+  }
+  if (warnMinutes !== undefined && warnMinutes !== null && warnMinutes !== '') {
+    const n = Number(warnMinutes);
+    if (!Number.isInteger(n) || n < 0 || n > 60) {
+      throw new SchedulingError('Warn somewhere between zero and sixty minutes before the end.');
+    }
+    await db.prepare('UPDATE users SET warn_minutes = ? WHERE id = ?').run(n, ownerId);
+  }
 }
 
 /** Just the window, left alone when the caller says nothing about it. */
@@ -70,18 +127,45 @@ async function setBookingWindow(ownerId, value) {
 async function replaceAvailability(ownerId, rules) {
   if (!Array.isArray(rules)) throw new SchedulingError('Expected a list of availability rules.');
 
-  for (const r of rules) {
-    if (
-      typeof r.dayOfWeek !== 'number' || r.dayOfWeek < 0 || r.dayOfWeek > 6 ||
-      !TIME_RE.test(r.startTime) || !TIME_RE.test(r.endTime) ||
-      r.startTime >= r.endTime
-    ) {
-      throw new SchedulingError('Each rule needs a valid day and a start time before its end time.');
+  // A block may arrive as a start and a length, or as a start and an end. The
+  // screen sends the first because that is what a person chooses; the second
+  // is still accepted so every existing caller keeps working.
+  const clean = rules.map((r) => {
+    if (typeof r.dayOfWeek !== 'number' || r.dayOfWeek < 0 || r.dayOfWeek > 6 || !TIME_RE.test(r.startTime)) {
+      throw new SchedulingError('Each block needs a day and a time it starts.');
     }
-  }
+    let endTime = r.endTime;
+    if (r.lengthMinutes !== undefined && r.lengthMinutes !== null && r.lengthMinutes !== '') {
+      const len = Number(r.lengthMinutes);
+      if (!Number.isInteger(len) || len < 5 || len > 24 * 60) {
+        throw new SchedulingError('A block has to run between five minutes and a day.');
+      }
+      endTime = addMinutes(r.startTime, len);
+    }
+    if (!endTime || !TIME_RE.test(endTime) || r.startTime >= endTime) {
+      throw new SchedulingError(`${DAY_NAMES[r.dayOfWeek]}: that block does not fit before midnight.`);
+    }
+
+    let slotMinutes = null;
+    if (r.slotMinutes !== undefined && r.slotMinutes !== null && r.slotMinutes !== '') {
+      const cap = Number(r.slotMinutes);
+      if (!Number.isInteger(cap) || cap < 5 || cap > 24 * 60) {
+        throw new SchedulingError('The longest meeting has to be between five minutes and a day.');
+      }
+      // A cap longer than the block itself can never be met, so it is a
+      // promise the booking page could not keep.
+      if (cap > minutesBetween(r.startTime, endTime)) {
+        throw new SchedulingError(
+          `${DAY_NAMES[r.dayOfWeek]}: that block is shorter than the longest meeting it says it takes.`,
+        );
+      }
+      slotMinutes = cap;
+    }
+    return { dayOfWeek: r.dayOfWeek, startTime: r.startTime, endTime, slotMinutes };
+  });
 
   const byDay = new Map();
-  for (const r of rules) {
+  for (const r of clean) {
     const list = byDay.get(r.dayOfWeek) || [];
     list.push(r);
     byDay.set(r.dayOfWeek, list);
@@ -102,10 +186,11 @@ async function replaceAvailability(ownerId, rules) {
   // where BEGIN and COMMIT issued separately could land on different ones.
   await db.tx(async (t) => {
     await t.prepare('DELETE FROM availability_rules WHERE owner_id = ?').run(ownerId);
-    for (const r of rules) {
+    for (const r of clean) {
       await t.prepare(
-        'INSERT INTO availability_rules (id, owner_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
-      ).run(crypto.randomUUID(), ownerId, r.dayOfWeek, r.startTime, r.endTime);
+        'INSERT INTO availability_rules (id, owner_id, day_of_week, start_time, end_time, slot_minutes)'
+        + ' VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(crypto.randomUUID(), ownerId, r.dayOfWeek, r.startTime, r.endTime, r.slotMinutes);
     }
   });
 
@@ -247,6 +332,6 @@ function handle(fn) {
 
 module.exports = {
   SchedulingError, handle,
-  listAvailability, replaceAvailability, getAvailability, setBookingWindow,
+  listAvailability, replaceAvailability, getAvailability, setBookingWindow, setRhythm,
   listMeetingTypes, createMeetingType, updateMeetingType, deleteMeetingType,
 };

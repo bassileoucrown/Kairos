@@ -13,7 +13,7 @@
 
 const db = require('./db');
 const { sendEmail } = require('./email');
-const { formatForEmail } = require('./format');
+const { rangeForEmail } = require('./format');
 const events = require('./bookingEvents');
 
 /**
@@ -35,7 +35,7 @@ async function cancelBooking({ booking, cancelledByUserId = null, note = '' }) {
   const owner = await db.prepare('SELECT * FROM users WHERE id = ?').get(booking.owner_id);
   const meetingType = await db.prepare('SELECT name FROM meeting_types WHERE id = ?')
     .get(booking.meeting_type_id);
-  const when = formatForEmail(booking.start_at, booking.booker_timezone);
+  const when = rangeForEmail(booking.start_at, booking.end_at, booking.booker_timezone);
   const reason = String(note || '').trim();
 
   await sendEmail({

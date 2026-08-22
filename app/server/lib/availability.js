@@ -22,6 +22,50 @@ const WINDOW_CHOICES = [
 const MIN_WINDOW_DAYS = 1;
 const MAX_WINDOW_DAYS = 365;
 
+// The lengths a block of hours can be, and the longest meeting it will take.
+// Both are chosen from a list rather than typed, because the thing being
+// removed is having to work out what 09:00 plus three hours is.
+const LENGTH_CHOICES = [
+  { minutes: 30, label: '30 minutes' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 90, label: '90 minutes' },
+  { minutes: 120, label: '2 hours' },
+  { minutes: 180, label: '3 hours' },
+  { minutes: 240, label: '4 hours' },
+  { minutes: 300, label: '5 hours' },
+  { minutes: 360, label: '6 hours' },
+  { minutes: 480, label: '8 hours' },
+];
+const CAP_CHOICES = [
+  { minutes: 15, label: '15 minutes' },
+  { minutes: 30, label: '30 minutes' },
+  { minutes: 45, label: '45 minutes' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 90, label: '90 minutes' },
+  { minutes: 120, label: '2 hours' },
+];
+
+// A breather between meetings, and how long before the end to say so.
+const GAP_CHOICES = [
+  { minutes: 0, label: 'None' },
+  { minutes: 5, label: '5 minutes' },
+  { minutes: 10, label: '10 minutes' },
+  { minutes: 15, label: '15 minutes' },
+  { minutes: 30, label: '30 minutes' },
+];
+const DEFAULT_GAP_MINUTES = 10;
+const DEFAULT_WARN_MINUTES = 5;
+
+function gapMinutesFor(owner) {
+  const n = Number(owner?.gap_minutes);
+  return Number.isInteger(n) && n >= 0 && n <= 120 ? n : DEFAULT_GAP_MINUTES;
+}
+
+function warnMinutesFor(owner) {
+  const n = Number(owner?.warn_minutes);
+  return Number.isInteger(n) && n >= 0 && n <= 60 ? n : DEFAULT_WARN_MINUTES;
+}
+
 /** The window to use for an owner, however old or odd their row is. */
 function windowDaysFor(owner) {
   const n = Number(owner?.booking_window_days);
@@ -63,8 +107,12 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
     .all(owner.id, now.toISOString(), excludeBookingId || '');
 
   const durationMs = meetingType.duration_minutes * 60000;
-  const bufferBeforeMs = meetingType.buffer_before_minutes * 60000;
-  const bufferAfterMs = meetingType.buffer_after_minutes * 60000;
+  // The account's breather is added to whatever the meeting type asks for, so
+  // a principal who wants ten minutes between everything gets it without
+  // editing every meeting type they own.
+  const gapMs = gapMinutesFor(owner) * 60000;
+  const bufferBeforeMs = meetingType.buffer_before_minutes * 60000 + gapMs;
+  const bufferAfterMs = meetingType.buffer_after_minutes * 60000 + gapMs;
 
   const slots = [];
   let cursor = todayInZone(owner.timezone, now);
@@ -75,12 +123,23 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
     const dayRules = rulesByDay.get(dow) || [];
 
     for (const rule of dayRules) {
+      // The longest meeting this block will take. A block that says thirty
+      // minutes offers nothing at all to an hour-long meeting type rather than
+      // shortening it — the booker asked for an hour and would be handed half
+      // of one without being told.
+      const cap = Number(rule.slot_minutes);
+      if (Number.isInteger(cap) && cap > 0 && meetingType.duration_minutes > cap) continue;
+
       const [startH, startM] = rule.start_time.split(':').map(Number);
       const [endH, endM] = rule.end_time.split(':').map(Number);
       const windowStart = zonedTimeToUtc(date.year, date.month, date.day, startH, startM, owner.timezone);
       const windowEnd = zonedTimeToUtc(date.year, date.month, date.day, endH, endM, owner.timezone);
 
-      for (let slotStart = windowStart.getTime(); slotStart + durationMs <= windowEnd.getTime(); slotStart += durationMs) {
+      // Slots step by the meeting plus its breather, so the next one starts
+      // when the principal is actually free rather than the moment the last
+      // one is due to end.
+      const stepMs = durationMs + gapMs;
+      for (let slotStart = windowStart.getTime(); slotStart + durationMs <= windowEnd.getTime(); slotStart += stepMs) {
         const slotEnd = slotStart + durationMs;
         if (slotStart <= now.getTime()) continue;
 
@@ -107,6 +166,13 @@ module.exports = {
   windowDaysFor,
   windowProblem,
   WINDOW_CHOICES,
+  LENGTH_CHOICES,
+  CAP_CHOICES,
+  GAP_CHOICES,
+  gapMinutesFor,
+  warnMinutesFor,
+  DEFAULT_GAP_MINUTES,
+  DEFAULT_WARN_MINUTES,
   DEFAULT_WINDOW_DAYS,
   MIN_WINDOW_DAYS,
   MAX_WINDOW_DAYS,
