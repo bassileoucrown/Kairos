@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 const db = require('./db');
 const { slugify } = require('./auth');
+const {
+  windowDaysFor, windowProblem, WINDOW_CHOICES, MIN_WINDOW_DAYS, MAX_WINDOW_DAYS,
+} = require('./availability');
 
 // Availability and meeting types, expressed as operations on an owner id
 // rather than on "the logged-in user".
@@ -32,6 +35,31 @@ function serializeRule(r) {
 async function listAvailability(ownerId) {
   return (await db.prepare('SELECT * FROM availability_rules WHERE owner_id = ? ORDER BY day_of_week, start_time')
     .all(ownerId)).map(serializeRule);
+}
+
+/**
+ * The hours and how far ahead they run.
+ *
+ * These are one answer to one question — when can people book me — so they are
+ * read and written together. Splitting them into two endpoints would let a
+ * screen show a week of hours over a window it had not fetched.
+ */
+async function getAvailability(ownerId) {
+  const owner = await db.prepare('SELECT booking_window_days FROM users WHERE id = ?').get(ownerId);
+  return {
+    rules: await listAvailability(ownerId),
+    windowDays: windowDaysFor(owner),
+    windowChoices: WINDOW_CHOICES,
+    windowLimits: { min: MIN_WINDOW_DAYS, max: MAX_WINDOW_DAYS },
+  };
+}
+
+/** Just the window, left alone when the caller says nothing about it. */
+async function setBookingWindow(ownerId, value) {
+  if (value === undefined || value === null || value === '') return;
+  const problem = windowProblem(value);
+  if (problem) throw new SchedulingError(problem);
+  await db.prepare('UPDATE users SET booking_window_days = ? WHERE id = ?').run(Number(value), ownerId);
 }
 
 /**
@@ -219,6 +247,6 @@ function handle(fn) {
 
 module.exports = {
   SchedulingError, handle,
-  listAvailability, replaceAvailability,
+  listAvailability, replaceAvailability, getAvailability, setBookingWindow,
   listMeetingTypes, createMeetingType, updateMeetingType, deleteMeetingType,
 };

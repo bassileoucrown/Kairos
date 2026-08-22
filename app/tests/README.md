@@ -44,6 +44,17 @@ database *failure* modes — a wrong password, a missing database, a garbled URL
 a working one — and cannot tell them apart with nothing listening. Without a
 local Postgres it is the single expected red in an otherwise green run.
 
+So check Postgres is actually up before reading a `bfail` failure as a defect:
+
+```sh
+pg_isready || sudo service postgresql start
+```
+
+In a container that suspends between sessions, Postgres does not always come
+back with it, and the symptom is six `bfail` assertions going red at once —
+which looks like six product faults and is one stopped service. `ECONNREFUSED`
+in the reported `databaseError` is the tell.
+
 ## Why nothing is shared
 
 Three suites used to borrow a long-running server on port 4000, and all three

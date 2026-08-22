@@ -4,6 +4,7 @@ import { api } from './api.js';
 export function useOpenSlots({ ownerSlug, meetingSlug, excludeBookingId }) {
   const [slots, setSlots] = useState(null);
   const [ownerTimezone, setOwnerTimezone] = useState('UTC');
+  const [windowDays, setWindowDays] = useState(null);
   const [error, setError] = useState('');
 
   const reload = useCallback(() => {
@@ -13,11 +14,12 @@ export function useOpenSlots({ ownerSlug, meetingSlug, excludeBookingId }) {
       .then((data) => {
         setSlots(data.slots);
         setOwnerTimezone(data.ownerTimezone);
+        setWindowDays(data.windowDays ?? null);
       })
       .catch((err) => setError(err.message));
   }, [ownerSlug, meetingSlug, excludeBookingId]);
 
   useEffect(reload, [reload]);
 
-  return { slots, ownerTimezone, error, reload };
+  return { slots, ownerTimezone, windowDays, error, reload };
 }

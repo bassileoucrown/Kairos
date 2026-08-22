@@ -9,7 +9,7 @@ import VideoJoinLink from '../components/VideoJoinLink.jsx';
 function RescheduleForm({ booking, onDone, onError }) {
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const { slots, reload } = useOpenSlots({
+  const { slots, windowDays, reload } = useOpenSlots({
     ownerSlug: booking.ownerSlug,
     meetingSlug: booking.meetingTypeSlug,
     excludeBookingId: booking.id,
@@ -32,7 +32,7 @@ function RescheduleForm({ booking, onDone, onError }) {
 
   return (
     <div className="booking-layout">
-      <SlotGrid slots={slots} timezone={booking.bookerTimezone} selected={selected} onSelect={setSelected} />
+      <SlotGrid slots={slots} timezone={booking.bookerTimezone} selected={selected} onSelect={setSelected} windowDays={windowDays} />
       <div>
         {!selected && <p className="hint">Select a new time.</p>}
         {selected && (

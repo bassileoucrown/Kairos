@@ -31,6 +31,11 @@ export default function AvailabilityTab({ ownerId = null, principalName = null }
   const base = ownerId ? `/pa/${ownerId}` : '';
   const whose = principalName ? `${principalName}'s` : 'your';
   const [week, setWeek] = useState(null);
+  // How far ahead the diary is open. It lives with the hours because it is
+  // the same question — when can people book me — asked about the far edge
+  // rather than the daily one.
+  const [windowDays, setWindowDays] = useState(14);
+  const [windowChoices, setWindowChoices] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +50,8 @@ export default function AvailabilityTab({ ownerId = null, principalName = null }
       }
       for (const day of next) day.blocks.sort((a, b) => a.startTime.localeCompare(b.startTime));
       setWeek(next);
+      setWindowDays(data.windowDays);
+      setWindowChoices(data.windowChoices || []);
     }).catch((err) => setError(err.message));
   }, [ownerId]);
 
@@ -96,10 +103,12 @@ export default function AvailabilityTab({ ownerId = null, principalName = null }
 
     setSubmitting(true);
     try {
-      await api.put(`${base}/availability`, { rules });
+      await api.put(`${base}/availability`, { rules, windowDays });
+      const span = windowChoices.find((c) => c.days === windowDays)?.label.toLowerCase()
+        || `${windowDays} days`;
       setSuccess(rules.length === 0
         ? `Saved — ${whose} booking page is closed until there are times.`
-        : 'Availability updated.');
+        : `Availability updated. People can book ${span} ahead.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,6 +127,32 @@ export default function AvailabilityTab({ ownerId = null, principalName = null }
         Set the hours people can book {principalName || 'you'}, in {whose} timezone. Add more than
         one block to a day to split it — mornings only, or 9–12 and 2–5 with lunch protected.
       </p>
+
+      {/* Above the week, because it governs it: these hours repeat only as far
+          as this reaches. Somebody who sets a week of hours and never finds
+          this has silently opened three months of their diary, or one day of
+          it, without deciding to. */}
+      <div className="field" style={{ maxWidth: 320 }}>
+        <label htmlFor="booking-window">How far ahead people can book</label>
+        <select
+          id="booking-window"
+          value={windowDays}
+          onChange={(e) => { setWindowDays(Number(e.target.value)); setSuccess(''); }}
+        >
+          {windowChoices.map((c) => (
+            <option key={c.days} value={c.days}>{c.label}</option>
+          ))}
+          {/* A window set elsewhere, or by an older version, is shown rather
+              than silently snapped to the nearest offered length. */}
+          {!windowChoices.some((c) => c.days === windowDays) && (
+            <option value={windowDays}>{windowDays} days</option>
+          )}
+        </select>
+        <p className="hint">
+          The booking page shows this much of {whose} diary and no more. Beyond it, there is
+          nothing to choose — which is how you keep next quarter from being spoken for.
+        </p>
+      </div>
 
       <div className="week-editor">
         {week.map((day) => {

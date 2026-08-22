@@ -1,7 +1,9 @@
 const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const { requireAuth } = require('../lib/auth');
-const { listAvailability, replaceAvailability, handle } = require('../lib/scheduling');
+const {
+  replaceAvailability, getAvailability, setBookingWindow, handle,
+} = require('../lib/scheduling');
 
 // A principal editing their own hours. The identical operations, scoped to a
 // principal an assistant supports, live in routes/pa.js — both call the same
@@ -10,11 +12,15 @@ const router = asyncRouter();
 router.use(requireAuth);
 
 router.get('/', handle(async (req, res) => {
-  res.json({ rules: await listAvailability(req.user.id) });
+  res.json(await getAvailability(req.user.id));
 }));
 
 router.put('/', handle(async (req, res) => {
-  res.json({ rules: await replaceAvailability(req.user.id, req.body?.rules) });
+  // The window is validated before the hours are rewritten, so a bad window
+  // cannot leave somebody with their week replaced and their range unchanged.
+  await setBookingWindow(req.user.id, req.body?.windowDays);
+  await replaceAvailability(req.user.id, req.body?.rules);
+  res.json(await getAvailability(req.user.id));
 }));
 
 module.exports = router;

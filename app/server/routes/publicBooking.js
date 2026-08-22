@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const formats = require('../lib/meetingFormats');
 const events = require('../lib/bookingEvents');
-const { getOpenSlots } = require('../lib/availability');
+const { getOpenSlots, windowDaysFor } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
 const { formatForEmail } = require('../lib/format');
@@ -53,6 +53,10 @@ router.get('/:slug/:meetingSlug/slots', async (req, res) => {
   const slots = await getOpenSlots({ owner, meetingType, excludeBookingId: req.query.excludeBookingId || null });
   res.json({
     ownerTimezone: owner.timezone,
+    // How far ahead this diary is open, so an empty grid can say "in the next
+    // week" rather than a hard-coded "two weeks" that stopped being true the
+    // moment the principal chose something else.
+    windowDays: windowDaysFor(owner),
     slots: slots.map((s) => ({ startAt: s.startUtc.toISOString(), endAt: s.endUtc.toISOString() })),
   });
 });

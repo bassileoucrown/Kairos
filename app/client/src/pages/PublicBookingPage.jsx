@@ -59,7 +59,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
   const [format, setFormat] = useState(meetingType.locationType);
   const [formatNote, setFormatNote] = useState('');
 
-  const { slots, ownerTimezone, reload } = useOpenSlots({ ownerSlug: slug, meetingSlug });
+  const { slots, ownerTimezone, windowDays, reload } = useOpenSlots({ ownerSlug: slug, meetingSlug });
 
   // Asking for something other than the usual turns the booking into a
   // request, whatever the tier — so the button has to stop saying "Confirm".
@@ -155,7 +155,7 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
           </div>
 
           <div className="booking-layout">
-            <SlotGrid slots={slots} timezone={bookerTimezone} selected={selected} onSelect={setSelected} />
+            <SlotGrid slots={slots} timezone={bookerTimezone} selected={selected} onSelect={setSelected} windowDays={windowDays} />
 
             <div>
               {!selected && <p className="hint">Select a time to continue.</p>}

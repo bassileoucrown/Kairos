@@ -6,7 +6,7 @@ const formats = require('../lib/meetingFormats');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess, requireSchedulingAccess } = require('../lib/paAccess');
 const {
-  listAvailability, replaceAvailability, listMeetingTypes,
+  replaceAvailability, getAvailability, setBookingWindow, listMeetingTypes,
   createMeetingType, updateMeetingType, deleteMeetingType, handle,
 } = require('../lib/scheduling');
 const { sendEmail } = require('../lib/email');
@@ -57,11 +57,13 @@ router.get('/principals', async (req, res) => {
 // validation and error messages are literally the same code.
 
 router.get('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
-  res.json({ rules: await listAvailability(req.principal.id) });
+  res.json(await getAvailability(req.principal.id));
 }));
 
 router.put('/:ownerId/availability', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {
-  res.json({ rules: await replaceAvailability(req.principal.id, req.body?.rules) });
+  await setBookingWindow(req.principal.id, req.body?.windowDays);
+  await replaceAvailability(req.principal.id, req.body?.rules);
+  res.json(await getAvailability(req.principal.id));
 }));
 
 router.get('/:ownerId/meeting-types', requirePaAccess, requireSchedulingAccess, handle(async (req, res) => {

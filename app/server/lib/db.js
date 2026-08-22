@@ -374,6 +374,13 @@ function ready() {
       // authenticator was on it. See lib/securityQuestion.js.
       await ensureColumn('users', 'security_question', 'TEXT');
       await ensureColumn('users', 'security_answer_hash', 'TEXT');
+      // How far ahead the diary is open. Fourteen days used to be a constant
+      // in lib/availability.js, which meant every principal on the platform
+      // had the same answer to a question that is entirely personal — a
+      // barrister opens three months, somebody running a family office opens
+      // a week. The default is the old constant so nothing shifts under
+      // anybody who has not chosen.
+      await ensureColumn('users', 'booking_window_days', 'INTEGER NOT NULL DEFAULT 14');
       // A device the principal has vouched for stays signed in, on a sliding
       // window, instead of being turned out every thirty days. See
       // lib/devices.js.

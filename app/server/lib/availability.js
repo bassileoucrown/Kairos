@@ -1,11 +1,46 @@
 const db = require('./db');
 const { zonedTimeToUtc, todayInZone, addCalendarDays, dayOfWeek } = require('./timezone');
 
-const BOOKING_WINDOW_DAYS = 14;
+// How far ahead the diary is open, when nobody has said otherwise. This was
+// the only answer the platform had; it is now the starting one.
+const DEFAULT_WINDOW_DAYS = 14;
+
+// The lengths offered, and the outer limits of what will be accepted. A day is
+// the shortest thing that is still a window — anything less is "not open" and
+// is said by having no hours, not by having a window of zero. A year is where
+// a rolling window stops being a window and becomes a diary somebody has to
+// maintain by hand.
+const WINDOW_CHOICES = [
+  { days: 1, label: 'A day' },
+  { days: 3, label: 'Three days' },
+  { days: 7, label: 'A week' },
+  { days: 14, label: 'Two weeks' },
+  { days: 30, label: 'A month' },
+  { days: 60, label: 'Two months' },
+  { days: 90, label: 'Three months' },
+];
+const MIN_WINDOW_DAYS = 1;
+const MAX_WINDOW_DAYS = 365;
+
+/** The window to use for an owner, however old or odd their row is. */
+function windowDaysFor(owner) {
+  const n = Number(owner?.booking_window_days);
+  if (!Number.isInteger(n) || n < MIN_WINDOW_DAYS || n > MAX_WINDOW_DAYS) return DEFAULT_WINDOW_DAYS;
+  return n;
+}
+
+/** Why this window is unusable, or null. Returns prose; callers show it. */
+function windowProblem(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return 'Choose how far ahead people can book.';
+  if (n < MIN_WINDOW_DAYS) return 'The diary has to be open for at least a day.';
+  if (n > MAX_WINDOW_DAYS) return "A year ahead is as far as Kairos will hold open.";
+  return null;
+}
 
 /**
- * Computes open booking slots for a meeting type over the next
- * BOOKING_WINDOW_DAYS, starting from "today" in the owner's timezone.
+ * Computes open booking slots for a meeting type over the owner's booking
+ * window, starting from "today" in the owner's timezone.
  * Returns an array of { startUtc: Date, endUtc: Date }, soonest first.
  */
 async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
@@ -34,7 +69,7 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   const slots = [];
   let cursor = todayInZone(owner.timezone, now);
 
-  for (let i = 0; i < BOOKING_WINDOW_DAYS; i++) {
+  for (let i = 0, days = windowDaysFor(owner); i < days; i++) {
     const date = i === 0 ? cursor : addCalendarDays(cursor, i);
     const dow = dayOfWeek(date);
     const dayRules = rulesByDay.get(dow) || [];
@@ -67,4 +102,12 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   return slots;
 }
 
-module.exports = { getOpenSlots, BOOKING_WINDOW_DAYS };
+module.exports = {
+  getOpenSlots,
+  windowDaysFor,
+  windowProblem,
+  WINDOW_CHOICES,
+  DEFAULT_WINDOW_DAYS,
+  MIN_WINDOW_DAYS,
+  MAX_WINDOW_DAYS,
+};
