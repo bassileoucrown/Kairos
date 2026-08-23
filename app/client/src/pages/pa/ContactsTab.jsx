@@ -4,7 +4,28 @@ import { api } from '../../lib/api.js';
 const TIER_LABELS = { inner_circle: 'Inner Circle', close: 'Close', professional: 'Professional' };
 const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
+// Month-day, said the way a person says it rather than as the storage format.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+function monthDay(value) {
+  if (!MONTH_DAY_RE.test(value || '')) return value || '';
+  const [m, d] = value.split('-');
+  return `${Number(d)} ${MONTHS[Number(m) - 1]}`;
+}
+
+/**
+ * One person, read before it is edited.
+ *
+ * Every card used to be a permanently open editing form: a tier dropdown, two
+ * date boxes and an empty notes area, per contact, always. Seven contacts made
+ * seven of each, so the page was a data-entry sheet where the only thing
+ * actually wanted most of the time — who is this, how well do we know them,
+ * what did we agree — had to be read out of the gaps between form controls.
+ *
+ * So it reads as a line, and opens when there is something to change.
+ */
 function ContactCard({ contact, ownerId, onSaved }) {
+  const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(contact.notes);
   const [tier, setTier] = useState(contact.relationshipTier);
   const [birthday, setBirthday] = useState(contact.birthday || '');
@@ -29,51 +50,82 @@ function ContactCard({ contact, ownerId, onSaved }) {
     }
   }
 
+  const who = contact.name || contact.email;
+  const dates = [
+    contact.birthday && `Birthday ${monthDay(contact.birthday)}`,
+    contact.anniversary && `Anniversary ${monthDay(contact.anniversary)}`,
+  ].filter(Boolean);
+
   return (
-    <div className="card">
-      <div className="meeting-type-card" style={{ alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <div className="name">{contact.name || contact.email}</div>
-          <div className="meta">
-            {contact.email} · {contact.meetingCount} meeting{contact.meetingCount === 1 ? '' : 's'}
-            {contact.lastMeetingAt ? ` · last ${new Date(contact.lastMeetingAt).toLocaleDateString()}` : ''}
-          </div>
+    <div className={'card contact-card' + (open ? ' is-open' : '')}>
+      <div className="contact-head">
+        <div className="contact-who">
+          <span className="name">{who}</span>
+          <span className={`pill tier-${contact.relationshipTier}`}>
+            {TIER_LABELS[contact.relationshipTier] || contact.relationshipTier}
+          </span>
+        </div>
+        <button
+          className="itin-tool"
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open ? 'Done' : 'Edit'}
+        </button>
+      </div>
 
-          {error && <div className="alert alert-error" style={{ marginTop: 8 }}>{error}</div>}
+      <div className="meta contact-meta">
+        {contact.email} · {contact.meetingCount} meeting{contact.meetingCount === 1 ? '' : 's'}
+        {contact.lastMeetingAt ? ` · last ${new Date(contact.lastMeetingAt).toLocaleDateString()}` : ''}
+        {dates.length > 0 && ` · ${dates.join(' · ')}`}
+      </div>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 8 }}>
-            <select aria-label={`Relationship tier for ${contact.name || contact.email}`} value={tier} onChange={(e) => setTier(e.target.value)} style={{ width: 'auto', fontSize: '0.82rem', padding: '6px 8px' }}>
+      {/* What was agreed about this person is the reason the record exists, so
+          it is read without opening anything. Absent, it says nothing at all
+          rather than showing an empty box. */}
+      {!open && contact.notes && <p className="contact-notes">{contact.notes}</p>}
+
+      {error && <div className="alert alert-error" style={{ marginTop: 8 }}>{error}</div>}
+
+      {open && (
+        <>
+          <div className="contact-fields">
+            <select
+              aria-label={`Relationship tier for ${who}`}
+              value={tier}
+              onChange={(e) => setTier(e.target.value)}
+            >
               {Object.entries(TIER_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
             <input
               type="text"
-              aria-label={`Birthday for ${contact.name || contact.email}`}
+              aria-label={`Birthday for ${who}`}
               placeholder="Birthday MM-DD"
               value={birthday}
               onChange={(e) => setBirthday(e.target.value)}
-              style={{ width: 130, fontSize: '0.82rem', padding: '6px 8px' }}
             />
             <input
               type="text"
-              aria-label={`Anniversary for ${contact.name || contact.email}`}
+              aria-label={`Anniversary for ${who}`}
               placeholder="Anniversary MM-DD"
               value={anniversary}
               onChange={(e) => setAnniversary(e.target.value)}
-              style={{ width: 150, fontSize: '0.82rem', padding: '6px 8px' }}
             />
           </div>
           <textarea
             value={notes}
+            aria-label={`Notes about ${who}`}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="PA notes — preferences, context, anything worth remembering"
-            style={{ minHeight: 50 }}
+            style={{ minHeight: 60 }}
           />
-        </div>
-      </div>
-      {dirty && (
-        <button className="btn btn-primary btn-sm" type="button" onClick={save} disabled={saving} style={{ marginTop: 10 }}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+          {dirty && (
+            <button className="btn btn-primary btn-sm" type="button" onClick={save} disabled={saving} style={{ marginTop: 10 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
+        </>
       )}
     </div>
   );

@@ -6,6 +6,12 @@ import VideoJoinLink from '../../components/VideoJoinLink.jsx';
 
 const SCOPES = [
   { id: 'upcoming', label: 'Upcoming' },
+  // Requests nobody has answered. The backend has always been able to list
+  // these; this screen simply never asked. So an office with four people
+  // waiting on a decision read "Nothing booked ahead. Share a meeting type
+  // link to get the first one." — advice to go drum up the business it
+  // already had, one tab away in the approval queue.
+  { id: 'pending', label: 'Waiting' },
   { id: 'past', label: 'Past' },
   // Cancelled and declined together: to whoever is looking, both mean the
   // meeting is not happening, and splitting them would mean checking two
@@ -15,6 +21,7 @@ const SCOPES = [
 
 const EMPTY = {
   upcoming: 'Nothing booked ahead. Share a meeting type link to get the first one.',
+  pending: 'Nothing is waiting on a decision.',
   past: 'No meetings behind you yet.',
   cancelled: 'Nothing has been cancelled or declined.',
 };

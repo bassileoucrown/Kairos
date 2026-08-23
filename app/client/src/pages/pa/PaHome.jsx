@@ -130,7 +130,7 @@ export default function PaHome() {
             : <div className="empty-state">
                 {current.name} hasn't given you access to their meeting types.
               </div>)}
-          {tab === 'approvals' && <ApprovalsTab ownerId={ownerId} />}
+          {tab === 'approvals' && <ApprovalsTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'bookings' && <BookingsTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'calendar' && <CalendarTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'contacts' && <ContactsTab ownerId={ownerId} />}

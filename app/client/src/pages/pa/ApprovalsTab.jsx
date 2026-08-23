@@ -5,7 +5,11 @@ import FormatChoice from '../../components/FormatChoice.jsx';
 
 const TIER_LABELS = { 3: 'Priority', 4: 'Inner Circle' };
 
-export default function ApprovalsTab({ ownerId }) {
+// `timezone` is the principal's, passed down the same way BookingsTab and
+// CalendarTab already take it, so every screen on the Desk states a time in
+// one zone rather than each in whichever it happened to have to hand.
+export default function ApprovalsTab({ ownerId, timezone = null }) {
+  const zone = timezone || 'UTC';
   const [bookings, setBookings] = useState(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -87,7 +91,22 @@ export default function ApprovalsTab({ ownerId }) {
               <div>
                 <div className="when">
                   <span className="pill" style={{ marginRight: 8 }}>{TIER_LABELS[b.accessTier] || `Tier ${b.accessTier}`}</span>
-                  {dayLabelInZone(b.startAt, b.bookerTimezone)} · {timeLabelInZone(b.startAt, b.bookerTimezone)} ({b.bookerTimezone})
+                  {/* The principal's own time first. The question being
+                      answered here is whether this fits their day, and it was
+                      being asked in the booker's zone — so an assistant
+                      deciding on a 9am Lagos meeting read "8:00 AM (UTC)" and
+                      had to do the arithmetic themselves, on the one screen
+                      where getting it wrong puts somebody in the wrong place.
+                      The booker's time still follows when the two differ,
+                      because "6:00 AM for them" is worth knowing before you
+                      agree to it. */}
+                  {dayLabelInZone(b.startAt, zone)} · {timeLabelInZone(b.startAt, zone)}
+                  {b.bookerTimezone && b.bookerTimezone !== zone && (
+                    <span className="when-theirs">
+                      {' '}· {timeLabelInZone(b.startAt, b.bookerTimezone)} for them
+                      ({b.bookerTimezone.replace('_', ' ')})
+                    </span>
+                  )}
                 </div>
                 <div className="meta">{b.meetingTypeName} with {b.bookerName} ({b.bookerEmail})</div>
               </div>
