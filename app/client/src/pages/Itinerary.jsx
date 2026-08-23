@@ -4,7 +4,7 @@ import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import RunningLate from '../components/RunningLate.jsx';
 import BuildTrip from '../components/BuildTrip.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
-import { ScheduleEntry, KIND_ICON } from './Today.jsx';
+import { ScheduleEntry, KIND_ICON, shapeOf, span } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
 import { useAsk } from '../components/Ask.jsx';
@@ -257,13 +257,27 @@ export default function Itinerary() {
   const entries = data?.entries || [];
   const viewerIsPrincipal = data?.viewerIsPrincipal !== false;
 
+  // Planning happens on days that are not today, and most of what this screen
+  // shows is some other Tuesday. A day that is not today has no "now" in it,
+  // so it gets no now line and nothing on it is running, finished, or next.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const isToday = date === todayKey;
+  const rows = shapeOf(entries, isToday ? Date.now() : null);
+
+  // The same sentence Today opens with, so the two screens describe one day
+  // the same way rather than each in its own dialect.
+  const summary = entries.length === 0
+    ? 'Nothing on it yet.'
+    : `${entries.length} item${entries.length === 1 ? '' : 's'}, `
+      + `${entries[0].startLabel} until `
+      + `${entries[entries.length - 1].endLabel || entries[entries.length - 1].startLabel}.`;
+
   return (
     <AppShell
       title="Itinerary"
       active="itinerary"
       actions={
         <>
-      {askDialog}
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => window.print()}>
             Print day sheet
           </button>
@@ -276,6 +290,7 @@ export default function Itinerary() {
         </>
       }
     >
+      {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="day-nav no-print">
@@ -288,13 +303,23 @@ export default function Itinerary() {
           onClick={() => setDate(new Date().toISOString().slice(0, 10))}>Today</button>
       </div>
 
-      <h2 className="day-heading">{friendly(date)}</h2>
-      {data && (
-        <p className="tz-note" style={{ marginBottom: 14 }}>
-          {data.principal.name}'s day, shown in {data.timezone.replace('_', ' ')}.
-          {entries.length > 0 && ` ${entries.length} item${entries.length === 1 ? '' : 's'}.`}
-        </p>
-      )}
+      {/* The same masthead Today wears, because it is the same day — read
+          there, built here. */}
+      <header className="today-head">
+        <h1 className="today-date day-heading">
+          {friendly(date)}
+          {isToday && <span className="today-badge">Today</span>}
+        </h1>
+        {data && (
+          <p className="today-summary tz-note">
+            {summary}
+            <span className="today-zone">
+              {viewerIsPrincipal ? '' : `${data.principal.name}'s day · `}
+              {data.timezone.replace('_', ' ')}
+            </span>
+          </p>
+        )}
+      </header>
 
       {buildingTrip && (
         <BuildTrip
@@ -335,68 +360,110 @@ export default function Itinerary() {
         </div>
       )}
 
-      <ul className="sched-list">
-        {entries.map((e) => (
-          <li className="itin-entry" key={e.id}>
-            <ScheduleEntry e={e} />
-            {e.source === 'itinerary' && !viewerIsPrincipal && e.status === 'draft' && (
-              <>
-                <button className="btn btn-primary btn-sm no-print" type="button"
-                  onClick={() => act(e.id, 'publish')}>Publish</button>
-                <button className="btn btn-sm no-print" type="button"
-                  onClick={async () => {
-                    const note = await ask({
-                      title: 'Send this for approval',
-                      label: 'Anything they should know',
-                      hint: 'Goes to them with the item. Leave it empty if it speaks for itself.',
-                      multiline: true,
-                      optional: true,
-                      confirmLabel: 'Send it',
-                    });
-                    if (note === null) return;
-                    act(e.id, 'propose', { note });
-                  }}>Ask them</button>
-              </>
-            )}
-            {e.source === 'itinerary' && !viewerIsPrincipal && e.status === 'proposed' && (
-              <span className="pill is-warn no-print">Waiting on them</span>
-            )}
-            {e.source === 'itinerary' && viewerIsPrincipal && e.status === 'proposed' && (
-              <>
-                <button className="btn btn-primary btn-sm no-print" type="button"
-                  onClick={() => act(e.id, 'decide', { approve: true })}>Approve</button>
-                <button className="btn btn-sm no-print" type="button"
-                  onClick={async () => {
-                    const note = await ask({
-                      title: 'Decline this',
-                      label: 'Anything they should know',
-                      hint: 'It goes back to their drafts rather than away, so a reason saves a round trip.',
-                      multiline: true,
-                      optional: true,
-                      confirmLabel: 'Decline',
-                    });
-                    if (note === null) return;
-                    act(e.id, 'decide', { approve: false, note });
-                  }}>Decline</button>
-              </>
-            )}
-            {e.source === 'itinerary' && e.status !== 'draft' && (
-              <button className="btn btn-sm no-print" type="button"
-                aria-label={`${e.title} is running late`} onClick={() => setLateItem(e)}>Running late</button>
-            )}
-            {/* Offered, never applied on its own: a schedule that reshuffles
-                itself because traffic moved is one nobody trusts. */}
-            {e.source === 'itinerary' && e.location && e.destination && (
-              <TravelTime ownerId={ownerId} item={e} onApplied={load} />
-            )}
-            {e.source === 'itinerary' && (
-              <button className="btn btn-danger btn-sm no-print" type="button"
-                aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>
-            )}
-            {e.source === 'booking' && <span className="pill no-print">From a booking</span>}
-          </li>
-        ))}
-      </ul>
+      {/* The day hangs off the same spine it does on Today: same gaps, same
+          rail, same proportions. One day, built here and read there.
+
+          The controls sit under each entry rather than beside it. Beside it
+          they pushed each card in from the right by however many controls that
+          row happened to carry, so five entries had five different widths and
+          the right edge of the day sawtoothed down the page. And the two that
+          are decisions — publish it, ask about it — are buttons, while the
+          three that are upkeep are words, because a red Remove on every row
+          was the loudest thing on a screen for planning a day. */}
+      <ol className="sched-list day-spine">
+        {rows.map((row, i) => {
+          if (row.type === 'now') {
+            return (
+              <li className={'day-now no-print' + (row.trailing ? ' is-trailing' : '')} key="now">
+                <span className="day-now-label">now</span>
+              </li>
+            );
+          }
+          if (row.type === 'gap') {
+            return (
+              <li className="day-gap" key={`gap-${i}`} style={{ height: row.height }}>
+                {row.height >= 34 && <span className="day-gap-label">{span(row.mins)} clear</span>}
+                {row.holdsNow && <span className="day-now-inline no-print" aria-label="now" />}
+              </li>
+            );
+          }
+          const { e } = row;
+          const mine = e.source === 'itinerary';
+          return (
+            <li
+              className={'day-item itin-entry'
+                + (row.running ? ' is-running' : '')
+                + (row.done ? ' is-done' : '')
+                + (e.status === 'draft' ? ' is-draft' : '')
+                + (e.status === 'proposed' ? ' is-proposed' : '')}
+              key={e.id}
+            >
+              <ScheduleEntry e={e} viewerIsPrincipal={viewerIsPrincipal} />
+
+              <div className="itin-actions no-print">
+                {mine && !viewerIsPrincipal && e.status === 'draft' && (
+                  <>
+                    <button className="btn btn-primary btn-sm" type="button"
+                      onClick={() => act(e.id, 'publish')}>Publish</button>
+                    <button className="btn btn-secondary btn-sm" type="button"
+                      onClick={async () => {
+                        const note = await ask({
+                          title: 'Send this for approval',
+                          label: 'Anything they should know',
+                          hint: 'Goes to them with the item. Leave it empty if it speaks for itself.',
+                          multiline: true,
+                          optional: true,
+                          confirmLabel: 'Send it',
+                        });
+                        if (note === null) return;
+                        act(e.id, 'propose', { note });
+                      }}>Ask them</button>
+                  </>
+                )}
+                {mine && viewerIsPrincipal && e.status === 'proposed' && (
+                  <>
+                    <button className="btn btn-primary btn-sm" type="button"
+                      onClick={() => act(e.id, 'decide', { approve: true })}>Approve</button>
+                    <button className="btn btn-secondary btn-sm" type="button"
+                      onClick={async () => {
+                        const note = await ask({
+                          title: 'Decline this',
+                          label: 'Anything they should know',
+                          hint: 'It goes back to their drafts rather than away, so a reason saves a round trip.',
+                          multiline: true,
+                          optional: true,
+                          confirmLabel: 'Decline',
+                        });
+                        if (note === null) return;
+                        act(e.id, 'decide', { approve: false, note });
+                      }}>Decline</button>
+                  </>
+                )}
+
+                {/* Not only a live-day alert here: on a day still being
+                    planned this is the question "if this slips an hour, does
+                    the flight still work?", which is exactly when it is worth
+                    asking. So it stays on every day, quietly. */}
+                {mine && e.status !== 'draft' && (
+                  <button className="itin-tool" type="button"
+                    aria-label={`${e.title} is running late`}
+                    onClick={() => setLateItem(e)}>Running late</button>
+                )}
+                {/* Offered, never applied on its own: a schedule that reshuffles
+                    itself because traffic moved is one nobody trusts. */}
+                {mine && e.location && e.destination && (
+                  <TravelTime ownerId={ownerId} item={e} onApplied={load} />
+                )}
+                {mine && (
+                  <button className="itin-tool is-danger" type="button"
+                    aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>
+                )}
+                {e.source === 'booking' && <span className="pill">From a booking</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
 
     </AppShell>
   );
@@ -437,7 +504,9 @@ function TravelTime({ ownerId, item, onApplied }) {
 
   if (!state) {
     return (
-      <button className="btn btn-sm no-print" type="button" disabled={busy}
+      // A word, like the other upkeep controls beside it — it was the one
+      // button left in a row of links.
+      <button className="itin-tool no-print" type="button" disabled={busy}
         onClick={() => ask(false)}>
         {busy ? 'Asking…' : 'Travel time'}
       </button>
@@ -451,7 +520,7 @@ function TravelTime({ ownerId, item, onApplied }) {
       {state.previousMinutes > 0 && state.previousMinutes !== state.minutes
         && ` · was ${state.previousMinutes}`}
       {!state.applied && (
-        <button className="btn btn-sm no-print" type="button" disabled={busy}
+        <button className="btn btn-secondary btn-sm no-print" type="button" disabled={busy}
           onClick={() => ask(true)}>Use it</button>
       )}
       {state.applied && <span className="pill">Applied</span>}

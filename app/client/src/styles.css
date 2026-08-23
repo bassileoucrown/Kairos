@@ -2113,6 +2113,10 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   margin: 0;
   padding: 0 0 0 22px;
   position: relative;
+  /* A readable measure, whatever the window. Given the whole of a desktop the
+     entries ran past a thousand pixels and every title sat alone at the far
+     left of its own card. */
+  max-width: 860px;
 }
 /* The rail the day hangs from. */
 .day-spine::before {
@@ -2236,6 +2240,66 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   color: var(--accent);
 }
 .day-item.is-next::before { top: 35px; border-color: var(--accent); }
+
+/* ---- Itinerary: the same day, with the tools for building it ----
+   The entry takes the full width and the controls sit under it, so every card
+   in the day ends at the same place however many controls its row carries. */
+.day-item.itin-entry { display: block; }
+.itin-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 8px 0 2px 2px;
+}
+/* Upkeep is a word; a decision is a button. A red Remove on every row was the
+   loudest thing on a screen whose job is planning a day. */
+.itin-tool {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.itin-tool:hover { color: var(--text); text-decoration-color: var(--text-muted); }
+.itin-tool.is-danger:hover { color: var(--danger); text-decoration-color: var(--danger); }
+.itin-actions .btn { margin-right: 2px; }
+.itin-actions .travel-note { font-size: 0.78rem; }
+
+/* A draft is not yet part of the day and a proposal is not yet agreed, so
+   neither gets a full node on the rail. Dashed was the obvious idea and the
+   wrong one: at nine pixels across, a dashed ring renders as three or four
+   stray fragments that read as a rendering fault rather than a state. Smaller
+   and fainter says the same thing and stays a circle. */
+.day-item.is-draft::before {
+  width: 7px; height: 7px;
+  left: -20px; top: 19px;
+  border-width: 1px;
+  opacity: 0.55;
+}
+.day-item.is-proposed::before { border-color: var(--warn); background: var(--surface); }
+
+/* Today, named on the day it is, so a planner three weeks out knows at a
+   glance when it has come back to the present. */
+.today-badge {
+  margin-left: 10px;
+  vertical-align: middle;
+  font-family: var(--font);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
 
 /* ---- Quieter than the day ---- */
 .today-grid .section-head {

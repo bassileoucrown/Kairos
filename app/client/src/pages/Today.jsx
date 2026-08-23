@@ -34,7 +34,7 @@ function friendlyDate(key) {
 }
 
 // How long a stretch of minutes is, said the way somebody says it.
-function span(mins) {
+export function span(mins) {
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -54,18 +54,25 @@ function span(mins) {
  * The clamp is the whole design decision. Unclamped it is a chart nobody can
  * read; unproportioned it is the list this replaces. Between the two it is a
  * shape you take in before you read a word of it.
+ *
+ * Pass now = null for a day that is not today — a Tuesday next month has no
+ * "now" in it, and calling one of its entries running, finished or next would
+ * be a lie the screen then acts on.
  */
-function shapeOf(schedule, now) {
+export function shapeOf(schedule, now) {
   const rows = [];
-  let nowPlaced = false;
-  let liveClaimed = false;
+  const dated = now !== null;
+  // With no clock to place, there is no now line to draw and nothing to call
+  // live, so both are settled before the loop starts.
+  let nowPlaced = !dated;
+  let liveClaimed = !dated;
 
   for (let i = 0; i < schedule.length; i++) {
     const e = schedule[i];
     const start = new Date(e.startAt).getTime();
     const end = e.endAt ? new Date(e.endAt).getTime() : start;
-    const running = now >= start && now < end;
-    const done = now >= end && end > start;
+    const running = dated && now >= start && now < end;
+    const done = dated && now >= end && end > start;
 
     // The now line goes above the first entry that has not started.
     if (!nowPlaced && now < start) {
@@ -77,7 +84,7 @@ function shapeOf(schedule, now) {
     // meeting at seven in the evening, and offering the option on all six
     // entries turned the day into a column of grey buttons louder than the
     // day itself.
-    const live = !done && !liveClaimed;
+    const live = !liveClaimed && !done;
     if (live) liveClaimed = true;
     rows.push({ type: 'item', e, running, done, live });
 
@@ -116,7 +123,12 @@ function untilLabel(startAt) {
 // One entry, wherever a day is shown. A div rather than an li: both callers
 // wrap it in something of their own — a spine node here, a row of controls on
 // the Itinerary — and an li inside a div inside a ul was invalid in both.
-export function ScheduleEntry({ e }) {
+// `viewerIsPrincipal` decides one word, and it matters: a proposed item is
+// "awaiting you" to the principal being asked and "waiting on them" to the
+// assistant who did the asking. The Itinerary used to render its own second
+// pill for the assistant's side, so a row could carry both at once and tell
+// one reader two opposite things about the same item.
+export function ScheduleEntry({ e, viewerIsPrincipal = true }) {
   return (
     <div className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
       <div className="sched-time">
@@ -127,7 +139,11 @@ export function ScheduleEntry({ e }) {
       <div className="sched-main">
         <div className="sched-title">
           {e.title}
-          {e.status === 'proposed' && <span className="pill is-warn sched-pill">Awaiting you</span>}
+          {e.status === 'proposed' && (
+            <span className="pill is-warn sched-pill">
+              {viewerIsPrincipal ? 'Awaiting you' : 'Waiting on them'}
+            </span>
+          )}
           {e.status === 'draft' && <span className="pill is-off sched-pill">Draft</span>}
         </div>
         <div className="sched-meta">
