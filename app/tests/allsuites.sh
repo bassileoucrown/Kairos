@@ -15,10 +15,20 @@ set -u
 SC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SC"
 
+# Set DATABASE_URL to a Postgres URL to run the whole board against the
+# backend production actually uses. Worth doing before a release: SQLite is the
+# more permissive of the two, so a statement it accepts can still be rejected
+# by Postgres, and that failure is invisible here otherwise. One reached main
+# that way — a uniqueness check written as `(? IS NULL OR id != ?)`, which
+# Postgres cannot type, turning every attempt to save a contact into a 500.
+#
+# Each suite gets an empty database, the same way the SQLite ones get an empty
+# file. See resetpg.js for why that is not optional.
 pass=0; fail=0; failed=""
 for f in b*.js; do
   s="${f%.js}"
   printf '%-12s ' "$s"
+  if ! node resetpg.js; then echo "FAIL[db] could not reset the database"; fail=$((fail+1)); failed="$failed $s"; continue; fi
   timeout 420 node "$f" > "/tmp/out-$s.log" 2>&1
   rc=$?
   last=$(grep -v ExperimentalWarning "/tmp/out-$s.log" | grep -v 'trace-warnings' | tail -1)

@@ -1,6 +1,6 @@
 # The suites
 
-Fifty-one end-to-end suites. No framework: each is a standalone Node script that
+Sixty-five end-to-end suites. No framework: each is a standalone Node script that
 prints ticks and crosses, exits non-zero on failure, and ends with one sentence
 saying what it proved. That last line is the point — `Nobody held up a name, and
 nobody had to guess` tells you what broke; `12 assertions failed` does not.
@@ -11,7 +11,7 @@ through `playwright-core`.
 ## Running them
 
 ```sh
-bash app/tests/allsuites.sh     # all 51, sequentially
+bash app/tests/allsuites.sh     # all 65, sequentially
 node app/tests/btravel.js       # one
 ```
 
@@ -38,6 +38,23 @@ DATABASE_URL=postgres://…/kold    bash app/tests/allsuites.sh # older database
 
 `pgmatrix.sh` and `sigmatrix.sh` run narrower slices across those same
 configurations when you only need to prove one area.
+
+**Do not skip the Postgres runs on anything that writes SQL.** SQLite is the
+more permissive of the two, so a statement it accepts can still be rejected
+outright by Postgres — and that failure is invisible in the SQLite run, on the
+backend production actually uses. One reached `main` that way: a uniqueness
+check written as `(? IS NULL OR id != ?)` so a single query could serve two
+callers. Postgres cannot infer a type for a bare parameter as the whole left
+side of `IS NULL`, rejected it with `42P18`, and every attempt to save a
+contact became a 500. The SQLite board was green throughout.
+
+On Postgres the runner empties the database before each suite (`resetpg.js`,
+which is a no-op on SQLite). This is not tidiness. Thirty of the suites delete
+the SQLite file on startup, so they each open on nothing; Postgres has no file
+to delete, so without the reset every suite inherits what the previous
+sixty-four left behind, and the ones that count things fail on leftovers rather
+than on defects. Two did exactly that, and both passed against an empty
+database. A Postgres failure is worth believing only when the run had isolation.
 
 `bfail` is the one suite that cannot run without Postgres at all: it asserts on
 database *failure* modes — a wrong password, a missing database, a garbled URL,

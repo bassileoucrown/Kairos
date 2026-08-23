@@ -35,6 +35,29 @@ function session() {
   };
 }
 
+/**
+ * One row of `essentials`, read from whichever backend is in play, with the
+ * application not involved.
+ */
+async function readEssentialRaw(field) {
+  const url = process.env.DATABASE_URL || '';
+  if (/^postgres/.test(url)) {
+    const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
+    const client = new Client({ connectionString: url });
+    await client.connect();
+    const r = await client.query(
+      'SELECT value, value_enc FROM essentials WHERE field = $1', [field],
+    );
+    await client.end();
+    return r.rows[0] || {};
+  }
+  const { DatabaseSync } = require('node:sqlite');
+  const raw = new DatabaseSync(`${ROOT}/app/server/data/kairos.sqlite`);
+  const row = raw.prepare('SELECT value, value_enc FROM essentials WHERE field = ?').get(field);
+  raw.close();
+  return row || {};
+}
+
 function boot(key) {
   return spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
@@ -134,15 +157,19 @@ async function waitReady() {
     ok('and two-factor can be set up', nowTwofa.s === 200 || nowTwofa.s === 201, String(nowTwofa.s));
 
     head('The stored identity detail is ciphertext, not the passport number:');
-    const { DatabaseSync } = require('node:sqlite');
-    const raw = new DatabaseSync(`${ROOT}/app/server/data/kairos.sqlite`);
-    const row = raw.prepare("SELECT value, value_enc FROM essentials WHERE field = 'passport_number'").get();
+    // Read straight out of the database, going around the application
+    // entirely. That is the whole point of this check — the app saying the
+    // value is encrypted proves nothing, the column has to show it — so it
+    // opens whichever store the server was actually given rather than
+    // assuming the SQLite file. Pointed at Postgres, this used to look in a
+    // SQLite file the server had never written to and fail with "no such
+    // table: essentials", which reads like a missing migration and is not one.
+    const row = await readEssentialRaw('passport_number');
     ok('the plaintext column is empty', !row.value);
     ok('and the encrypted one is versioned ciphertext', /^v1:/.test(row.value_enc || ''),
       String(row.value_enc).slice(0, 24));
     ok('containing nothing that looks like the number',
       !String(row.value_enc).includes('Z99887766'));
-    raw.close();
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
