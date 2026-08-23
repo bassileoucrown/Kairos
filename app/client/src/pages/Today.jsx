@@ -33,6 +33,78 @@ function friendlyDate(key) {
   return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+// How long a stretch of minutes is, said the way somebody says it.
+function span(mins) {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+}
+
+/**
+ * The day, as a shape rather than a list.
+ *
+ * A list of five cards tells you there are five things. It does not tell you
+ * that four of them are before noon and the fifth is at seven, which is the
+ * thing somebody actually wants to know when they open this at breakfast — and
+ * the thing a diary is for. So the space between two entries on screen is
+ * proportional to the space between them in the day, clamped so that a
+ * nine-hour gap does not push the evening off the bottom of a phone.
+ *
+ * The clamp is the whole design decision. Unclamped it is a chart nobody can
+ * read; unproportioned it is the list this replaces. Between the two it is a
+ * shape you take in before you read a word of it.
+ */
+function shapeOf(schedule, now) {
+  const rows = [];
+  let nowPlaced = false;
+  let liveClaimed = false;
+
+  for (let i = 0; i < schedule.length; i++) {
+    const e = schedule[i];
+    const start = new Date(e.startAt).getTime();
+    const end = e.endAt ? new Date(e.endAt).getTime() : start;
+    const running = now >= start && now < end;
+    const done = now >= end && end > start;
+
+    // The now line goes above the first entry that has not started.
+    if (!nowPlaced && now < start) {
+      rows.push({ type: 'now' });
+      nowPlaced = true;
+    }
+    // "Running late" belongs on exactly one entry: whatever is happening, or
+    // if nothing is, whatever is next. You cannot be late for this morning's
+    // meeting at seven in the evening, and offering the option on all six
+    // entries turned the day into a column of grey buttons louder than the
+    // day itself.
+    const live = !done && !liveClaimed;
+    if (live) liveClaimed = true;
+    rows.push({ type: 'item', e, running, done, live });
+
+    const next = schedule[i + 1];
+    if (!next) continue;
+    const gapMins = Math.max(0, Math.round((new Date(next.startAt).getTime() - end) / 60000));
+    if (gapMins >= 5) {
+      // The now line belongs in the gap it actually falls inside, drawn where
+      // it falls rather than shoved to the top of the next thing. Claiming it
+      // here is also what stops it being drawn twice: the check at the top of
+      // the next iteration would otherwise place a second one above `next`.
+      const holdsNow = now >= end && now < new Date(next.startAt).getTime();
+      if (holdsNow) nowPlaced = true;
+      rows.push({
+        type: 'gap',
+        mins: gapMins,
+        // Roughly half a pixel a minute, floored so a breather is still
+        // visible and ceilinged so an empty afternoon does not become scroll.
+        height: Math.min(84, Math.max(14, Math.round(gapMins * 0.5))),
+        holdsNow,
+      });
+    }
+  }
+  if (!nowPlaced && schedule.length > 0) rows.push({ type: 'now', trailing: true });
+  return rows;
+}
+
 function untilLabel(startAt) {
   const mins = Math.round((new Date(startAt) - Date.now()) / 60000);
   if (mins < 0) return 'now';
@@ -41,9 +113,12 @@ function untilLabel(startAt) {
   return hrs < 24 ? `in ${hrs} hr${hrs === 1 ? '' : 's'}` : 'later';
 }
 
+// One entry, wherever a day is shown. A div rather than an li: both callers
+// wrap it in something of their own — a spine node here, a row of controls on
+// the Itinerary — and an li inside a div inside a ul was invalid in both.
 export function ScheduleEntry({ e }) {
   return (
-    <li className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
+    <div className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
       <div className="sched-time">
         <span className="sched-start">{e.startLabel}</span>
         {e.endLabel && <span className="sched-end">{e.endLabel}</span>}
@@ -73,7 +148,7 @@ export function ScheduleEntry({ e }) {
       {e.videoRoom && (
         <a className="btn btn-secondary btn-sm" href={`https://meet.jit.si/${e.videoRoom}`} target="_blank" rel="noreferrer">Join</a>
       )}
-    </li>
+    </div>
   );
 }
 
@@ -101,9 +176,22 @@ export function DirectLine({ line, isSelf, principalName }) {
   );
 }
 
+// A clock that ticks, so a countdown on this screen is true rather than true
+// at the moment the page happened to load. Half a minute is fine for a screen
+// that speaks in minutes, and cheap enough to leave running.
+function useNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
 export default function Today() {
   // Replaces window.prompt; see components/Ask.jsx.
   const [ask, askDialog] = useAsk();
+  const now = useNow();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -149,34 +237,87 @@ export default function Today() {
 
   const { schedule, nextUp, needsYou, todayTasks, relationships } = data;
 
+  // What the day is, in one sentence, before any of it is read.
+  const firstItem = schedule[0];
+  const lastItem = schedule[schedule.length - 1];
+  const summary = schedule.length === 0
+    ? 'Nothing in the diary.'
+    : `${schedule.length} thing${schedule.length === 1 ? '' : 's'}, `
+      + `${firstItem.startLabel} until ${lastItem.endLabel || lastItem.startLabel}.`;
+
+  // What is happening right now, or what is next. This is the one thing the
+  // screen exists to answer, so it is the one thing said loudly.
+  const running = schedule.find((e) => {
+    const s0 = new Date(e.startAt).getTime();
+    const e0 = e.endAt ? new Date(e.endAt).getTime() : s0;
+    return now >= s0 && now < e0;
+  });
+  const upcoming = nextUp && new Date(nextUp.startAt).getTime() > now ? nextUp : null;
+  const minsLeft = running && running.endAt
+    ? Math.max(0, Math.round((new Date(running.endAt).getTime() - now) / 60000))
+    : null;
+  const rows = shapeOf(schedule, now);
+
   return (
     <AppShell
       title="Today"
       active="today"
-      actions={<Link className="btn btn-primary btn-sm" to="/itinerary">Plan the day</Link>}
+      actions={<Link className="btn btn-secondary btn-sm" to="/itinerary">Plan the day</Link>}
     >
       {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
 
-      <p className="today-date">{friendlyDate(data.date)} · {data.timezone.replace('_', ' ')}</p>
+      {/* The masthead. Set in a serif, because this is the one line on the
+          screen that is a statement rather than a control. */}
+      <header className="today-head">
+        <h1 className="today-date">{friendlyDate(data.date)}</h1>
+        <p className="today-summary">
+          {summary}
+          <span className="today-zone"> {data.timezone.replace('_', ' ')}</span>
+        </p>
+      </header>
+
+      {/* Now. Three states, and the third is worth saying out loud rather
+          than leaving as an absence. */}
+      {running ? (
+        <div className="now-band is-running">
+          <span className="now-label">Now</span>
+          <span className="now-title">{running.title}</span>
+          <span className="now-detail">
+            {minsLeft === null ? running.startLabel
+              : minsLeft === 0 ? 'due to end'
+                : `${span(minsLeft)} left · until ${running.endLabel}`}
+            {running.location ? ` · ${running.location}` : ''}
+          </span>
+          {running.videoRoom && (
+            <a className="btn btn-primary btn-sm" href={`https://meet.jit.si/${running.videoRoom}`}
+              target="_blank" rel="noreferrer">Join</a>
+          )}
+        </div>
+      ) : upcoming ? (
+        <div className="now-band">
+          <span className="now-label">Next {untilLabel(upcoming.startAt)}</span>
+          <span className="now-title">{upcoming.title}</span>
+          <span className="now-detail">
+            {upcoming.startLabel}
+            {upcoming.location ? ` · ${upcoming.location}` : ''}
+          </span>
+        </div>
+      ) : (
+        <div className="now-band is-clear">
+          <span className="now-label">Now</span>
+          <span className="now-title">
+            {schedule.length === 0 ? 'Nothing in the diary today.' : 'The day is clear from here.'}
+          </span>
+        </div>
+      )}
 
       {data.directLine && (
         <DirectLine line={data.directLine} isSelf={data.isSelf} principalName={data.principal.name} />
       )}
 
-      {nextUp && (
-        <div className="next-up">
-          <span className="next-up-label">Next up {untilLabel(nextUp.startAt)}</span>
-          <span className="next-up-title">
-            <span aria-hidden="true">{KIND_ICON[nextUp.kind] || '•'}</span> {nextUp.startLabel} — {nextUp.title}
-          </span>
-          {nextUp.location && <span className="next-up-where">{nextUp.location}</span>}
-        </div>
-      )}
-
       <div className="today-grid">
         <section>
-          <h2 className="section-head">The day</h2>
           {lateItem && (
             <RunningLate
               ownerId={data.principal.id}
@@ -191,23 +332,47 @@ export default function Today() {
               Nothing scheduled. <Link to="/itinerary">Add something to the itinerary</Link>.
             </div>
           ) : (
-            <ul className="sched-list">
-              {schedule.map((e) => (
-                <div className="today-row" key={e.id}>
-                  <ScheduleEntry e={e} />
-                  {e.source === 'itinerary' && (
-                    <button
-                      className="btn btn-sm today-late"
-                      type="button"
-                      aria-label={`${e.title} is running late`}
-                      onClick={() => setLateItem(e)}
-                    >
-                      Running late
-                    </button>
-                  )}
-                </div>
-              ))}
-            </ul>
+            <ol className="sched-list day-spine">
+              {rows.map((row, i) => {
+                if (row.type === 'now') {
+                  return (
+                    <li className={'day-now' + (row.trailing ? ' is-trailing' : '')} key="now">
+                      <span className="day-now-label">now</span>
+                    </li>
+                  );
+                }
+                if (row.type === 'gap') {
+                  return (
+                    <li className="day-gap" key={`gap-${i}`} style={{ height: row.height }}>
+                      {/* Only worth naming when there is enough of it to use. */}
+                      {row.height >= 34 && <span className="day-gap-label">{span(row.mins)} clear</span>}
+                      {row.holdsNow && <span className="day-now-inline" aria-label="now" />}
+                    </li>
+                  );
+                }
+                const { e } = row;
+                return (
+                  <li
+                    className={'day-item today-row'
+                      + (row.running ? ' is-running' : '')
+                      + (row.done ? ' is-done' : '')}
+                    key={e.id}
+                  >
+                    <ScheduleEntry e={e} />
+                    {e.source === 'itinerary' && row.live && (
+                      <button
+                        className="today-late"
+                        type="button"
+                        aria-label={`${e.title} is running late`}
+                        onClick={() => setLateItem(e)}
+                      >
+                        Running late
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
           )}
 
           {todayTasks.length > 0 && (
@@ -303,10 +468,12 @@ export default function Today() {
             </Link>
           ))}
 
-          {/* Both bands, and the difference is the point: one is a warning
-              you can still act on, the other is a report of a deadline that
-              has already gone. */}
-          {(needsYou.dueTasks || needsYou.overdueTasks || []).map((t) => (
+          {/* dueTasks carries both bands, and the difference is the point: one
+              is a warning you can still act on, the other is a report of a
+              deadline that has already gone. (needsYou.overdueTasks is the
+              same rows filtered, kept for the rail's count — reading it here
+              as a fallback was dead code, since dueTasks is always an array.) */}
+          {(needsYou.dueTasks || []).map((t) => (
             <Link
               className={'needs-card ' + (t.band === 'due_soon' ? 'is-warn' : 'is-overdue')}
               key={t.id}

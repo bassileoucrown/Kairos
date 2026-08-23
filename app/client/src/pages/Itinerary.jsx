@@ -337,7 +337,7 @@ export default function Itinerary() {
 
       <ul className="sched-list">
         {entries.map((e) => (
-          <div className="itin-entry" key={e.id}>
+          <li className="itin-entry" key={e.id}>
             <ScheduleEntry e={e} />
             {e.source === 'itinerary' && !viewerIsPrincipal && e.status === 'draft' && (
               <>
@@ -394,7 +394,7 @@ export default function Itinerary() {
                 aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>
             )}
             {e.source === 'booking' && <span className="pill no-print">From a booking</span>}
-          </div>
+          </li>
         ))}
       </ul>
 

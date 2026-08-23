@@ -14,6 +14,12 @@
   --radius: 8px;
   --shadow: 0 1px 2px rgba(28,33,39,0.05), 0 1px 8px rgba(28,33,39,0.04);
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  /* One serif, for the handful of places where Kairos states something rather
+     than offers a control: the date on Today, and nothing else yet. A system
+     stack on purpose — no download, no third-party request from a product that
+     holds passport numbers, and Georgia is a genuinely good face. Swap this one
+     variable for a licensed one when there is a wordmark to match. */
+  --serif: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
 }
 
 * { box-sizing: border-box; }
@@ -876,11 +882,14 @@ textarea { resize: vertical; min-height: 70px; }
 .sched-row.kind-meeting, .sched-row.kind-call { border-left-color: var(--accent); }
 .sched-row.kind-meal, .sched-row.kind-personal { border-left-color: #B3703A; }
 .sched-time {
-  flex: 0 0 66px; display: flex; flex-direction: column;
+  flex: 0 0 72px; display: flex; flex-direction: column;
   font-variant-numeric: tabular-nums;
 }
 .sched-start { font-weight: 600; font-size: 0.88rem; }
+/* Stacked bare, "9:00 AM" over "10:00 AM" reads as two start times. The dash
+   is what makes the second one an ending. */
 .sched-end { font-size: 0.76rem; color: var(--text-muted); }
+.sched-end::before { content: '– '; opacity: 0.65; }
 .sched-icon { font-size: 0.95rem; line-height: 1.5; flex-shrink: 0; }
 .sched-main { flex: 1; min-width: 0; }
 .sched-title { font-weight: 600; font-size: 0.94rem; overflow-wrap: anywhere; }
@@ -2041,4 +2050,187 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
   color: var(--text-muted);
   opacity: 0.75;
+}
+
+/* ============================================================
+   Today
+   ============================================================
+   The screen a principal opens between a car and a lift. Three things, in
+   this order of loudness: what the day is, what is happening now, and the
+   shape of the rest of it. Everything else on the page is quieter than all
+   three, on purpose. */
+
+.today-head { margin-bottom: 18px; }
+.today-date {
+  font-family: var(--serif);
+  font-size: clamp(1.65rem, 5vw, 2.3rem);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0 0 4px;
+}
+.today-summary { margin: 0; color: var(--text-muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.today-zone { opacity: 0.7; }
+.today-zone::before { content: ' · '; }
+
+/* ---- Now ----
+   The one question this screen exists to answer, so it is the one element
+   allowed to be large. A left rule rather than a filled panel: it should read
+   as a statement, not as an alert. */
+.now-band {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 0 14px 16px;
+  margin-bottom: 22px;
+  border-left: 3px solid var(--border);
+  min-width: 0;
+}
+.now-band.is-running { border-left-color: var(--accent); }
+.now-band.is-clear { border-left-color: var(--border); }
+.now-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.now-band.is-running .now-label { color: var(--accent); }
+.now-title {
+  font-family: var(--serif);
+  font-size: clamp(1.15rem, 3.6vw, 1.5rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.now-detail { font-size: 0.88rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.now-band .btn { align-self: flex-start; margin-top: 8px; }
+
+/* ---- The day, as a shape ----
+   The space between two entries is proportional to the space between them in
+   the day. See shapeOf() in Today.jsx for why it is clamped. */
+.day-spine {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 22px;
+  position: relative;
+}
+/* The rail the day hangs from. */
+.day-spine::before {
+  content: '';
+  position: absolute;
+  left: 5px; top: 6px; bottom: 6px;
+  width: 1px;
+  background: var(--border);
+}
+.day-item { position: relative; margin: 0; }
+/* Each entry's node on the rail, coloured by what kind of thing it is —
+   the same colours the entry's own left border already uses. */
+.day-item::before {
+  content: '';
+  position: absolute;
+  left: -21px; top: 18px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+}
+.day-item.is-running::before { border-color: var(--accent); background: var(--accent); }
+.day-item.is-done::before { background: var(--border); border-color: var(--border); }
+.day-item.is-done .sched-row { opacity: 0.62; }
+
+.day-gap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  /* The spine is a flex column, so without this the inline height set by
+     shapeOf() is only a suggestion and the proportions collapse. */
+  flex: 0 0 auto;
+}
+.day-gap-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+  padding-left: 2px;
+}
+
+/* Now, drawn across the day where it actually falls. */
+.day-now, .day-now-inline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 0;
+  margin: 9px 0;
+}
+.day-now::before, .day-now-inline::before {
+  content: '';
+  position: absolute;
+  left: -21px; right: 0;
+  height: 1px;
+  background: var(--danger);
+  opacity: 0.55;
+}
+/* Centred on the rail (which sits at 5.5px inside a 22px indent), the same
+   way each entry's node is. */
+.day-now::after, .day-now-inline::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.day-now-inline { position: absolute; left: 0; right: 0; top: 50%; margin: 0; }
+.day-now-label {
+  position: relative;
+  margin-left: auto;
+  padding: 0 0 0 8px;
+  background: var(--bg);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+/* Nothing left today: the line sits under the last thing rather than
+   pretending there is something after it. */
+.day-now.is-trailing { margin-top: 14px; }
+
+/* One entry at a time offers this, and it is a word rather than a button:
+   it is the escape hatch, not the point of the screen. */
+.today-late {
+  align-self: flex-start;
+  margin-top: 12px;
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.today-late:hover { color: var(--danger); text-decoration-color: var(--danger); }
+
+/* ---- Quieter than the day ---- */
+.today-grid .section-head {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 26px 0 10px;
+}
+.today-grid section:first-child .section-head:first-child { margin-top: 0; }
+
+/* The spine's indent is deliberately NOT responsive: the nodes and the now
+   dot are positioned relative to each entry, the rail relative to the list,
+   and changing the indent at one breakpoint slid the two apart by exactly the
+   difference. One number, everywhere. */
+@media (max-width: 700px) {
+  .now-band { margin-bottom: 18px; }
 }
