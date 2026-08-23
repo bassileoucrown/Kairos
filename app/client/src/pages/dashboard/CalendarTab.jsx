@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
-import { dateKeyInZone, timeLabelInZone, zonedToUtc } from '../../lib/timezones.js';
+import { dateKeyInZone, timeLabelInZone } from '../../lib/timezones.js';
 import VideoJoinLink from '../../components/VideoJoinLink.jsx';
+import { KIND_ICON, KIND_LABEL } from '../Today.jsx';
 
 // How much diary to look at.
 //
@@ -79,22 +80,48 @@ function periodFor(view, anchor) {
   };
 }
 
-function Entry({ booking, timezone, compact }) {
-  const held = booking.status === 'pending';
+// The colour a kind of thing is drawn in, matching the left edge each entry
+// already wears on Today and the Itinerary. One diary, one palette.
+const KIND_COLOR = {
+  flight: '#4C5B7A', train: '#4C5B7A', car: '#4C5B7A',
+  hotel: '#8A5426', meal: '#B3703A', personal: '#B3703A',
+  meeting: '#3E6357', call: '#3E6357', note: '#6B7280',
+};
+
+// What to call it, in as few words as a calendar cell allows. A booking is
+// somebody's name; everything else is already titled.
+function entryLabel(e, compact) {
+  if (e.source === 'booking') {
+    return compact ? e.bookerName : `${e.bookerName} · ${e.meetingTypeName}`;
+  }
+  return e.title;
+}
+
+function Entry({ entry: e, timezone, compact }) {
+  const held = e.status === 'pending';
+  const draft = e.status === 'draft';
+  const proposed = e.status === 'proposed';
+  const time = timeLabelInZone(e.startAt, timezone);
+  const color = e.source === 'booking'
+    ? (e.meetingTypeColor || KIND_COLOR.meeting)
+    : (KIND_COLOR[e.kind] || KIND_COLOR.note);
+  const state = held ? ' (awaiting a decision)'
+    : proposed ? ' (waiting on a decision)'
+      : draft ? ' (draft)' : '';
   return (
     <span
-      className={'cal-entry' + (held ? ' is-held' : '')}
-      style={{ '--entry-color': booking.meetingTypeColor }}
-      title={`${timeLabelInZone(booking.startAt, timezone)} · ${booking.meetingTypeName} · ${booking.bookerName}${held ? ' (awaiting a decision)' : ''}`}
+      className={'cal-entry' + (held || proposed ? ' is-held' : '') + (draft ? ' is-draft' : '')}
+      style={{ '--entry-color': color }}
+      title={`${time} · ${entryLabel(e)}${state}`}
     >
-      {timeLabelInZone(booking.startAt, timezone)} {compact ? booking.bookerName : `${booking.bookerName} · ${booking.meetingTypeName}`}
+      <span className="cal-entry-icon" aria-hidden="true">{KIND_ICON[e.kind] || '•'}</span>
+      {time} {entryLabel(e, compact)}
     </span>
   );
 }
 
 export default function CalendarTab({ ownerId = null, timezone = null }) {
   const { user } = useAuth();
-  const base = ownerId ? `/pa/${ownerId}` : '';
   const zone = timezone || user?.timezone || 'UTC';
 
   const [view, setView] = useState(() => {
@@ -105,7 +132,11 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
   });
   const today = dateKeyInZone(new Date().toISOString(), zone);
   const [anchor, setAnchor] = useState(today);
-  const [bookings, setBookings] = useState(null);
+  // The whole diary, not only the part of it strangers booked. This screen
+  // used to ask for /bookings alone, so a month containing a flight to London,
+  // a car, a hotel and a board meeting rendered as four empty boxes — the one
+  // view people plan against was the one view that did not show the plan.
+  const [entries, setEntries] = useState(null);
   const [error, setError] = useState('');
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -126,30 +157,32 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
     });
   }
 
+  // The range endpoint already groups by day in the principal's zone and
+  // decides which day an entry falls on there, which is the one place that
+  // arithmetic belongs.
+  // On the principal's own dashboard no ownerId is passed, and the route has
+  // no "me" alias — it looks the id up and 404s on anything else.
+  const subjectId = ownerId || user?.id;
+  const first = period.days[0];
+  const last = period.days[period.days.length - 1];
   useEffect(() => {
-    const from = zonedToUtc(period.days[0], '00:00', zone);
-    const to = zonedToUtc(shiftDays(period.days[period.days.length - 1], 1), '00:00', zone);
+    if (!subjectId) return undefined;
     let live = true;
-    setBookings(null);
+    setEntries(null);
     setError('');
-    api.get(`${base}/bookings?scope=range&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
-      .then((d) => { if (live) setBookings(d.bookings); })
+    api.get(`/itinerary/${subjectId}/range?from=${first}&to=${last}`)
+      .then((d) => { if (live) setEntries(d.days); })
       .catch((err) => { if (live) setError(err.message); });
     return () => { live = false; };
-  }, [base, zone, period.days[0], period.days[period.days.length - 1]]);
+  }, [subjectId, first, last]);
 
   const byDay = useMemo(() => {
     const map = new Map();
-    for (const b of bookings || []) {
-      const key = dateKeyInZone(b.startAt, zone);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(b);
-    }
-    for (const list of map.values()) list.sort((a, b) => a.startAt.localeCompare(b.startAt));
+    for (const [key, list] of Object.entries(entries || {})) map.set(key, list);
     return map;
-  }, [bookings, zone]);
+  }, [entries]);
 
-  const selectedBookings = selectedDay ? (byDay.get(selectedDay) || []) : [];
+  const selectedEntries = selectedDay ? (byDay.get(selectedDay) || []) : [];
 
   return (
     <div>
@@ -179,15 +212,15 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
         </div>
       </div>
 
-      {bookings === null && <p className="hint">Loading…</p>}
+      {entries === null && <p className="hint">Loading…</p>}
 
       {/* ---- A day, hour by hour ---- */}
-      {bookings !== null && view === 'day' && (
-        <DayView day={anchor} bookings={byDay.get(anchor) || []} zone={zone} />
+      {entries !== null && view === 'day' && (
+        <DayView day={anchor} entries={byDay.get(anchor) || []} zone={zone} />
       )}
 
       {/* ---- A week: seven columns with room, seven sections without ---- */}
-      {bookings !== null && view === 'week' && (
+      {entries !== null && view === 'week' && (
         <div className="cal-week">
           {period.days.map((key) => {
             const list = byDay.get(key) || [];
@@ -199,7 +232,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
                 </div>
                 <div className="cal-day-body">
                   {list.length === 0 && <span className="cal-empty">—</span>}
-                  {list.map((b) => <Entry key={b.id} booking={b} timezone={zone} />)}
+                  {list.map((b) => <Entry key={b.id} entry={b} timezone={zone} />)}
                 </div>
               </div>
             );
@@ -208,7 +241,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
       )}
 
       {/* ---- A month, as before ---- */}
-      {bookings !== null && view === 'month' && (
+      {entries !== null && view === 'month' && (
         <div className="cal-month">
           {WEEKDAY_LABELS.map((w) => <div className="cal-dow-head" key={w}>{w}</div>)}
           {period.days.map((key) => {
@@ -224,7 +257,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
                 onClick={() => setSelectedDay(selectedDay === key ? null : key)}
               >
                 <span className="cal-dom">{label(key, { day: 'numeric' })}</span>
-                {list.slice(0, 3).map((b) => <Entry key={b.id} booking={b} timezone={zone} compact />)}
+                {list.slice(0, 3).map((b) => <Entry key={b.id} entry={b} timezone={zone} compact />)}
                 {list.length > 3 && <span className="cal-more">+{list.length - 3} more</span>}
               </button>
             );
@@ -237,24 +270,41 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
           <h3 style={{ marginBottom: 10 }}>
             {label(selectedDay, { weekday: 'long', day: 'numeric', month: 'long' })}
           </h3>
-          {selectedBookings.length === 0 && <p className="hint">Nothing booked.</p>}
-          {selectedBookings.map((b) => <Row key={b.id} booking={b} zone={zone} />)}
+          {selectedEntries.length === 0 && <p className="hint">Nothing on this day.</p>}
+          {selectedEntries.map((b) => <Row key={b.id} entry={b} zone={zone} />)}
         </div>
       )}
     </div>
   );
 }
 
-function Row({ booking: b, zone }) {
+// One line of a day, whether it came from the booking page or from the person
+// building the day. A booking's second line is who booked it; everything
+// else's is where it is and what it is.
+function Row({ entry: b, zone }) {
+  const isBooking = b.source === 'booking';
+  const color = isBooking
+    ? (b.meetingTypeColor || KIND_COLOR.meeting)
+    : (KIND_COLOR[b.kind] || KIND_COLOR.note);
   return (
     <div className="booking-row" style={{ marginBottom: 8 }}>
       <div>
         <div className="when">
-          <span className="cal-swatch" style={{ background: b.meetingTypeColor }} />
-          {timeLabelInZone(b.startAt, zone)} · {b.meetingTypeName}
+          <span className="cal-swatch" style={{ background: color }} />
+          {timeLabelInZone(b.startAt, zone)}
+          {b.endLabel ? ` – ${b.endLabel}` : ''}
+          {' · '}
+          {isBooking ? b.meetingTypeName : b.title}
           {b.status === 'pending' && <span className="pill is-off" style={{ marginLeft: 8 }}>Held</span>}
+          {b.status === 'proposed' && <span className="pill is-warn" style={{ marginLeft: 8 }}>Waiting</span>}
+          {b.status === 'draft' && <span className="pill is-off" style={{ marginLeft: 8 }}>Draft</span>}
         </div>
-        <div className="meta">{b.bookerName} ({b.bookerEmail}) · {b.formatLabel}</div>
+        <div className="meta">
+          {isBooking
+            ? `${b.bookerName}${b.bookerEmail ? ` (${b.bookerEmail})` : ''}`
+            : [KIND_LABEL[b.kind] || b.kind, b.location, b.destination && `→ ${b.destination}`]
+              .filter(Boolean).join(' · ')}
+        </div>
       </div>
       {b.videoRoom && <VideoJoinLink room={b.videoRoom} />}
     </div>
@@ -269,40 +319,49 @@ function Row({ booking: b, zone }) {
  * midnight to midnight: twenty-four rows to show two meetings is a scroll
  * nobody asked for.
  */
-function DayView({ day, bookings, zone }) {
+function DayView({ day, entries, zone }) {
   const hours = useMemo(() => {
     let first = 8;
     let last = 18;
-    for (const b of bookings) {
+    for (const b of entries) {
       const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hour12: false })
         .format(new Date(b.startAt)));
       first = Math.min(first, h);
       last = Math.max(last, h + 1);
     }
     return Array.from({ length: Math.max(1, last - first) }, (_, i) => first + i);
-  }, [bookings, zone]);
+  }, [entries, zone]);
 
   const byHour = useMemo(() => {
     const map = new Map();
-    for (const b of bookings) {
+    for (const b of entries) {
       const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hour12: false })
         .format(new Date(b.startAt)));
       if (!map.has(h)) map.set(h, []);
       map.get(h).push(b);
     }
     return map;
-  }, [bookings, zone]);
+  }, [entries, zone]);
+
+  // Ten ruled hours under the words "nothing on this day" is the same fact
+  // told twice, the second time at length. The wrapper stays either way: it
+  // is what says "this is the day view", and returning a bare empty-state
+  // instead left the screen with nothing identifying which view was on.
+  if (entries.length === 0) {
+    return (
+      <div className="cal-hours">
+        <div className="empty-state" style={{ padding: '28px 0' }}>Nothing on this day.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="cal-hours">
-      {bookings.length === 0 && (
-        <div className="empty-state" style={{ padding: '20px 0' }}>Nothing booked on this day.</div>
-      )}
       {hours.map((h) => (
         <div className="cal-hour" key={h}>
           <span className="cal-hour-label">{pad(h)}:00</span>
           <div className="cal-hour-body">
-            {(byHour.get(h) || []).map((b) => <Row key={b.id} booking={b} zone={zone} />)}
+            {(byHour.get(h) || []).map((b) => <Row key={b.id} entry={b} zone={zone} />)}
           </div>
         </div>
       ))}

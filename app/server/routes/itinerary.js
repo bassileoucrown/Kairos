@@ -176,6 +176,88 @@ async function buildDay(principal, dateKey, { viewerIsPrincipal = true } = {}) {
   return entries;
 }
 
+/**
+ * The same day-building, over a span, in one pair of queries.
+ *
+ * The calendar needs six weeks at a time and buildDay needs two queries per
+ * day, so asking it forty-two times is eighty-four round trips to draw one
+ * month. The window and the filtering are the only things that differ, so the
+ * body is buildDay's with the day key swapped for a range.
+ */
+async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true } = {}) {
+  const tz = principal.timezone || 'UTC';
+
+  // Same generous margins as buildDay, for the same reason: "this calendar day
+  // in Lagos" is not a UTC range, so the window is widened and the day is
+  // decided in the zone afterwards.
+  const from = new Date(new Date(`${fromKey}T00:00:00Z`).getTime() - 36 * 3600 * 1000).toISOString();
+  const to = new Date(new Date(`${toKey}T00:00:00Z`).getTime() + 60 * 3600 * 1000).toISOString();
+
+  const statuses = visibleStatusesFor(viewerIsPrincipal);
+  const items = await db.prepare(`
+    SELECT i.*, u.name AS created_by_name FROM itinerary_items i
+    LEFT JOIN users u ON u.id = i.created_by
+    WHERE i.owner_id = ? AND i.start_at >= ? AND i.start_at <= ?
+      AND i.status IN (${statuses.map(() => '?').join(',')})
+  `).all(principal.id, from, to, ...statuses);
+
+  // Pending bookings are on the calendar too, marked as held. On a day view a
+  // held slot is exactly what somebody needs to see before they promise it to
+  // someone else.
+  const bookings = await db.prepare(`
+    SELECT b.*, mt.name AS meeting_type_name, mt.color AS meeting_type_color
+    FROM bookings b JOIN meeting_types mt ON mt.id = b.meeting_type_id
+    WHERE b.owner_id = ? AND b.status IN ('confirmed', 'pending')
+      AND b.start_at >= ? AND b.start_at <= ?
+  `).all(principal.id, from, to);
+
+  const covered = new Set(items.filter((i) => i.booking_id).map((i) => i.booking_id));
+
+  const all = [
+    ...items.map((i) => serializeItem(i, tz)),
+    ...bookings.filter((b) => !covered.has(b.id)).map((b) => ({
+      ...serializeBooking(b, tz),
+      status: b.status === 'pending' ? 'pending' : 'confirmed',
+      meetingTypeColor: b.meeting_type_color,
+      bookerName: b.booker_name,
+      meetingTypeName: b.meeting_type_name,
+    })),
+  ];
+
+  const days = {};
+  for (const e of all) {
+    const key = dayKeyInZone(e.startAt, e.startTimezone || tz);
+    if (key < fromKey || key > toKey) continue;
+    (days[key] ||= []).push(e);
+  }
+  for (const list of Object.values(days)) {
+    list.sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  }
+  return days;
+}
+
+// What the calendar draws. The whole diary, not only the part of it that
+// strangers booked: a month with a flight to London in it should say so.
+router.get('/:ownerId/range', requirePaAccess, async (req, res) => {
+  const tz = req.principal.timezone || 'UTC';
+  const { from, to } = req.query;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')) {
+    return res.status(400).json({ error: 'from and to must be YYYY-MM-DD.' });
+  }
+  if (to < from) return res.status(400).json({ error: 'to must not be before from.' });
+  // A calendar asks for six weeks; anything far beyond that is a scrape.
+  const spanDays = Math.round(
+    (new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86400000,
+  );
+  if (spanDays > 400) return res.status(400).json({ error: 'That range is too long.' });
+
+  const viewerIsPrincipal = req.paRole === 'owner';
+  res.json({
+    from, to, timezone: tz, viewerIsPrincipal,
+    days: await buildRange(req.principal, from, to, { viewerIsPrincipal }),
+  });
+});
+
 router.get('/:ownerId/day', requirePaAccess, async (req, res) => {
   const tz = req.principal.timezone || 'UTC';
   const date = req.query.date || new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());

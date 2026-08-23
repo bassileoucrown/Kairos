@@ -1806,10 +1806,20 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   background: color-mix(in srgb, var(--entry-color) 14%, transparent);
   color: var(--entry-color);
   border-left: 2px solid var(--entry-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-align: left;
+  /* Two lines, then stop.
+     This used to be one line clipped with an ellipsis, which was survivable
+     while every entry was a booker's name. Now that the whole diary is here,
+     a cell roughly 120px wide rendered "Board pre-read with the Chief " and
+     "The C…" — a truncation that costs the reader the only part that
+     identified the thing. Two wrapped lines fit the same box and say what it
+     is. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 /* A request nobody has answered occupies the time without owning it. */
 .cal-entry.is-held {
@@ -1817,6 +1827,11 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   border: 1px dashed var(--entry-color);
   border-left-width: 2px;
 }
+/* A draft is the assistant's working, not yet part of the day. */
+.cal-entry.is-draft { opacity: 0.6; border-left-style: dotted; }
+/* The glyph says flight or dinner before a single word is read, which in a
+   cell this narrow is often all that survives the truncation. */
+.cal-entry-icon { margin-right: 3px; font-style: normal; }
 .cal-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 
 /* ---- Month ---- */
@@ -1856,7 +1871,31 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .cal-cell.is-outside { opacity: 0.4; }
 .cal-cell.is-selected { border-top-color: var(--accent); }
-.cal-cell.is-today .cal-dom { color: var(--accent); font-weight: 700; }
+/* Today was marked by tinting the date number accent — a dark green a shade
+   off the text it replaced, on a grid of forty-two numbers. The first
+   question anybody asks a calendar is where they are in it, so today gets the
+   filled disc every calendar uses, and its cell a faint wash. */
+.cal-cell.is-today { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.cal-cell.is-today .cal-dom {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  padding: 0 5px;
+}
+.cal-day.is-today .cal-dom {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  min-width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .cal-dom { font-size: 0.75rem; font-weight: 600; }
 .cal-more { font-size: 0.62rem; color: var(--text-muted); }
 
@@ -1879,7 +1918,10 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   border-bottom: 1px solid var(--border);
 }
 .cal-dow { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
-.cal-day.is-today .cal-dow, .cal-day.is-today .cal-dom { color: var(--accent); }
+/* Only the weekday word takes the accent as text. The date itself is the
+   filled disc defined above — colouring it here too painted accent on accent
+   and left an empty green circle where the number should be. */
+.cal-day.is-today .cal-dow { color: var(--accent); }
 .cal-day-body { padding: 6px; display: flex; flex-direction: column; gap: 3px; min-height: 90px; min-width: 0; }
 .cal-empty { color: var(--text-muted); font-size: 0.8rem; }
 
@@ -1888,7 +1930,8 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
      Same reasoning as the tab row: stop pretending it fits, and stack. */
   .cal-week { grid-template-columns: 1fr; }
   .cal-day-body { min-height: 0; }
-  .cal-entry { white-space: normal; overflow-wrap: anywhere; }
+  /* .cal-entry wraps at every width now, so there is nothing left to undo
+     here — see the base rule. */
   .cal-cell { min-height: 58px; }
   .cal-title { flex-basis: 100%; order: -1; text-align: left; }
 }
@@ -2300,6 +2343,46 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   border-radius: 999px;
   padding: 3px 8px;
 }
+
+/* ---- The Desk: contacts ----
+   A line to read, which opens when there is something to change. */
+.contact-card { margin-bottom: 10px; }
+.contact-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.contact-who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.contact-who .name { font-weight: 600; overflow-wrap: anywhere; }
+.contact-meta { margin-top: 2px; overflow-wrap: anywhere; }
+.contact-notes {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.contact-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0 8px;
+}
+.contact-fields select, .contact-fields input {
+  width: auto;
+  font-size: 0.82rem;
+  padding: 6px 8px;
+}
+.contact-fields input { width: 150px; }
+/* How well somebody is known, at a glance and in one colour each. */
+.pill.tier-inner_circle { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.pill.tier-close { background: color-mix(in srgb, #8A5426 16%, transparent); color: #8A5426; }
+
+/* The booker's own time, when it is not the principal's. */
+.when-theirs { color: var(--text-muted); font-weight: 400; }
 
 /* ---- Quieter than the day ---- */
 .today-grid .section-head {

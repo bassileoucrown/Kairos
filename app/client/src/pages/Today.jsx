@@ -10,7 +10,7 @@ export const KIND_ICON = {
   flight: '✈', train: '🚆', car: '🚗', hotel: '🛎', meeting: '👥',
   meal: '🍽', personal: '★', call: '☎', note: '•',
 };
-const KIND_LABEL = {
+export const KIND_LABEL = {
   flight: 'Flight', train: 'Train', car: 'Car', hotel: 'Hotel', meeting: 'Meeting',
   meal: 'Meal', personal: 'Personal', call: 'Call', note: 'Note',
 };
