@@ -195,12 +195,56 @@ function NewContactForm({ ownerId, onCreated }) {
   );
 }
 
+const KIND_LABELS = { birthday: 'Birthday', anniversary: 'Anniversary' };
+
+function whenLabel(daysUntil) {
+  if (daysUntil === 0) return 'Today';
+  if (daysUntil === 1) return 'Tomorrow';
+  return `In ${daysUntil} days`;
+}
+
+/**
+ * What is coming up, at the top of the people it belongs to.
+ *
+ * This was its own tab. But it is not a second set of records — it is the
+ * birthday and anniversary fields of these same contacts, sorted by which
+ * comes next, and both were edited one tab away from where they were read.
+ * One dataset behind two doors is how a strip ends up with eleven tabs.
+ */
+function ComingUp({ upcoming }) {
+  if (!upcoming || upcoming.length === 0) return null;
+  return (
+    <section className="coming-up">
+      <h2 className="section-head">Coming up</h2>
+      <ul className="coming-list">
+        {upcoming.map((u) => (
+          <li key={`${u.contactId}-${u.kind}`} className={u.daysUntil <= 7 ? 'is-near' : ''}>
+            <span className="coming-when">{whenLabel(u.daysUntil)}</span>
+            <span className="coming-what">
+              {KIND_LABELS[u.kind]} · <strong>{u.name}</strong>
+            </span>
+            {u.relationshipTier === 'inner_circle' && (
+              <span className="pill tier-inner_circle">Inner Circle</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function ContactsTab({ ownerId }) {
   const [contacts, setContacts] = useState(null);
+  const [upcoming, setUpcoming] = useState(null);
   const [error, setError] = useState('');
 
   function load() {
     api.get(`/pa/${ownerId}/contacts`).then((data) => setContacts(data.contacts)).catch((err) => setError(err.message));
+    // Its own request, and a silent failure: a date nobody has set yet is the
+    // normal case, and it must not stop the list of people rendering.
+    api.get(`/pa/${ownerId}/relationships/upcoming`)
+      .then((data) => setUpcoming(data.upcoming))
+      .catch(() => setUpcoming([]));
   }
 
   useEffect(load, [ownerId]);
@@ -216,6 +260,7 @@ export default function ContactsTab({ ownerId }) {
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
+      <ComingUp upcoming={upcoming} />
       {contacts !== null && <NewContactForm ownerId={ownerId} onCreated={handleCreated} />}
       {contacts === null && <p className="hint">Loading…</p>}
       {contacts && contacts.length === 0 && (

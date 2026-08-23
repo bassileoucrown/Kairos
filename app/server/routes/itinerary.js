@@ -184,7 +184,7 @@ async function buildDay(principal, dateKey, { viewerIsPrincipal = true } = {}) {
  * month. The window and the filtering are the only things that differ, so the
  * body is buildDay's with the day key swapped for a range.
  */
-async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true } = {}) {
+async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true, includePending = false } = {}) {
   const tz = principal.timezone || 'UTC';
 
   // Same generous margins as buildDay, for the same reason: "this calendar day
@@ -201,15 +201,18 @@ async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true 
       AND i.status IN (${statuses.map(() => '?').join(',')})
   `).all(principal.id, from, to, ...statuses);
 
-  // Pending bookings are on the calendar too, marked as held. On a day view a
-  // held slot is exactly what somebody needs to see before they promise it to
-  // someone else.
+  // A held slot occupies the time, so the calendar shows it — that is what
+  // stops somebody promising the same hour twice. But the week outlook has
+  // always answered with agreed things only, and quietly widening it while
+  // making it faster would be a change of meaning smuggled in as an
+  // optimisation. So callers say which they want.
+  const statusList = includePending ? ['confirmed', 'pending'] : ['confirmed'];
   const bookings = await db.prepare(`
     SELECT b.*, mt.name AS meeting_type_name, mt.color AS meeting_type_color
     FROM bookings b JOIN meeting_types mt ON mt.id = b.meeting_type_id
-    WHERE b.owner_id = ? AND b.status IN ('confirmed', 'pending')
+    WHERE b.owner_id = ? AND b.status IN (${statusList.map(() => '?').join(',')})
       AND b.start_at >= ? AND b.start_at <= ?
-  `).all(principal.id, from, to);
+  `).all(principal.id, ...statusList, from, to);
 
   const covered = new Set(items.filter((i) => i.booking_id).map((i) => i.booking_id));
 
@@ -254,7 +257,7 @@ router.get('/:ownerId/range', requirePaAccess, async (req, res) => {
   const viewerIsPrincipal = req.paRole === 'owner';
   res.json({
     from, to, timezone: tz, viewerIsPrincipal,
-    days: await buildRange(req.principal, from, to, { viewerIsPrincipal }),
+    days: await buildRange(req.principal, from, to, { viewerIsPrincipal, includePending: true }),
   });
 });
 
@@ -283,14 +286,24 @@ router.get('/:ownerId/upcoming', requirePaAccess, async (req, res) => {
   const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 
   const viewerIsPrincipal = req.paRole === 'owner';
-  const out = [];
+
+  // One pair of queries for the whole outlook. This called buildDay once per
+  // day, which is two queries each — sixty round trips to answer "what does
+  // the next month look like".
+  const keys = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(`${todayKey}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    const entries = await buildDay(req.principal, key, { viewerIsPrincipal });
-    out.push({ date: key, count: entries.length, entries });
+    keys.push(d.toISOString().slice(0, 10));
   }
+  const grouped = await buildRange(req.principal, keys[0], keys[keys.length - 1], { viewerIsPrincipal });
+  // buildRange returns only the days that hold something; this endpoint has
+  // always returned a row per day, empty ones included, so the shape is filled
+  // back in from the keys rather than from what came back.
+  const out = keys.map((key) => {
+    const entries = grouped[key] || [];
+    return { date: key, count: entries.length, entries };
+  });
   res.json({ timezone: tz, viewerIsPrincipal, days: out });
 });
 

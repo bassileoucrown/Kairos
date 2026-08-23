@@ -565,7 +565,9 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .tab-btn {
   padding: 10px 4px;
-  margin-right: 20px;
+  /* Nine sections separated by twenty pixels spend a hundred and sixty on gaps
+     alone, which was enough to push the last one onto a row of its own. */
+  margin-right: 16px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -2343,6 +2345,32 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   border-radius: 999px;
   padding: 3px 8px;
 }
+
+/* What is coming up, at the head of the people it belongs to. */
+.coming-up { margin-bottom: 20px; }
+.coming-list { list-style: none; margin: 0 0 4px; padding: 0; }
+.coming-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 5px 0;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border);
+}
+.coming-list li:last-child { border-bottom: 0; }
+.coming-when {
+  flex: 0 0 auto;
+  min-width: 82px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+/* Near enough to act on rather than merely note. */
+.coming-list li.is-near .coming-when { color: var(--accent); }
+.coming-what { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---- The Desk: contacts ----
    A line to read, which opens when there is something to change. */

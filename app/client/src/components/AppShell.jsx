@@ -43,7 +43,13 @@ const NAV = [
   { group: 'day', to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
   { group: 'day', to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
   { group: 'day', to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
-  { group: 'day', to: '/dashboard?tab=calendar', match: '/dashboard', label: 'Calendar', icon: '▤' },
+  // Principal-scoped, like the three above it. It was the one entry in "The
+  // day" that was not, so it went to /dashboard — the signed-in user's own
+  // account. For a principal that is right by accident; for an assistant it
+  // meant the rail's Calendar opened their own empty diary while the person
+  // they support had a month full of things, reachable only from a tab on the
+  // Desk. A calendar belongs to whoever you are acting for.
+  { group: 'day', to: '/pa?tab=calendar', match: '/pa', label: 'Calendar', icon: '▤', principalScoped: true },
   // Marked in the rail rather than only on the page: somebody deciding whether
   // to rely on this should learn it is not open before they click, not after.
   { group: 'day', to: '/concierge', label: 'Concierge', icon: '☏', principalScoped: true, soon: true },

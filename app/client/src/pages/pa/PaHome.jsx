@@ -9,7 +9,6 @@ import ContactsTab from './ContactsTab.jsx';
 import BriefsTab from './BriefsTab.jsx';
 import InstructionsTab from './InstructionsTab.jsx';
 import CommsTab from './CommsTab.jsx';
-import RelationshipsTab from './RelationshipsTab.jsx';
 import AiAssistTab from './AiAssistTab.jsx';
 import AvailabilityTab from '../dashboard/AvailabilityTab.jsx';
 import MeetingTypesTab from '../dashboard/MeetingTypesTab.jsx';
@@ -19,19 +18,41 @@ import Tabs from '../../components/Tabs.jsx';
 
 // Scheduling tabs only appear when the principal has delegated them, so an
 // assistant is never shown a door that will 403.
+//
+// Eleven tabs wrapped onto two rows, which was the rail's old filing-cabinet
+// problem one level down. Two of them stopped being tabs, for two different
+// reasons:
+//
+//   Relationships was the birthday and anniversary fields of these same
+//   contacts, sorted by what comes next — read one tab away from where they
+//   are set. One dataset, two doors. It is a band at the head of Contacts now,
+//   and /pa/:id?tab=relationships still lands there.
+//
+//   Calendar is still rendered here, but its door is the rail rather than a
+//   button in this strip. That entry used to point at /dashboard, so it opened
+//   the signed-in user's own diary; for an assistant that meant their empty
+//   one, while the principal's month was reachable only from here. Making it
+//   principal-scoped — as Today, Itinerary and Trips already were — gave it a
+//   single honest destination and left this tab with nothing to add.
+//
+// Availability and Meeting Types stay apart on purpose: when you are free and
+// what you offer are two different jobs, and merging them to win back a row
+// would be tidying the strip at the cost of the idea.
 const TABS = [
   { id: 'approvals', label: 'Approvals' },
   { id: 'bookings', label: 'Bookings' },
-  { id: 'calendar', label: 'Calendar' },
   { id: 'availability', label: 'Availability', scheduling: true },
   { id: 'meeting_types', label: 'Meeting Types', scheduling: true },
   { id: 'contacts', label: 'Contacts' },
-  { id: 'relationships', label: 'Relationships' },
   { id: 'briefs', label: 'Briefs' },
   { id: 'instructions', label: 'Instructions' },
   { id: 'comms', label: 'Comms' },
   { id: 'ai_assist', label: 'AI Assist' },
 ];
+
+// A link somebody sent last week, or a bookmark, still has to land somewhere
+// sensible.
+const MOVED = { relationships: 'contacts' };
 
 
 export default function PaHome() {
@@ -42,7 +63,9 @@ export default function PaHome() {
   const [error, setError] = useState('');
   const [waiting, setWaiting] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'approvals';
+  const raw = searchParams.get('tab') || 'approvals';
+  // A bookmark or a link somebody sent last week still lands somewhere true.
+  const tab = MOVED[raw] || raw;
   const setTab = (t) => setSearchParams({ tab: t }, { replace: true });
 
   // Assistant-category users land here straight out of onboarding (never
@@ -99,7 +122,7 @@ export default function PaHome() {
   // in. Both read from the same endpoint, so they cannot disagree.
   const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule)
     .map((t) => (t.id === 'approvals' ? { ...t, attention: waiting > 0 } : t));
-  const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.id, t.label]));
+  const TAB_LABEL = { ...Object.fromEntries(TABS.map((t) => [t.id, t.label])), calendar: 'Calendar' };
   // Every tab of this page is behind one rail entry now, so they all light
   // the same one. Which section you are in is the tab strip's job.
   const activeNav = tab === 'calendar' ? 'calendar' : 'desk';
@@ -134,7 +157,6 @@ export default function PaHome() {
           {tab === 'bookings' && <BookingsTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'calendar' && <CalendarTab ownerId={ownerId} timezone={current.timezone} />}
           {tab === 'contacts' && <ContactsTab ownerId={ownerId} />}
-          {tab === 'relationships' && <RelationshipsTab ownerId={ownerId} />}
           {tab === 'briefs' && <BriefsTab ownerId={ownerId} />}
           {tab === 'instructions' && <InstructionsTab ownerId={ownerId} />}
           {tab === 'comms' && <CommsTab ownerId={ownerId} />}
