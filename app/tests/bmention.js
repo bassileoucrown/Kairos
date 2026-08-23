@@ -34,7 +34,18 @@ function client() {
 (async () => {
   const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
-    env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT), DATABASE_URL: '' },
+    // Whatever backend this process is pointed at, the server must be pointed
+    // at the same one. Some assertions here call lib/mentions directly, which
+    // opens its own connection from THIS process — pinning the child to sqlite
+    // while the parent held a Postgres URL gave the two of them different
+    // databases, and the direct calls failed against fixtures they could not
+    // see. That looked like a Postgres bug and was a split brain.
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(PORT),
+      DATABASE_URL: process.env.DATABASE_URL || '',
+    },
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   const deadline = Date.now() + 20000;
@@ -165,6 +176,81 @@ function client() {
     } else {
       ok('a pending connection was found to accept', false, JSON.stringify(conn).slice(0, 200));
     }
+    // --- @ in a thread ----------------------------------------------------
+    //
+    // The whole distinction has to survive the trip to a screen. In a space it
+    // gains a third case: somebody real, with an account, who is not in this
+    // room. They are worth naming and they were NOT told, and drawing them as
+    // a delivered address would be the same lie by another road.
+    head('@ inside a thread:');
+    const sp = await boss('POST', '/spaces', { name: 'Board dinner', context: 'work' });
+    const spaceId = sp.d.space?.id || sp.d.id;
+    ok('a space was made', !!spaceId, JSON.stringify(sp.d).slice(0, 160));
+
+    const th = await boss('POST', `/spaces/${spaceId}/threads`, { name: 'Cars' });
+    const threadId = th.d.thread?.id || th.d.id;
+    ok('and a thread in it', !!threadId, JSON.stringify(th.d).slice(0, 160));
+
+    // A work space already seeds the owner's chief of staff, so Kit is in the
+    // room without being asked twice. Said out loud rather than relied on
+    // silently — if that default ever changes, this line is where it shows.
+    r = await pa('GET', `/threads/${threadId}/messages`);
+    ok('the chief of staff is already in the room', r.s === 200, String(r.s));
+
+    // Filed under the space owner, so it is the owner's outbox that grows.
+    const before = ((await boss('GET', '/emails')).d.emails || []).length;
+    r = await boss('POST', `/threads/${threadId}/messages`, {
+      body: `@kit-${ID} please book the cars. @tunde-bakare has the list, `
+        + `and @ngozi-${ID} is not in this space.`,
+    });
+    ok('the message is accepted', r.s === 201, JSON.stringify(r.d));
+
+    r = await pa('GET', `/threads/${threadId}/messages`);
+    const posted = r.d.messages[r.d.messages.length - 1];
+    const seen = Object.fromEntries((posted.mentions || []).map((m) => [m.handle, m]));
+    ok('the thread hands back what each @ is',
+      (posted.mentions || []).length === 3, JSON.stringify(posted.mentions));
+    ok('a member is an address', seen[`kit-${ID}`]?.kind === 'person');
+    ok('and was told', seen[`kit-${ID}`]?.notified === true);
+    ok('a contact is a mention', seen['tunde-bakare']?.kind === 'contact');
+    ok('and was not told', seen['tunde-bakare']?.notified === false);
+    // The one this section exists for.
+    ok('somebody outside the space is still named',
+      seen[`ngozi-${ID}`]?.kind === 'person', JSON.stringify(seen[`ngozi-${ID}`]));
+    ok('but is not told, because they cannot read it',
+      seen[`ngozi-${ID}`]?.notified === false);
+    ok('and the screen is told why', seen[`ngozi-${ID}`]?.reason === 'no-access');
+
+    const after = (await boss('GET', '/emails')).d.emails || [];
+    ok('the member addressed gets told',
+      after.length > before && after.some((e) => /mentioned you/i.test(e.subject || '')),
+      String(after.length) + ' vs ' + String(before));
+    ok('and the thread is not quoted into the mail',
+      !after.some((e) => /book the cars/i.test(e.body || '')));
+
+    // --- The picker inside a space ----------------------------------------
+    head('The picker inside a thread:');
+    r = await pa('GET', `/mentions/space/${spaceId}/lookup?q=`);
+    ok('offers people in the room', r.d.people.some((p) => p.handle === `adaeze-${ID}`),
+      JSON.stringify(r.d.people));
+    ok('and nobody outside it',
+      !r.d.people.some((p) => p.handle === `ngozi-${ID}`), JSON.stringify(r.d.people));
+    ok('and never yourself',
+      !r.d.people.some((p) => p.handle === `kit-${ID}`), JSON.stringify(r.d.people));
+    ok('and offers no invitation from here',
+      r.d.contacts.every((c) => c.canInvite === false));
+
+    const shut = await outsider('GET', `/mentions/space/${spaceId}/lookup?q=`);
+    ok('somebody with no access cannot read it at all', shut.s === 404, String(shut.s));
+
+    // A member who is not the owner's assistant is not handed the address book
+    // merely for being added to a thread.
+    r = await boss('POST', `/spaces/${spaceId}/members`, { email: `ngozi${ID}@x.com`, role: 'member' });
+    ok('a plain member can be added', r.s === 201 || r.s === 409, JSON.stringify(r.d));
+    r = await stranger('GET', `/mentions/space/${spaceId}/lookup?q=`);
+    ok('a plain member sees the room', r.s === 200 && r.d.people.length > 0, String(r.s));
+    ok('but not the office address book', (r.d.contacts || []).length === 0,
+      JSON.stringify(r.d.contacts));
   } finally {
     proc.kill();
   }

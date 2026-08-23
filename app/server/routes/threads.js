@@ -3,9 +3,11 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
-const { resolveAccess, markThreadRead } = require('../lib/spaceAccess');
+const { resolveAccess, spaceAudience, markThreadRead } = require('../lib/spaceAccess');
 const { syncStageFromRecords } = require('../lib/stageStatus');
 const voice = require('../lib/voiceNotes');
+const mentions = require('../lib/mentions');
+const { sendEmail } = require('../lib/email');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -33,10 +35,15 @@ async function loadThread(req, res, next) {
   next();
 }
 
-function serializeMessage(m, acks, voiceByMessage) {
+function serializeMessage(m, acks, voiceByMessage, mentionsForMessage) {
   return {
     id: m.id,
     body: m.body,
+    // What each @ in the body turned out to be, resolved once on the way out.
+    // The screen must not re-derive this: it cannot see who is in the space,
+    // and guessing would be exactly the mistake — a contact drawn like a
+    // colleague who was told.
+    mentions: mentionsForMessage || [],
     // Present only when there is a recording, and metadata only — the audio
     // itself is fetched one message at a time.
     voice: voiceByMessage?.get(m.id) || null,
@@ -97,6 +104,15 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
 
   const voiceByMessage = await voice.forThread(req.thread.id);
 
+  // One resolution pass for the whole thread rather than one per message: the
+  // same handles repeat heavily down a conversation, and a screen should not
+  // cost a query per @.
+  const audience = await spaceAudience(req.access.space);
+  const mentionsPerMessage = await mentions.forBodies(
+    rows.map((m) => m.body),
+    { viewerId: req.user.id, ownerId: req.access.space.owner_id, audience },
+  );
+
   res.json({
     thread: { id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id },
     stage: stage && {
@@ -113,9 +129,48 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
       maxSeconds: voice.MAX_SECONDS,
       retentionDays: voice.RETENTION_DAYS,
     },
-    messages: rows.map((m) => serializeMessage(m, acks, voiceByMessage)),
+    messages: rows.map((m, i) => serializeMessage(m, acks, voiceByMessage, mentionsPerMessage[i])),
   });
 });
+
+/**
+ * Tell the people a message was addressed to.
+ *
+ * This is the whole difference between an address and a mention, and it only
+ * holds if it actually happens. Three rules, each of them a promise the screen
+ * has already made on this function's behalf:
+ *
+ *   - only people IN the space, because addressing somebody who cannot open
+ *     the thread would announce something they then cannot read;
+ *   - never the author, who does not need telling what they just wrote;
+ *   - the message is not quoted. A thread can hold anything, and Kairos does
+ *     not push the contents of one into an inbox. It says where to look.
+ *
+ * Failure here must not fail the send. The message is already filed, and a
+ * mail provider having a bad afternoon is not a reason to reject a sentence
+ * somebody has written.
+ */
+async function tellAddressed({ body, thread, space, author }) {
+  try {
+    const audience = await spaceAudience(space);
+    const found = await mentions.of(body, {
+      viewerId: author.id, ownerId: space.owner_id, audience,
+    });
+    const addressed = found.filter((m) => m.kind === 'person' && m.notified && m.id !== author.id);
+    for (const person of addressed) {
+      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(person.id);
+      if (!user?.email) continue;
+      await sendEmail({
+        ownerId: space.owner_id,
+        toEmail: user.email,
+        category: 'mention',
+        subject: `${author.name} mentioned you in ${thread.name}`,
+        body: `${author.name} wrote to you in "${thread.name}" (${space.name}).`
+          + '\n\nOpen Kairos to read it.',
+      });
+    }
+  } catch { /* Said above: a message already filed does not fail over its mail. */ }
+}
 
 async function nextRecordSeq(threadId) {
   const row = await db.prepare("SELECT MAX(record_seq) AS max FROM messages WHERE thread_id = ? AND register = 'record'")
@@ -146,6 +201,13 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
     isRecord ? await nextRecordSeq(req.thread.id) : null,
     new Date().toISOString(),
   );
+
+  await tellAddressed({
+    body: String(body).trim(),
+    thread: req.thread,
+    space: req.access.space,
+    author: req.user,
+  });
 
   const stage = isRecord ? await syncStageFromRecords(req.thread.stage_id) : null;
   res.status(201).json({ id, stage });

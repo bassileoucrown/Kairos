@@ -66,6 +66,27 @@ async function resolveAccess(spaceId, userId) {
   };
 }
 
+/**
+ * Everyone who can see a space, as a set of user ids.
+ *
+ * The mirror image of resolveAccess: that answers "may this one person read
+ * it", this answers "who are they all". Used where something is about to be
+ * addressed to somebody — an @ in a message — because addressing a person who
+ * cannot read the thread promises a delivery that will not happen.
+ *
+ * A private space is a set of one by construction, and says so here for the
+ * same reason resolveAccess short-circuits: a stray space_members row must not
+ * be able to widen it.
+ */
+async function spaceAudience(space) {
+  const ids = new Set([space.owner_id]);
+  if (space.context === 'private') return ids;
+  const rows = await db.prepare('SELECT user_id FROM space_members WHERE space_id = ?')
+    .all(space.id);
+  for (const r of rows) ids.add(r.user_id);
+  return ids;
+}
+
 /** Every space the user can see: those they own, plus those they're a member of. */
 async function listVisibleSpaces(userId) {
   return await db.prepare(`
@@ -200,6 +221,7 @@ module.exports = {
   parseRoles,
   roleCanDelegate,
   resolveAccess,
+  spaceAudience,
   listVisibleSpaces,
   unreadMessageCount,
   markThreadRead,

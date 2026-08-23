@@ -4,6 +4,7 @@ import { api } from '../../lib/api.js';
 import SoonButton from '../../components/SoonButton.jsx';
 import AppShell from '../../components/AppShell.jsx';
 import VoiceRecorder from '../../components/VoiceRecorder.jsx';
+import { MentionText, MentionPicker } from '../../components/Mention.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 import TaskList from './TaskList.jsx';
 
@@ -100,7 +101,9 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
-        {hasText && <div className="msg-bubble">{m.body}</div>}
+        {hasText && (
+          <div className="msg-bubble"><MentionText body={m.body} mentions={m.mentions} /></div>
+        )}
         {m.voice && <VoiceBubble threadId={threadId} m={m} />}
         {/* Both actions turn a message into text somebody else will act on —
             a frozen record, or a task with a title. A recording has neither
@@ -192,7 +195,7 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
         {m.locked && <span className="msg-seq" title="Acknowledged — body is frozen">🔒 locked</span>}
       </div>
 
-      <div className="msg-record-body">{m.body}</div>
+      <div className="msg-record-body"><MentionText body={m.body} mentions={m.mentions} /></div>
 
       <div className="msg-record-foot">
         {m.promotedFromId && (
@@ -282,6 +285,7 @@ export default function ThreadView() {
   const [tasks, setTasks] = useState([]);
   const [members, setMembers] = useState([]);
   const endRef = useRef(null);
+  const composerRef = useRef(null);
 
   function load() {
     return api.get(`/threads/${threadId}/messages`).then((d) => {
@@ -415,15 +419,26 @@ export default function ThreadView() {
               </select>
             )}
 
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              aria-label="Message"
-              placeholder={register === 'record'
-                ? 'State it plainly — this becomes part of the formal record.'
-                : 'Write a message…'}
-              required
-            />
+            {/* The picker sits in a positioned wrapper so it can open above
+                the box without pushing the send button down the page. */}
+            <div className="mention-anchor">
+              <textarea
+                ref={composerRef}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                aria-label="Message"
+                placeholder={register === 'record'
+                  ? 'State it plainly — this becomes part of the formal record.'
+                  : 'Write a message… @ to name someone'}
+                required
+              />
+              <MentionPicker
+                spaceId={data.thread.spaceId}
+                value={body}
+                onChange={setBody}
+                textareaRef={composerRef}
+              />
+            </div>
             <button className="btn btn-primary" type="submit" disabled={sending}>
               {sending ? 'Sending…' : register === 'record' ? 'File record' : 'Send'}
             </button>

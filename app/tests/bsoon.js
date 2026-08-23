@@ -74,6 +74,11 @@ async function ready(base) {
 
     // ---- One screen listing everything, for whoever is being shown it ---
     head('The roadmap is inside the product:');
+    // Waited for, not counted on sight. count() is the one locator call that
+    // does not auto-wait, and this is the first assertion after a redirect —
+    // so on a slow paint it read 0 and failed a rail that was about to be
+    // there. Waiting first makes the count mean "how many", not "how many yet".
+    await p.waitForSelector('.app-nav a:has-text("Coming")', { timeout: 15000 });
     ok('the rail carries it', (await p.locator('.app-nav a:has-text("Coming")').count()) === 1);
     await p.click('.app-nav a:has-text("Coming")');
     await p.waitForSelector('.coming-row', { timeout: 15000 });

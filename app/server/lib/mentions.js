@@ -63,12 +63,23 @@ function handleFrom(nameOrEmail) {
   return base;
 }
 
+// Two spellings rather than one clever one.
+//
+// This began as a single query with `(? IS NULL OR id != ?)` so that the
+// exclusion could be switched off by passing null. SQLite accepts that
+// happily. Postgres cannot: a bare parameter as the whole left side of IS NULL
+// has no inferable type, so it rejected the statement with 42P18 and every
+// attempt to save a contact became a 500 — on the production backend only,
+// where the sqlite test suite could not see it.
+const CLASH_SQL = 'SELECT id FROM contacts WHERE owner_id = ? AND handle = ?';
+const CLASH_SQL_EXCLUDING = `${CLASH_SQL} AND id != ?`;
+
 async function uniqueContactHandle(ownerId, desired, excludeId = null) {
   let candidate = handleFrom(desired);
   for (let n = 2; n < 200; n++) {
-    const clash = await db.prepare(
-      'SELECT id FROM contacts WHERE owner_id = ? AND handle = ? AND (? IS NULL OR id != ?)',
-    ).get(ownerId, candidate, excludeId, excludeId);
+    const clash = excludeId
+      ? await db.prepare(CLASH_SQL_EXCLUDING).get(ownerId, candidate, excludeId)
+      : await db.prepare(CLASH_SQL).get(ownerId, candidate);
     if (!clash) return candidate;
     candidate = `${handleFrom(desired)}-${n}`.slice(0, 40);
   }
@@ -82,16 +93,32 @@ async function uniqueContactHandle(ownerId, desired, excludeId = null) {
  * handles have always used, so this cannot become a directory. `ownerId` is
  * the principal whose contacts are in scope, because a contact belongs to an
  * office rather than to everyone.
+ *
+ * `audience`, when given, is the set of user ids who can actually see the
+ * thing being written. Somebody outside it is still a real person and still
+ * worth naming, but they are NOT told, because they cannot read what they
+ * would be told about. Writing @ada in a space Ada has no access to must not
+ * draw like a delivered address — that is the same lie as a contact drawn like
+ * a user, arriving by a different road. Omit it where there is no such
+ * boundary and everyone who resolves is reachable.
  */
-async function resolve(viewerId, ownerId, handles) {
+async function resolve(viewerId, ownerId, handles, audience = null) {
   const out = [];
   for (const handle of handles) {
     // A person who can answer wins over a record about somebody, because the
     // stronger promise should not be silently downgraded.
     const person = await resolveVisibleHandle(viewerId, handle);
     if (person) {
+      const reachable = !audience || audience.has(person.id);
       out.push({
-        handle, kind: 'person', id: person.id, name: person.name, notified: true,
+        handle,
+        kind: 'person',
+        id: person.id,
+        name: person.name,
+        notified: reachable,
+        // Only ever set when the answer is no, so a renderer that ignores it
+        // simply draws the quieter form rather than inventing a reason.
+        reason: reachable ? null : 'no-access',
       });
       continue;
     }
@@ -106,19 +133,41 @@ async function resolve(viewerId, ownerId, handles) {
         // renderer has to make this distinction and none of them should have
         // to know the rule.
         notified: false,
+        reason: 'no-account',
       });
       continue;
     }
-    out.push({ handle, kind: 'unknown', id: null, name: handle, notified: false });
+    out.push({
+      handle, kind: 'unknown', id: null, name: handle, notified: false, reason: null,
+    });
   }
   return out;
 }
 
 /** Parse and resolve in one step, which is what every caller actually wants. */
-async function of(body, { viewerId, ownerId }) {
+async function of(body, { viewerId, ownerId, audience = null }) {
   const handles = parse(body);
   if (handles.length === 0) return [];
-  return resolve(viewerId, ownerId, handles);
+  return resolve(viewerId, ownerId, handles, audience);
 }
 
-module.exports = { parse, resolve, of, handleFrom, uniqueContactHandle, TOKEN_RE };
+/**
+ * The same, for many bodies at once.
+ *
+ * A thread is read whole, and resolving each message on its own turns one
+ * screen into a query per @ per message. The handles repeat heavily — a thread
+ * about a trip says @tunde-bakare a dozen times — so they are gathered, looked
+ * up once, and handed back per body.
+ */
+async function forBodies(bodies, { viewerId, ownerId, audience = null }) {
+  const perBody = bodies.map((b) => parse(b));
+  const all = [...new Set(perBody.flat())];
+  if (all.length === 0) return perBody.map(() => []);
+  const resolved = await resolve(viewerId, ownerId, all, audience);
+  const byHandle = new Map(resolved.map((m) => [m.handle, m]));
+  return perBody.map((handles) => handles.map((h) => byHandle.get(h)).filter(Boolean));
+}
+
+module.exports = {
+  parse, resolve, of, forBodies, handleFrom, uniqueContactHandle, TOKEN_RE,
+};

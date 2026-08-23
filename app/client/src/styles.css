@@ -2471,11 +2471,27 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
-.mention.is-contact {
+/* A contact, and a real person who is not in this space, are drawn the same
+   way on purpose. They differ in what they are and agree in what matters
+   here: nothing reached them. Hover says which. */
+.mention.is-contact,
+.mention.is-quiet {
   color: var(--text-muted);
   font-weight: 500;
   border-bottom: 1px dotted var(--text-muted);
   cursor: help;
+}
+
+/* Holds the picker over the composer instead of shoving the send button
+   down the page as somebody types. */
+.mention-anchor { position: relative; }
+.mention-anchor .mention-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin: 0 0 6px;
+  z-index: 20;
 }
 
 .mention-picker {

@@ -6,8 +6,98 @@ const db = require('../lib/db');
 const mentions = require('../lib/mentions');
 const { sendEmail } = require('../lib/email');
 const { limit, clientIp } = require('../lib/rateLimit');
+const { resolveAccess, spaceAudience } = require('../lib/spaceAccess');
 
 const router = asyncRouter();
+
+function likeFor(q) {
+  return `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+}
+
+function normalizeQuery(raw) {
+  return String(raw || '').trim().toLowerCase().replace(/^@+/, '');
+}
+
+/**
+ * The picker inside a space, where "who can I address" has a narrower answer.
+ *
+ * Authorised by access to the SPACE, not by PA access to its owner: you can be
+ * a member of a space belonging to somebody who is not your principal, and in
+ * that thread the people worth naming are the ones in the room with you. The
+ * owner-scoped route below would refuse you, correctly and uselessly.
+ *
+ * PEOPLE are the space's audience. Nobody else, because an @ that reaches
+ * outside the room would either notify a person who cannot open the thread or
+ * quietly fail to notify anybody. Membership is not a secret within a space —
+ * everyone here can already see the member list.
+ *
+ * CONTACTS are the owner's, and are offered only to someone who may already
+ * read them. A member who is not the owner's assistant sees no contact list
+ * here; the office's address book is not a side effect of being added to a
+ * thread.
+ */
+router.get('/space/:spaceId/lookup', requireAuth, async (req, res) => {
+  const access = await resolveAccess(req.params.spaceId, req.user.id);
+  // Same as everywhere else in spaces: invisible and non-existent look alike.
+  if (!access) return res.status(404).json({ error: 'Thread not found.' });
+
+  const q = normalizeQuery(req.query.q);
+  const like = likeFor(q);
+  const audience = [...await spaceAudience(access.space)].filter((id) => id !== req.user.id);
+
+  let people = [];
+  if (audience.length > 0) {
+    const holes = audience.map(() => '?').join(',');
+    people = await db.prepare(`
+      SELECT id, name, slug, email FROM users
+       WHERE id IN (${holes})
+         AND (? = '' OR lower(name) LIKE ? ESCAPE '\\' OR lower(slug) LIKE ? ESCAPE '\\')
+       ORDER BY name
+       LIMIT 10
+    `).all(...audience, q, like, like);
+  }
+
+  const mayReadContacts = access.space.owner_id === req.user.id || await db.prepare(
+    "SELECT 1 FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status = 'active'",
+  ).get(access.space.owner_id, req.user.id);
+
+  const contacts = mayReadContacts ? await db.prepare(`
+    SELECT id, name, email, handle FROM contacts
+     WHERE owner_id = ?
+       AND handle IS NOT NULL
+       AND (? = '' OR lower(name) LIKE ? ESCAPE '\\' OR lower(handle) LIKE ? ESCAPE '\\')
+     ORDER BY name
+     LIMIT 10
+  `).all(access.space.owner_id, q, like, like) : [];
+
+  // On the address, never on the handle — a contact's is derived from their
+  // name and a user's is whatever they chose, so the two strings differ for
+  // one and the same person. Used to suppress the duplicate below and
+  // deliberately not returned.
+  const addressable = new Set(people.map((p) => String(p.email || '').toLowerCase()));
+
+  res.json({
+    people: people.map((p) => ({
+      handle: p.slug, name: p.name, kind: 'person', notified: true,
+    })),
+    // Dropped before mapping, while the address is still there to compare on.
+    // Somebody already in the room is offered once, as a person, not a second
+    // time as a record about themselves.
+    contacts: contacts
+      .filter((c) => !addressable.has(String(c.email || '').toLowerCase()))
+      .map((c) => ({
+        handle: c.handle,
+        name: c.name || c.email,
+        kind: 'contact',
+        notified: false,
+        // No invitation offered from inside a thread. Connecting to somebody
+        // is an act of the office, and belongs where the office's contacts are
+        // managed rather than as a button beside a half-typed sentence.
+        canInvite: false,
+        contactId: c.id,
+      })),
+  });
+});
 
 /**
  * What the @ picker offers, in two groups, because they are two things.
@@ -21,8 +111,8 @@ const router = asyncRouter();
  * be discovered when nobody turns up.
  */
 router.get('/:ownerId/lookup', requireAuth, requirePaAccess, async (req, res) => {
-  const q = String(req.query.q || '').trim().toLowerCase().replace(/^@+/, '');
-  const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const q = normalizeQuery(req.query.q);
+  const like = likeFor(q);
 
   // Everyone the caller may address: their principals and the people who
   // support them, plus accepted peer connections.

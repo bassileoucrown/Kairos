@@ -51,6 +51,11 @@ async function onboard(p, name, email, roleLabel) {
     await pa.click('button:has-text("Finish setup")');
     await pa.waitForURL('**/today', { timeout: 15000 });
 
+    // Anchored on something Today always draws before asking what it does not
+    // draw. waitForURL fires on the URL changing, not on the page painting, so
+    // an unpainted Today has no .direct-line for the boring reason and this
+    // would have passed without testing anything.
+    await pa.waitForSelector('.today-date', { timeout: 15000 });
     ok('no direct line on Today while working alone',
       (await pa.locator('.direct-line').count()) === 0);
 

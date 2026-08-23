@@ -13,6 +13,12 @@ import { api } from '../lib/api.js';
  * A handle matching neither stays as plain text, because people write
  * "email me @ 9" and that must not become a broken link.
  */
+function titleFor(m) {
+  if (m.notified) return `${m.name} — they were told`;
+  if (m.reason === 'no-access') return `${m.name} — not in this space, so not told`;
+  return `${m.name} — a contact, not told`;
+}
+
 export function MentionText({ body, mentions = [] }) {
   if (!body) return null;
   const byHandle = new Map(mentions.map((m) => [m.handle.toLowerCase(), m]));
@@ -27,13 +33,15 @@ export function MentionText({ body, mentions = [] }) {
         if (!part.startsWith('@')) return part;
         const m = byHandle.get(part.slice(1).toLowerCase());
         if (!m || m.kind === 'unknown') return part;
+        // Three states, not two. A person outside this space is a real person
+        // and worth naming, but nothing reached them — so they are drawn like
+        // a mention rather than like an address, and say why.
+        const reached = m.notified;
         return (
           <span
             key={`${part}-${i}`}
-            className={`mention is-${m.kind}`}
-            title={m.notified
-              ? `${m.name} — they can see this`
-              : `${m.name} — a contact, not notified`}
+            className={`mention is-${reached ? m.kind : 'quiet'}`}
+            title={titleFor(m)}
           >
             @{m.handle}
           </span>
@@ -52,7 +60,12 @@ export function MentionText({ body, mentions = [] }) {
  * offer is the point. Typing @ for a contact used to find nothing at all,
  * which reads as a bug rather than as "this person has no account yet".
  */
-export function MentionPicker({ ownerId, value, onChange, textareaRef }) {
+export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }) {
+  // Inside a space the answer to "who can I address" is narrower — the people
+  // in the room — and is authorised by access to the space rather than by
+  // being somebody's assistant. Two endpoints, one component, because the
+  // difference is in who may be offered, not in how choosing one works.
+  const source = spaceId ? `/mentions/space/${spaceId}/lookup` : (ownerId && `/mentions/${ownerId}/lookup`);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [found, setFound] = useState({ people: [], contacts: [] });
@@ -81,15 +94,15 @@ export function MentionPicker({ ownerId, value, onChange, textareaRef }) {
   }, [value, textareaRef]);
 
   useEffect(() => {
-    if (!open || !ownerId) return undefined;
+    if (!open || !source) return undefined;
     let live = true;
     const t = setTimeout(() => {
-      api.get(`/mentions/${ownerId}/lookup?q=${encodeURIComponent(q)}`)
+      api.get(`${source}?q=${encodeURIComponent(q)}`)
         .then((d) => { if (live) setFound(d); })
         .catch(() => {});
     }, 150);
     return () => { live = false; clearTimeout(t); };
-  }, [open, q, ownerId]);
+  }, [open, q, source]);
 
   function insert(handle) {
     const before = String(value || '').slice(0, anchor.current);
