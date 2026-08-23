@@ -183,7 +183,17 @@ router.post('/:ownerId/approvals/:bookingId/counter', requirePaAccess, async (re
     WHERE b.id = ? AND b.owner_id = ?
   `).get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Request not found.' });
-  if (booking.status !== 'pending') return res.status(400).json({ error: 'This request was already resolved.' });
+  // Confirmed as well as pending, and that is the point of the change.
+  //
+  // The booker's choice no longer holds the booking, so a Tier 1 booking made
+  // in person when the type says video is confirmed on arrival. This used to
+  // refuse anything not pending, which would have left the office able to
+  // suggest another format only for the bookings that were already waiting —
+  // that is, never for the ones this change lets through. Cancelled and
+  // declined are still refused: there is nothing left to arrange.
+  if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+    return res.status(400).json({ error: 'That booking is not happening, so there is nothing to suggest.' });
+  }
 
   const { format, formatNote } = req.body || {};
   if (!formats.isFormat(format)) return res.status(400).json({ error: 'Choose a way of meeting.' });

@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import VideoJoinLink from '../../components/VideoJoinLink.jsx';
+import FormatChoice from '../../components/FormatChoice.jsx';
 
 const SCOPES = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -43,6 +44,40 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
   // Which booking's correspondence is open, and what it holds.
   const [openTrail, setOpenTrail] = useState(null);
   const [trail, setTrail] = useState(null);
+  // Which booking is having another format suggested, and what the suggestion
+  // is. One at a time — two half-written suggestions on screen is a way to
+  // send the wrong one.
+  const [counterFor, setCounterFor] = useState(null);
+  const [counterFormat, setCounterFormat] = useState('');
+  const [counterNote, setCounterNote] = useState('');
+  const [busyId, setBusyId] = useState(null);
+
+  // The counter endpoint is scoped to a principal; on the principal's own
+  // dashboard no ownerId is passed, so it is their own id.
+  const subjectId = ownerId || user?.id;
+
+  function openCounter(b) {
+    setError('');
+    setCounterFor(b.id);
+    setCounterFormat(b.usualFormat && b.usualFormat !== b.format ? b.usualFormat : '');
+    setCounterNote('');
+  }
+  function closeCounter() {
+    setCounterFor(null);
+    setCounterFormat('');
+    setCounterNote('');
+  }
+  async function sendCounter(b) {
+    setBusyId(b.id);
+    setError('');
+    try {
+      await api.post(`/pa/${subjectId}/approvals/${b.id}/counter`, {
+        format: counterFormat, formatNote: counterNote,
+      });
+      closeCounter();
+      load(scope, query);
+    } catch (err) { setError(err.message); } finally { setBusyId(null); }
+  }
 
   async function load(currentScope, q) {
     setError('');
@@ -135,7 +170,7 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
                 {b.formatLabel}
                 {/* The office is regularly asked whether somebody was given an
                     exception. This is where that is on the record. */}
-                {b.wasUnusual && ` — they asked for this instead of ${b.usualFormatLabel.toLowerCase()}`}
+                {b.wasUnusual && ` — they chose this instead of ${b.usualFormatLabel.toLowerCase()}`}
                 {b.formatNote && ` · “${b.formatNote}”`}
               </div>
             </div>
@@ -146,6 +181,17 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
                   {openTrail === b.id ? 'Hide' : `History (${b.trailLength})`}
                 </button>
               )}
+              {/* The booker's format is allowed on arrival, so this is the
+                  only place the office can say "actually, come in" about a
+                  booking that never went to the approval queue. Without it,
+                  suggesting another format would be possible only for the
+                  bookings that were already being held — never for the ones
+                  the booker's own choice now lets straight through. */}
+              {scope === 'upcoming' && b.status === 'confirmed' && b.formatState !== 'countered' && (
+                <button className="itin-tool" type="button" onClick={() => openCounter(b)}>
+                  Suggest another format
+                </button>
+              )}
               {scope === 'upcoming' && (
                 <button className="btn btn-danger btn-sm" type="button" onClick={() => handleCancel(b)}>
                   Cancel
@@ -153,6 +199,58 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
               )}
             </div>
           </div>
+
+          {counterFor === b.id && (
+            <div style={{ marginTop: 14 }}>
+              <FormatChoice
+                idPrefix={`bk-counter-${b.id}`}
+                formats={b.formats}
+                value={counterFormat}
+                onChange={setCounterFormat}
+                note={counterNote}
+                onNote={setCounterNote}
+                legend="Suggest instead:"
+                alreadyAskedId={b.format}
+                noteLabel="What are you suggesting?"
+              />
+              {counterFormat && counterFormat !== 'other' && (
+                <div className="field">
+                  <label htmlFor={`bk-counter-why-${b.id}`}>Why (optional)</label>
+                  <input
+                    id={`bk-counter-why-${b.id}`}
+                    type="text"
+                    maxLength={300}
+                    value={counterNote}
+                    onChange={(e) => setCounterNote(e.target.value)}
+                    placeholder="The grounds are being resurfaced"
+                  />
+                  <p className="hint">Goes to them in the email. A reason turns a refusal into an arrangement.</p>
+                </div>
+              )}
+              <p className="hint">
+                Their time stays booked either way. They will be emailed, and can accept
+                this or withdraw.
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  type="button"
+                  disabled={busyId === b.id || !counterFormat}
+                  onClick={() => sendCounter(b)}
+                >
+                  {busyId === b.id ? 'Sending…' : 'Send suggestion'}
+                </button>
+                <button className="btn btn-sm" type="button" onClick={closeCounter}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {b.formatState === 'countered' && b.counterFormatLabel && (
+            <div className="format-note-box" style={{ marginTop: 12 }}>
+              <strong>You suggested {b.counterFormatLabel.toLowerCase()} — waiting on them</strong>
+              {b.counterFormatNote && <span className="said">“{b.counterFormatNote}”</span>}
+            </div>
+          )}
 
           {openTrail === b.id && (
             <div className="trail">

@@ -25,7 +25,7 @@ router.get('/:slug', async (req, res) => {
   const owner = await getOwnerBySlug(req.params.slug);
   if (!owner) return res.status(404).json({ error: 'This booking page does not exist.' });
 
-  const meetingTypes = await db.prepare('SELECT id, name, slug, duration_minutes, description, location_type FROM meeting_types WHERE owner_id = ? AND is_active = 1 ORDER BY created_at')
+  const meetingTypes = await db.prepare('SELECT id, name, slug, duration_minutes, description, location_type, access_tier FROM meeting_types WHERE owner_id = ? AND is_active = 1 ORDER BY created_at')
     .all(owner.id);
 
   res.json({
@@ -37,7 +37,15 @@ router.get('/:slug', async (req, res) => {
       durationMinutes: mt.duration_minutes,
       description: mt.description,
       locationType: mt.location_type,
+      locationLabel: formats.label(mt.location_type),
       formats: formats.offer(mt.location_type),
+      // Whether this one is answered by a person, as a plain yes or no. The
+      // tier number itself stays private — it is the office's own grading of
+      // who someone is, and a booker has no business reading it. Whether they
+      // are about to make a request rather than a booking is different: they
+      // find that out one click later regardless, and knowing before they
+      // fill the form in is simply better manners.
+      needsApproval: (mt.access_tier || 1) >= 3,
     })),
   });
 });
@@ -103,19 +111,21 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
   if (noteProblem) return res.status(400).json({ error: noteProblem });
   const formatNote = String(req.body?.formatNote || '').trim() || null;
 
-  // Two separate reasons a booking might not go straight on the diary, and
-  // they are independent: the meeting type's access tier, and whether the
-  // booker asked for a format other than the usual one. Either is enough.
-  const tierNeedsApproval = meetingType.access_tier >= 3;
-  const formatNeedsAgreement = formats.needsAgreement(chosen, meetingType.location_type);
-  const needsApproval = tierNeedsApproval || formatNeedsAgreement;
-  const status = needsApproval ? 'pending' : 'confirmed';
-  const formatState = formatNeedsAgreement ? formats.STATES.proposed : formats.STATES.agreed;
+  // One reason a booking might not go straight on the diary: the meeting
+  // type's access tier. The format is not a second one.
+  //
+  // It used to be. Asking to meet in person when the type said video held the
+  // booking until somebody agreed, which made a Tier 1 booking pending because
+  // the booker preferred the telephone — offering four ways to meet and then
+  // treating three of them as an imposition. The choice is allowed; the office
+  // can still suggest otherwise afterwards, which is the counter flow below.
+  const status = meetingType.access_tier >= 3 ? 'pending' : 'confirmed';
+  const formatState = formats.STATES.agreed;
 
   // The room follows the format that will actually be used, not the one the
   // meeting type happens to name. Creating one for a booking that turns out to
   // be in person would put a dead video link in a confirmation email.
-  const videoRoom = (chosen === 'video' && formatState === formats.STATES.agreed)
+  const videoRoom = chosen === 'video'
     ? `kairos-${crypto.randomBytes(8).toString('hex')}`
     : null;
 
@@ -131,9 +141,14 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
     bookingId: id, ownerId: owner.id, kind: events.KINDS.booked,
     actorLabel: cleanName, toValue: chosen,
   });
-  if (formatNeedsAgreement) {
+  // A departure from the principal's usual format is worth a line of its own
+  // in the trail — the office is regularly asked whether somebody was given an
+  // exception, and "booked" alone does not answer it. Recorded as agreed
+  // rather than proposed, because that is what it is: the choice stands, and
+  // nobody is being asked for anything.
+  if (formats.isDeparture(chosen, meetingType.location_type)) {
     await events.record({
-      bookingId: id, ownerId: owner.id, kind: events.KINDS.format_proposed,
+      bookingId: id, ownerId: owner.id, kind: events.KINDS.format_agreed,
       actorLabel: cleanName, fromValue: meetingType.location_type, toValue: chosen,
       note: formatNote || '',
     });
@@ -150,7 +165,14 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
   }
 
   const when = rangeForEmail(start.toISOString(), end.toISOString(), bookerTimezone);
-  if (needsApproval) {
+  const departed = formats.isDeparture(chosen, meetingType.location_type);
+  // Said the same way in both branches: what they are doing, not what they
+  // have requested. Nobody is being asked to agree to it.
+  const howTheyAreMeeting = departed
+    ? ` They are meeting by ${formats.label(chosen)}${formatNote ? ` — ${formatNote}` : ''}, rather than the usual ${formats.label(meetingType.location_type)}.`
+    : '';
+
+  if (status === 'pending') {
     await sendEmail({
       ownerId: owner.id, toEmail: cleanEmail, relatedBookingId: id, category: 'transactional',
       subject: `Request received: ${meetingType.name} with ${owner.name}`,
@@ -160,9 +182,7 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
       ownerId: owner.id, toEmail: owner.email, relatedBookingId: id, category: 'transactional',
       subject: `Approval needed: ${cleanName} wants to book ${meetingType.name}`,
       body: `${cleanName} (${cleanEmail}) requested ${when} (${bookerTimezone}) for ${meetingType.name}.`
-        + (formatNeedsAgreement
-          ? ` They asked to meet by ${formats.label(chosen)}${formatNote ? ` — ${formatNote}` : ''}, rather than the usual ${formats.label(meetingType.location_type)}.`
-          : '')
+        + howTheyAreMeeting
         + ' Review it in your Approval Queue.',
     });
   } else {
@@ -171,6 +191,23 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
       subject: `Confirmed: ${meetingType.name} with ${owner.name}`,
       body: `Hi ${cleanName},\n\nYou're confirmed for ${when} (${bookerTimezone}).\n\nManage this booking: /book/manage/${id}`,
     });
+    // The office hears about this one too, and only this one.
+    //
+    // A booking that takes the usual format needs no announcement — it is on
+    // the diary and that is the whole point of an open tier. But a booking
+    // that departs from it used to be held until somebody agreed, and the
+    // office found out because it was sitting in their queue. Now it goes
+    // straight through, so without this the first they would know of somebody
+    // arriving in person is the person arriving.
+    if (departed) {
+      await sendEmail({
+        ownerId: owner.id, toEmail: owner.email, relatedBookingId: id, category: 'transactional',
+        subject: `Booked in person: ${cleanName} — ${meetingType.name}`.replace('in person', formats.label(chosen).toLowerCase()),
+        body: `${cleanName} (${cleanEmail}) booked ${when} (${bookerTimezone}) for ${meetingType.name}.`
+          + howTheyAreMeeting
+          + ' Their choice stands; suggest another format from Bookings if it does not suit.',
+      });
+    }
   }
 
   res.status(201).json({

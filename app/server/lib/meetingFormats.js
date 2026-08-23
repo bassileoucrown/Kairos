@@ -7,19 +7,26 @@
 // the building anyway, somebody on a train with no signal. They had no way to
 // say so except to book and then email about it.
 //
-// So the booker chooses, and the office agrees. Two rules make that safe.
+// So the booker chooses, and the choice stands. Two rules make that safe.
 //
-// TAKING THE USUAL FORMAT CHANGES NOTHING. A booker who accepts the format the
-// principal already offers is treated exactly as before: Tier 1 and 2 land on
-// the diary immediately, Tier 3 and 4 go to the approval queue. Asking for
-// something different is what turns a booking into a request, whatever the
-// tier — because that is the only case where somebody has to decide.
+// THE BOOKER'S CHOICE IS ALLOWED. Whatever they pick is the format, agreed on
+// arrival. It does not hold the booking and it does not turn a booking into a
+// request — the access tier alone decides that, exactly as it did before
+// formats existed. Tier 1 and 2 land on the diary; Tier 3 and 4 go to the
+// approval queue; and in both cases the format is simply what was asked for.
 //
-// THE OFFICE CAN ANSWER BACK. Accepting or declining is a poor pair of choices
-// when the real answer is usually "not video, come in" — so the office can
-// propose a different format and the booker accepts it or withdraws. That is
-// how this conversation goes on the telephone, and there is no reason the app
-// should be worse at it.
+// This was the other way round at first: choosing anything other than the
+// principal's usual format held the booking until somebody agreed. That made a
+// menu out of a question already answered — it offered four ways to meet and
+// then treated three of them as an imposition, so a Tier 1 booking that would
+// have been instant became pending because somebody preferred the telephone.
+//
+// THE OFFICE CAN STILL ANSWER BACK. What replaces the gate is a suggestion:
+// the office may propose a different format, and then the booker accepts it or
+// withdraws. That is how the conversation goes on the telephone — you do not
+// refuse to hold the appointment until the room is settled, you take it and
+// say "actually, come in" — and there is no reason the app should be worse
+// at it.
 
 const FORMATS = {
   video: {
@@ -103,14 +110,17 @@ function offer(defaultFormat) {
 }
 
 /**
- * Does this choice need somebody to agree to it?
+ * Is this a departure from what the principal usually offers?
  *
- * Only when it differs from what the principal already offers. Choosing the
- * usual format is not a request and must not be treated as one.
+ * For saying so, and nothing else. This used to decide whether a booking was
+ * held — it no longer does, and it must not be given that job again, because
+ * the booker's choice is allowed. The office is still told, since an assistant
+ * reading an approval needs to see that this "Intro call" is in person before
+ * they answer it; being told is not the same as being asked.
  */
-function needsAgreement(chosen, defaultFormat) {
+function isDeparture(chosen, defaultFormat) {
   if (!chosen) return false;
   return chosen !== defaultFormat;
 }
 
-module.exports = { FORMATS, IDS, STATES, isFormat, label, problem, offer, needsAgreement };
+module.exports = { FORMATS, IDS, STATES, isFormat, label, problem, offer, isDeparture };

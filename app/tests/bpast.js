@@ -91,19 +91,25 @@ const anon = sess();
     // ---- Before anything has ended -----------------------------------------
     head('The list as it stands:');
     r = await boss('GET', '/bookings?scope=upcoming');
-    ok('the confirmed ones are ahead of you', r.d.bookings.length === 2,
+    // Three, not two. The in-person one is on an open tier, and choosing a
+    // format other than the principal's usual no longer holds a booking —
+    // only the tier does. It used to be counted here as a question.
+    ok('the confirmed ones are ahead of you', r.d.bookings.length === 3,
       String(r.d.bookings.length));
     ok('and each says how it is to happen',
       r.d.bookings.every((b) => !!b.formatLabel), JSON.stringify(r.d.bookings.map((b) => b.formatLabel)));
 
-    r = await boss('GET', '/bookings?scope=pending');
-    ok('the two that are still questions are pending', r.d.bookings.length === 2,
-      String(r.d.bookings.length));
     const asked = r.d.bookings.find((b) => b.id === visiting.id);
-    ok('and one is on record as having asked for something unusual', asked.wasUnusual === true);
+    ok('the one who wanted something else is simply booked', !!asked && asked.status === 'confirmed',
+      String(asked && asked.status));
+    ok('and is on record as having chosen something unusual', asked.wasUnusual === true);
     ok('saying what, against what the usual was',
       asked.formatLabel === 'In person' && asked.usualFormatLabel === 'Video call',
       `${asked.formatLabel} / ${asked.usualFormatLabel}`);
+
+    r = await boss('GET', '/bookings?scope=pending');
+    ok('and only the gated tier is still a question', r.d.bookings.length === 1,
+      String(r.d.bookings.length));
 
     r = await boss('GET', '/bookings?scope=cancelled');
     ok('nothing has ended yet', r.d.bookings.length === 0, String(r.d.bookings.length));
@@ -119,8 +125,10 @@ const anon = sess();
     const byId = Object.fromEntries(r.d.bookings.map((b) => [b.id, b]));
     ok('the cancelled one says cancelled', byId[dropped.id]?.status === 'cancelled');
     ok('the declined one says declined', byId[refused.id]?.status === 'declined');
+    // Two left, not one: the in-person booking is confirmed now rather than
+    // waiting, so it stays on the upcoming list alongside the kept one.
     ok('and neither is still counted as upcoming',
-      (await boss('GET', '/bookings?scope=upcoming')).d.bookings.length === 1);
+      (await boss('GET', '/bookings?scope=upcoming')).d.bookings.length === 2);
 
     // The property somebody only discovers by standing in a lobby.
     head('Nobody is cancelled in silence:')
@@ -140,7 +148,8 @@ const anon = sess();
     r = await boss('GET', `/bookings?scope=upcoming&q=keep${ID}`);
     ok('an address matches too', r.d.bookings.length === 1 && r.d.bookings[0].id === kept.id);
     r = await boss('GET', '/bookings?scope=upcoming&q=intro');
-    ok('and so does the name of the meeting type', r.d.bookings.length === 1);
+    ok('and so does the name of the meeting type', r.d.bookings.length === 2,
+      String(r.d.bookings.length));
     r = await boss('GET', '/bookings?scope=upcoming&q=%25');
     ok('a wildcard is searched for, not obeyed', r.d.bookings.length === 0,
       String(r.d.bookings.length));
@@ -209,12 +218,15 @@ const anon = sess();
     r = await boss('GET', `/bookings/${talked}/trail`);
     const kinds = r.d.trail.filter((t) => t.source === 'event').map((t) => t.kind);
     ok('every turn of it is there, in the order it happened',
-      JSON.stringify(kinds) === JSON.stringify(['booked', 'format_proposed', 'format_countered', 'format_agreed']),
+      // The booker's choice is recorded as agreed, not proposed: it stands on
+      // arrival and nobody is being asked for anything. The office's answer is
+      // still a counter, and accepting it is the second format_agreed.
+      JSON.stringify(kinds) === JSON.stringify(['booked', 'format_agreed', 'format_countered', 'format_agreed']),
       JSON.stringify(kinds));
-    const proposed = r.d.trail.find((t) => t.kind === 'format_proposed');
-    ok('the ask says what was wanted and what it replaced',
-      /in person/i.test(proposed.headline) && /video call/i.test(proposed.headline),
-      proposed.headline);
+    const chose = r.d.trail.filter((t) => t.kind === 'format_agreed')[0];
+    ok('the choice says what was wanted and what it replaced',
+      /in person/i.test(chose.headline) && /video call/i.test(chose.headline),
+      chose.headline);
     const countered = r.d.trail.find((t) => t.kind === 'format_countered');
     ok('the office\'s answer carries its reason',
       countered.detail === 'The grounds are being resurfaced', String(countered.detail));

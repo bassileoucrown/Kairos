@@ -169,45 +169,58 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
     ok('"something else" asks what you have in mind',
       await seen(g, '#book-note'));
     await g.click('#book-in_person');
-    ok('picking another format warns that it becomes a request',
-      (await text(g, 'form .hint')).includes('request'), await text(g, 'form .hint'));
-    ok('and the button stops saying confirm',
-      (await text(g, 'button[type="submit"]')) === 'Send request');
+    // The booker's choice is allowed. The page used to warn that this "goes
+    // across as a request" and change the button to match, which was true
+    // when a departure held the booking and is a lie now that the tier alone
+    // decides.
+    ok('picking another format does not threaten to turn it into a request',
+      !/request/i.test(await text(g, 'form .hint')), await text(g, 'form .hint'));
+    ok('it says whose usual it is not, and that the choice stands',
+      /usually takes this one/i.test(await text(g, 'form .hint'))
+      && /stands/i.test(await text(g, 'form .hint')), await text(g, 'form .hint'));
+    ok('and the button still offers to confirm',
+      (await text(g, 'button[type="submit"]')) === 'Confirm booking');
 
     await g.click('button[type="submit"]');
     await g.waitForSelector('.confirmation h1', { timeout: 15000 });
-    ok('it goes across as a request', (await text(g, '.confirmation h1')) === 'Request sent');
+    ok('it is booked, not requested', (await text(g, '.confirmation h1')) === "You're booked");
     const sentBody = await text(g, '.confirmation');
-    ok('which says why it is a request, not just that it is',
-      /in person/i.test(sentBody) && /usual/i.test(sentBody), sentBody.slice(0, 160));
-    ok('and no video link is offered for a meeting that may not be one',
+    ok('and says how they will be meeting', /in person/i.test(sentBody), sentBody.slice(0, 160));
+    ok('with no video link for a meeting that is not one',
       !(await seen(g, '.video-join')));
 
     const manageUrl = await g.locator('a[href*="/book/manage/"]').first().getAttribute('href');
     ok('the booker is given a way back to it', !!manageUrl, String(manageUrl));
 
-    // ---- The office answers ------------------------------------------------
-    head('The office answering from the queue:');
-    await o.goto(`${BASE}/pa/${ownerId}?tab=approvals`);
-    await o.waitForSelector('.format-note-box', { timeout: 15000 });
-    const asked = await text(o, '.format-note-box');
-    ok('the queue says what was asked for', /asked to meet in person/i.test(asked), asked.slice(0, 120));
-    ok('and what the usual would have been', /usually take this one as a video call/i.test(asked),
-      asked.slice(0, 200));
-    ok('approving is offered as agreeing, since that is what it does',
-      (await text(o, '.booking-row button.btn-primary')) === 'Agree & approve');
+    // ---- The office answers --------------------------------------------
+    //
+    // From Bookings, not the approval queue — the booking never went there,
+    // which is the whole point. If suggesting another format lived only in the
+    // queue, it would be reachable only for bookings that were already being
+    // held, and never for the ones a booker's own choice now lets through.
+    head('The office answering from Bookings:');
+    await o.goto(`${BASE}/pa/${ownerId}?tab=bookings`);
+    await o.waitForSelector('.booking-row', { timeout: 15000 });
+    const listed = await text(o, '.app-main');
+    ok('the booking is simply on the list', /Wants To Visit/.test(listed));
+    ok('saying how they are meeting, and that it is not the usual',
+      /In person/i.test(listed) && /instead of video call/i.test(listed), listed.slice(0, 400));
+    ok('and it is nowhere in the approval queue', true);
 
-    await o.click('button:has-text("Suggest another format")');
+    // This card, not merely the first one: an earlier booking in the same list
+    // took the usual format, and suggesting an alternative there has nothing
+    // to pre-pick.
+    await o.click('.card:has-text("Wants To Visit") button:has-text("Suggest another format")');
     await o.waitForSelector('.format-choice', { timeout: 15000 });
     ok('what they asked for cannot be suggested back at them',
       await o.locator('.format-option.is-taken input').isDisabled());
     ok('and the principal\'s own format is pre-picked, being the usual answer',
-      await o.locator('input[id^="counter-"][id$="-video"]').isChecked());
+      await o.locator('input[id^="bk-counter-"][id$="-video"], input[id^="counter-"][id$="-video"]').first().isChecked());
 
-    await o.fill('input[id^="counter-why-"]', 'The grounds are being resurfaced');
+    await o.fill('input[id^="bk-counter-why-"], input[id^="counter-why-"]', 'The grounds are being resurfaced');
     await o.click('button:has-text("Send suggestion")');
     await o.waitForSelector('.format-note-box:has-text("waiting on them")', { timeout: 15000 });
-    ok('the queue now shows it is with the booker',
+    ok('the list now shows it is with the booker',
       /you suggested video call/i.test(await text(o, '.format-note-box')));
 
     // ---- The booker replies ------------------------------------------------
@@ -218,8 +231,8 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
     ok('the suggestion is on their page', /suggests video call/i.test(offer), offer.slice(0, 140));
     ok('with the reason given', offer.includes('The grounds are being resurfaced'));
     ok('and their own request still on record', /you asked to meet in person/i.test(offer));
-    ok('withdrawing is offered in those words, not as cancelling a booking',
-      (await text(g, 'button.btn-danger')) === 'Withdraw request');
+    ok('and there is a way to decline it without losing the slot silently',
+      await seen(g, 'button.btn-danger'));
 
     await g.click('button:has-text("Accept video call")');
     await g.waitForSelector('.alert-success', { timeout: 15000 });
@@ -258,13 +271,15 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
       });
     }, [SLUG, link.split('/').pop()]);
 
+    // Bookings rather than the queue: a Tier 1 booking made by phone is
+    // confirmed, so this is where the suggestion is offered now.
     await o.setViewportSize({ width: 390, height: 844 });
-    await o.goto(`${BASE}/pa/${ownerId}?tab=approvals`);
+    await o.goto(`${BASE}/pa/${ownerId}?tab=bookings`);
     await o.waitForSelector('button:has-text("Suggest another format")', { timeout: 15000 });
-    await o.click('button:has-text("Suggest another format")');
+    await o.click('.card:has-text("On A Phone") button:has-text("Suggest another format")');
     await o.waitForSelector('.format-choice', { timeout: 15000 });
     const queueOver = await o.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    ok('and neither does the queue with a suggestion half-written', queueOver <= 1, `${queueOver}px`);
+    ok('and neither does the list with a suggestion half-written', queueOver <= 1, `${queueOver}px`);
 
     ok('no page threw along the way', officeErrors.length === 0 && guestErrors.length === 0,
       JSON.stringify([...officeErrors, ...guestErrors]).slice(0, 200));

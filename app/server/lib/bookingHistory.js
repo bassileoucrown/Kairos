@@ -60,10 +60,16 @@ function serialize(b) {
     formatLabel: formats.label(format),
     formatNote: b.format_note || null,
     formatState: b.format_state || 'agreed',
+    counterFormat: b.counter_format || null,
     counterFormatLabel: b.counter_format ? formats.label(b.counter_format) : null,
+    counterFormatNote: b.counter_format_note || null,
     usualFormat: b.location_type,
     usualFormatLabel: formats.label(b.location_type),
     wasUnusual: !!b.format && b.format !== b.location_type,
+    // The office can suggest another format from this list now that a
+    // booker's choice no longer holds the booking, so the choices travel with
+    // the row rather than being fetched a second time to draw one picker.
+    formats: formats.offer(b.location_type),
     hasBrief: !!b.has_brief,
     trailLength: Number(b.trail_length || 0),
     createdAt: b.created_at,

@@ -101,22 +101,33 @@ const anon = sess();
     });
     ok('choosing nothing is treated as the usual format', r.d.booking.status === 'confirmed');
 
-    // ---- Asking for something else --------------------------------------
-    head('Asking for something else:');
+    // ---- Choosing something else ----------------------------------------
+    //
+    // The booker's choice is allowed. It was not always: picking anything
+    // other than the principal's usual format used to hold the booking until
+    // somebody agreed, which made a Tier 1 booking pending because the caller
+    // preferred the telephone. The tier decides, and nothing else does.
+    head('Choosing something else:');
     open = await slots(openType.slug);
     r = await book(openType.slug, {
       name: 'Wants To Visit', email: `visit${ID}@x.com`, timezone: 'UTC',
       startAt: open[0].startAt, format: 'in_person',
     });
-    ok('a different format makes it a request, even on Tier 1',
-      r.d.booking.status === 'pending', JSON.stringify(r.d.booking).slice(0, 140));
+    ok('a different format is allowed, and Tier 1 still lands on the diary',
+      r.d.booking.status === 'confirmed', JSON.stringify(r.d.booking).slice(0, 140));
     const visitId = r.d.booking.id;
-    ok('and no video room is made for a meeting that may not be one',
+    ok('and no video room is made for a meeting that is not one',
       !r.d.booking.videoRoom);
 
     r = await anon('GET', `/public/bookings/${visitId}`);
-    ok('the booker can see it is waiting on the office',
-      r.d.booking.formatState === 'proposed', r.d.booking.formatState);
+    ok('the booker is not left waiting on anybody',
+      r.d.booking.formatState === 'agreed', r.d.booking.formatState);
+    ok('and it is in person, as they asked', r.d.booking.formatLabel === 'In person');
+
+    // The office is told, because it no longer arrives in their queue.
+    r = await boss('GET', '/emails');
+    const heard = (r.d.emails || []).some((e) => /Wants To Visit/.test(e.subject || ''));
+    ok('the office is emailed about a booking that departs from the usual', heard);
 
     // "Something else" has to say what it is.
     open = await slots(openType.slug);
@@ -131,28 +142,30 @@ const anon = sess();
       name: 'Specific', email: `spec${ID}@x.com`, timezone: 'UTC',
       startAt: open[0].startAt, format: 'other', formatNote: 'A walk around the estate',
     });
-    ok('with a note it is accepted', r.s === 201 && r.d.booking.status === 'pending');
+    ok('with a note it is accepted, and it too goes straight on the diary',
+      r.s === 201 && r.d.booking.status === 'confirmed', JSON.stringify(r.d).slice(0, 140));
     const walkId = r.d.booking.id;
 
-    // ---- The office agrees ------------------------------------------------
-    head('The office agreeing:');
-    r = await boss('GET', `/pa/${me.id}/approvals`);
-    const queued = r.d.bookings.find((b) => b.id === visitId);
-    ok('the request is in the queue', !!queued);
-    ok('saying what was asked for', queued.formatLabel === 'In person', queued.formatLabel);
-    ok('and what the usual would have been', queued.usualFormatLabel === 'Video call',
-      queued.usualFormatLabel);
-    const walkQueued = r.d.bookings.find((b) => b.id === walkId);
-    ok('a written-in request carries its words', walkQueued.formatNote === 'A walk around the estate',
-      String(walkQueued.formatNote));
+    // ---- What the office is shown ----------------------------------------
+    head('What the office is shown:');
+    r = await boss('GET', `/bookings?scope=upcoming`);
+    const listed = (r.d.bookings || []).find((b) => b.id === visitId);
+    ok('the booking is in the list', !!listed);
+    ok('saying how they are meeting', listed.formatLabel === 'In person', listed.formatLabel);
+    ok('and that it departs from the usual', listed.wasUnusual === true);
+    ok('with the usual named, so nobody has to remember it',
+      listed.usualFormatLabel === 'Video call', listed.usualFormatLabel);
+    ok('and the choices to suggest from travel with it',
+      Array.isArray(listed.formats) && listed.formats.length > 0);
 
-    r = await boss('POST', `/pa/${me.id}/approvals/${visitId}/approve`);
-    ok('approving settles it in one action', r.s === 200);
-    r = await anon('GET', `/public/bookings/${visitId}`);
-    ok('the booking is confirmed', r.d.booking.status === 'confirmed');
-    ok('the format is agreed', r.d.booking.formatState === 'agreed');
-    ok('it is in person', r.d.booking.formatLabel === 'In person');
-    ok('and no video room was invented for it', !r.d.booking.videoRoom);
+    const walkListed = (r.d.bookings || []).find((b) => b.id === walkId);
+    ok('a written-in choice carries its words',
+      walkListed.formatNote === 'A walk around the estate', String(walkListed.formatNote));
+
+    // Nothing is waiting on the office: it never became a request.
+    r = await boss('GET', `/pa/${me.id}/approvals`);
+    ok('and none of it is sitting in the approval queue',
+      !(r.d.bookings || []).some((b) => b.id === visitId || b.id === walkId));
 
     // ---- The office suggests something else ------------------------------
     head('The office suggesting something else:');
@@ -171,7 +184,12 @@ const anon = sess();
       String(r.d.booking.counterFormatLabel));
     ok('with the reason given', r.d.booking.counterFormatNote === 'The grounds are being resurfaced');
     ok('their own request is still on record', r.d.booking.formatLabel === 'Something else');
-    ok('and the slot is still held while they decide', r.d.booking.status === 'pending');
+    // Confirmed, not pending — and that is the change. A suggestion is not a
+    // withdrawal of the booking: their time stays theirs while they think
+    // about how to spend it. On a Tier 3 booking this would read 'pending',
+    // for the tier's own reasons rather than the format's.
+    ok('and their time is still theirs while they decide',
+      r.d.booking.status === 'confirmed', r.d.booking.status);
 
     // ---- The booker answers ----------------------------------------------
     head('The booker answering:');

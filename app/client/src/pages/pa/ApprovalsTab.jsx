@@ -79,10 +79,11 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
         <div className="empty-state">No requests waiting on approval — Tier 3/4 bookings will show up here.</div>
       )}
       {bookings && bookings.map((b) => {
-        // Three separate things the format can be doing, and the office needs
-        // to be told which: nothing unusual, they asked for something else, or
-        // we already answered and are waiting on them.
-        const asked = b.formatState === 'proposed';
+        // The booker's choice is allowed, so this is a statement rather than a
+        // question: they are meeting in person, and if that does not suit,
+        // suggest otherwise. `answered` is the one state still waiting on
+        // somebody, and the somebody is them.
+        const departure = !!b.format && !!b.usualFormat && b.format !== b.usualFormat;
         const answered = b.formatState === 'countered';
 
         return (
@@ -112,7 +113,7 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary btn-sm" type="button" disabled={busyId === b.id} onClick={() => act(b.id, 'approve')}>
-                  {asked ? 'Agree & approve' : 'Approve'}
+                  Approve
                 </button>
                 {counterFor !== b.id && !answered && (
                   <button className="btn btn-secondary btn-sm" type="button" disabled={busyId === b.id} onClick={() => openCounter(b)}>
@@ -125,14 +126,18 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
               </div>
             </div>
 
-            {asked && (
+            {/* Said, not asked. The meeting is happening the way they chose;
+                this is here so nobody answers an approval without noticing
+                that the "Intro call" is somebody coming to the building. */}
+            {departure && !answered && (
               <div className="format-note-box" style={{ marginTop: 12, marginBottom: 0 }}>
-                <strong>They asked to meet {b.formatLabel.toLowerCase()}</strong>
+                <strong>Meeting {b.formatLabel.toLowerCase()}</strong>
                 {b.formatNote && <span className="said">“{b.formatNote}”</span>}
                 {b.usualFormatLabel && (
                   <span className="said">
                     You usually take this one
-                    {b.usualFormat === 'in_person' ? ' in person.' : ` as a ${b.usualFormatLabel.toLowerCase()}.`}
+                    {b.usualFormat === 'in_person' ? ' in person' : ` as a ${b.usualFormatLabel.toLowerCase()}`}
+                    {' — suggest another format if that does not suit.'}
                   </span>
                 )}
               </div>

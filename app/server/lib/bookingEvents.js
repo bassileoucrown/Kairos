@@ -86,7 +86,14 @@ function headline(event, { formatLabel, whenLabel }) {
     case KINDS.format_countered:
       return `Suggested ${formatLabel(to).toLowerCase()} instead`;
     case KINDS.format_agreed:
-      return `Agreed on ${formatLabel(to).toLowerCase()}`;
+      // Name what it replaced when there was something to replace. This line
+      // is how the office answers "was an exception made for them?", and
+      // "Agreed on in person" on its own does not answer it — the useful half
+      // is that in person is not what this meeting type usually is. When the
+      // two match there is nothing to contrast, so it stays the short form.
+      return from && from !== to
+        ? `Agreed on ${formatLabel(to).toLowerCase()}, rather than ${formatLabel(from).toLowerCase()}`
+        : `Agreed on ${formatLabel(to).toLowerCase()}`;
     case KINDS.approved:
       return 'Approved';
     case KINDS.declined:

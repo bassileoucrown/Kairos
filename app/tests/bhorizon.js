@@ -142,6 +142,10 @@ const daysBetween = (a, b) =>
       await boss('PUT', '/availability', { rules: week, windowDays: 90 });
       const wide = (await slots()).slots;
       const target = wide.find((x) => daysBetween(dayKey(wide[0].startAt), dayKey(x.startAt)) >= 5);
+      // Say so rather than throwing on a property of undefined three lines
+      // later, which reads as a fault in the app rather than a suite that
+      // could not find what it needed.
+      if (!target) throw new Error('a 90-day window produced nothing five days out');
       await boss('PUT', '/availability', { rules: week, windowDays: 1 });
       return new Date(target.startAt);
     })();

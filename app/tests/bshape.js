@@ -140,10 +140,35 @@ const minuteOf = (iso) => Number(iso.slice(14, 16));
     ok('the gap is saved', r.d.gapMinutes === 15, String(r.d.gapMinutes));
 
     shortSlots = await slotsOf(short);
-    const morning = shortSlots.filter((s) => hourOf(s.startAt) >= 9 && hourOf(s.startAt) < 12)
-      .sort((a, b) => a.startAt.localeCompare(b.startAt));
+    // Two consecutive morning slots ON ONE DAY, which is not the same as the
+    // first two morning slots in the horizon.
+    //
+    // Filtering the whole window for 9am-to-noon and taking [0] and [1] pairs
+    // them across midnight whenever today has exactly one morning slot left —
+    // so the step measured is not a step at all, it is the distance from
+    // today's last morning to tomorrow's first. Green most of the day, red for
+    // the hour that produces that, which is the worst way for a test to fail.
+    const byDay = new Map();
+    for (const s of shortSlots) {
+      if (hourOf(s.startAt) < 9 || hourOf(s.startAt) >= 12) continue;
+      const k = s.startAt.slice(0, 10);
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(s);
+    }
+    const morning = [...byDay.values()]
+      .map((list) => list.sort((a, b) => a.startAt.localeCompare(b.startAt)))
+      .find((list) => list.length >= 2);
+    if (!morning) throw new Error('no single day has two morning slots to measure between');
+    // The distance between them, not the digits on the second one. A clock
+    // minute of :45 is only correct when the day's first slot is 09:00, which
+    // is not true of a today that is already half spent — and the property
+    // being tested was never about the clock, it is that a 30-minute meeting
+    // plus a 15-minute breather steps by 45.
+    const stepMinutes = Math.round(
+      (Date.parse(morning[1].startAt) - Date.parse(morning[0].startAt)) / 60000,
+    );
     ok('slots step by the meeting plus the breather, not by the meeting',
-      minuteOf(morning[1].startAt) === 45, `${morning[0].startAt} then ${morning[1].startAt}`);
+      stepMinutes === 45, `${morning[0].startAt} then ${morning[1].startAt} — ${stepMinutes} min`);
 
     // The property that makes it more than spacing on a grid.
     const first = morning[0];

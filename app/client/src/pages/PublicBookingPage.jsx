@@ -61,9 +61,14 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
 
   const { slots, ownerTimezone, windowDays, reload } = useOpenSlots({ ownerSlug: slug, meetingSlug });
 
-  // Asking for something other than the usual turns the booking into a
-  // request, whatever the tier — so the button has to stop saying "Confirm".
+  // Whether this is the principal's usual format. It no longer changes what
+  // happens — the choice is allowed and the tier alone decides whether the
+  // booking is held — so it no longer changes what the button says either.
+  // The page used to warn that choosing the telephone "goes across as a
+  // request", which was true then and would be a lie now.
   const differs = format !== meetingType.locationType;
+  // What the tier decides, which is the only thing that decides.
+  const willBeHeld = !!meetingType.needsApproval;
 
   async function handleConfirm(e) {
     e.preventDefault();
@@ -191,15 +196,17 @@ function SlotPicker({ slug, meetingSlug, owner, meetingType }) {
 
                   {differs && (
                     <p className="hint" style={{ marginBottom: 12 }}>
-                      That is not how {owner.name} usually takes this meeting, so this goes across
-                      as a request. Your time is held while the office answers.
+                      {owner.name} usually takes this one as a{' '}
+                      {(meetingType.locationLabel || 'video call').toLowerCase()}, but that is
+                      what you have asked for and it stands. They may write to suggest
+                      otherwise.
                     </p>
                   )}
 
                   <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
                     {submitting
-                      ? (differs ? 'Sending…' : 'Confirming…')
-                      : (differs ? 'Send request' : 'Confirm booking')}
+                      ? (willBeHeld ? 'Sending…' : 'Confirming…')
+                      : (willBeHeld ? 'Send request' : 'Confirm booking')}
                   </button>
                 </form>
               )}
