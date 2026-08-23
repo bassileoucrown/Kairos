@@ -2454,3 +2454,65 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 @keyframes focus-fade {
   to { box-shadow: 0 0 0 0 transparent; border-color: var(--border); }
 }
+
+/* ---- @ ----
+   Two things wearing one symbol, and the difference has to be visible.
+
+   An address is a person who will be told, so it is solid and carries the
+   accent. A mention is a record about somebody who will not, so it is quieter
+   and dotted. If these looked alike, an assistant would write "@tunde will
+   confirm" believing Tunde had been asked. */
+.mention {
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.mention.is-person {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mention.is-contact {
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px dotted var(--text-muted);
+  cursor: help;
+}
+
+.mention-picker {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  margin-top: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.mention-group {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 10px 4px;
+}
+.mention-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+.mention-option:hover { background: var(--bg-raised); }
+.mention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 10px;
+}
+.mention-row .mention-option { flex: 1; min-width: 0; }
+.mention-notice { padding: 6px 10px 8px; margin: 0; }

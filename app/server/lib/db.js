@@ -239,6 +239,40 @@ if (USE_PG && CONFIG_ERROR) {
   };
 }
 
+/**
+ * A handle for every contact that predates the column.
+ *
+ * Deliberately not importing lib/mentions: that module requires this one, and
+ * a cycle here runs during boot, before either is fully built. The rule is
+ * small enough to state twice, and stating it twice is cheaper than a
+ * require() that resolves to an empty object at exactly the wrong moment.
+ */
+async function backfillContactHandles() {
+  const rows = await impl.prepare(
+    'SELECT id, owner_id, name, email FROM contacts WHERE handle IS NULL OR handle = \'\'',
+  ).all();
+  if (rows.length === 0) return;
+
+  // Uniqueness is per owner, so the taken set is built per owner as we go.
+  const taken = new Map();
+  for (const r of rows) {
+    if (!taken.has(r.owner_id)) {
+      const existing = await impl.prepare(
+        'SELECT handle FROM contacts WHERE owner_id = ? AND handle IS NOT NULL',
+      ).all(r.owner_id);
+      taken.set(r.owner_id, new Set(existing.map((e) => e.handle)));
+    }
+    const set = taken.get(r.owner_id);
+    const base = String(r.name || r.email || '')
+      .split('@')[0].toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 38) || 'contact';
+    let candidate = base.length < 3 ? `c-${base}` : base;
+    for (let n = 2; set.has(candidate); n++) candidate = `${base}-${n}`.slice(0, 40);
+    set.add(candidate);
+    await impl.prepare('UPDATE contacts SET handle = ? WHERE id = ?').run(candidate, r.id);
+  }
+}
+
 // Retrofits columns added after a table already existed — CREATE TABLE IF NOT
 // EXISTS won't do it.
 async function ensureColumn(table, column, definition) {
@@ -317,6 +351,20 @@ function ready() {
       await impl.exec(schemaSql);
       await ensureColumn('contacts', 'birthday', 'TEXT');
       await ensureColumn('contacts', 'anniversary', 'TEXT');
+      // What to type after the @ to refer to this contact.
+      //
+      // Contacts are not users and have no slug of their own, so one is
+      // derived from the name and kept unique within an owner's contacts —
+      // deliberately not globally, since two principals may each know a
+      // different Tunde and neither has any business colliding with the other.
+      // See lib/mentions.js.
+      await ensureColumn('contacts', 'handle', 'TEXT');
+      // Every contact that predates the column gets one, so @ works for the
+      // whole address book on the first boot after this ships rather than only
+      // for people added afterwards. Runs once — the WHERE clause empties
+      // itself — and is deliberately done here rather than lazily on read, so
+      // no request ever pays for it.
+      await backfillContactHandles();
       await ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
       // Which plan the account is on. Existing rows land on 'founding' — see
       // lib/plans.js for why that is a fact in the row rather than a promise.
