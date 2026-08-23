@@ -5,7 +5,7 @@ const db = require('../lib/db');
 const mentions = require('../lib/mentions');
 const formats = require('../lib/meetingFormats');
 const { requireAuth } = require('../lib/auth');
-const { requirePaAccess, requireSchedulingAccess } = require('../lib/paAccess');
+const { requirePaAccess, requireSchedulingAccess, officeAudience } = require('../lib/paAccess');
 const {
   replaceAvailability, getAvailability, setBookingWindow, setRhythm, listMeetingTypes,
   createMeetingType, updateMeetingType, deleteMeetingType, handle,
@@ -423,7 +423,17 @@ router.get('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
 
   const brief = await db.prepare('SELECT * FROM briefs WHERE booking_id = ?').get(booking.id);
   const sections = brief ? { ...emptySections(), ...JSON.parse(brief.sections) } : emptySections();
-  res.json({ sections, updatedAt: brief?.updated_at || null });
+  res.json({
+    sections,
+    // One list for the whole brief rather than one per section. Every section
+    // is rendered against a lookup keyed by handle, so splitting it seven ways
+    // would only mean resolving the same names seven times.
+    mentions: await mentions.of(
+      Object.values(sections).join('\n'),
+      { ...officeContext(req), audience: await officeAudience(req.principal.id) },
+    ),
+    updatedAt: brief?.updated_at || null,
+  });
 });
 
 // Pre-fills brief sections from whatever the system already knows about
@@ -493,7 +503,7 @@ router.put('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
   const clean = {};
   for (const key of BRIEF_SECTION_KEYS) clean[key] = String(sections[key] || '').slice(0, 4000);
 
-  const existing = await db.prepare('SELECT id FROM briefs WHERE booking_id = ?').get(booking.id);
+  const existing = await db.prepare('SELECT id, sections FROM briefs WHERE booking_id = ?').get(booking.id);
   const now = new Date().toISOString();
   if (existing) {
     await db.prepare('UPDATE briefs SET sections = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(clean), now, existing.id);
@@ -504,18 +514,49 @@ router.put('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
     `).run(crypto.randomUUID(), booking.id, req.principal.id, JSON.stringify(clean), req.user.id, now, now);
   }
 
-  res.json({ sections: clean, updatedAt: now });
+  const audience = await officeAudience(req.principal.id);
+  const found = await mentions.of(Object.values(clean).join('\n'), {
+    ...officeContext(req), audience,
+  });
+
+  // Only whoever is newly named.
+  //
+  // A brief is saved over and over while it is being written — that is what
+  // the Save button is for — and a message that already reached you the first
+  // time is noise every time after. So the handles that were there before are
+  // subtracted, and somebody is told once, when they are first named.
+  const before = new Set(existing
+    ? mentions.parse(Object.values(JSON.parse(existing.sections)).join('\n'))
+    : []);
+  await mentions.notify({
+    found: found.filter((m) => !before.has(m.handle)),
+    author: req.user,
+    ownerId: req.principal.id,
+    subject: `${req.user.name} named you in a brief`,
+    where: `a brief for ${req.principal.name}`,
+  });
+
+  res.json({ sections: clean, mentions: found, updatedAt: now });
 });
 
-function serializeInstruction(i) {
+function serializeInstruction(i, found) {
   return {
     id: i.id,
     text: i.text,
+    // What each @ in the text is. Resolved here because only the server can
+    // see who is in the office; a screen guessing at it would draw a contact
+    // like a colleague who was told.
+    mentions: found || [],
     priority: i.priority,
     status: i.status,
     createdBy: i.created_by_name,
     createdAt: i.created_at,
   };
+}
+
+/** The office an @ in a brief or an instruction can reach. */
+function officeContext(req) {
+  return { viewerId: req.user.id, ownerId: req.principal.id };
 }
 
 router.get('/:ownerId/instructions', requirePaAccess, async (req, res) => {
@@ -526,7 +567,14 @@ router.get('/:ownerId/instructions', requirePaAccess, async (req, res) => {
     WHERE i.owner_id = ?
     ORDER BY (i.status = 'open') DESC, (i.priority = 'urgent') DESC, i.created_at DESC
   `).all(req.principal.id);
-  res.json({ instructions: rows.map(serializeInstruction) });
+
+  // One pass for the whole list. The same names recur down a vault of
+  // instructions, and a screen should not cost a query per @.
+  const audience = await officeAudience(req.principal.id);
+  const found = await mentions.forBodies(
+    rows.map((i) => i.text), { ...officeContext(req), audience },
+  );
+  res.json({ instructions: rows.map((i, n) => serializeInstruction(i, found[n])) });
 });
 
 router.post('/:ownerId/instructions', requirePaAccess, async (req, res) => {
@@ -544,7 +592,17 @@ router.post('/:ownerId/instructions', requirePaAccess, async (req, res) => {
   const row = await db.prepare(`
     SELECT i.*, u.name as created_by_name FROM instructions i JOIN users u ON u.id = i.created_by WHERE i.id = ?
   `).get(id);
-  res.status(201).json({ instruction: serializeInstruction(row) });
+
+  const audience = await officeAudience(req.principal.id);
+  const found = await mentions.of(row.text, { ...officeContext(req), audience });
+  await mentions.notify({
+    found,
+    author: req.user,
+    ownerId: req.principal.id,
+    subject: `${req.user.name} named you in an instruction`,
+    where: `an instruction for ${req.principal.name}`,
+  });
+  res.status(201).json({ instruction: serializeInstruction(row, found) });
 });
 
 router.patch('/:ownerId/instructions/:id', requirePaAccess, async (req, res) => {
@@ -560,7 +618,9 @@ router.patch('/:ownerId/instructions/:id', requirePaAccess, async (req, res) => 
   const updated = await db.prepare(`
     SELECT i.*, u.name as created_by_name FROM instructions i JOIN users u ON u.id = i.created_by WHERE i.id = ?
   `).get(row.id);
-  res.json({ instruction: serializeInstruction(updated) });
+  const audience = await officeAudience(req.principal.id);
+  const found = await mentions.of(updated.text, { ...officeContext(req), audience });
+  res.json({ instruction: serializeInstruction(updated, found) });
 });
 
 router.get('/:ownerId/comms', requirePaAccess, async (req, res) => {

@@ -1,5 +1,6 @@
 const db = require('./db');
 const { normalizeHandle, resolveVisibleHandle } = require('./handles');
+const { sendEmail } = require('./email');
 
 /**
  * @ as two things, and the difference must survive all the way to the screen.
@@ -168,6 +169,43 @@ async function forBodies(bodies, { viewerId, ownerId, audience = null }) {
   return perBody.map((handles) => handles.map((h) => byHandle.get(h)).filter(Boolean));
 }
 
+/**
+ * Tell the people who were addressed.
+ *
+ * This is the entire difference between an address and a mention, so it lives
+ * in one place rather than once per screen that has a text box. Four rules,
+ * each of them a promise the rendering has already made on this function's
+ * behalf:
+ *
+ *   - only people the resolver marked `notified`, which already means they can
+ *     see the thing they were named in;
+ *   - never the author, who does not need telling what they just wrote;
+ *   - the text is NOT quoted. A thread, an instruction and a brief can each
+ *     hold anything, and Kairos does not push their contents into an inbox. It
+ *     says where to look;
+ *   - failing here does not fail the write. The thing is already saved, and a
+ *     mail provider having a bad afternoon is not a reason to reject a
+ *     sentence somebody has written.
+ */
+async function notify({ found, author, ownerId, subject, where }) {
+  try {
+    const addressed = (found || []).filter(
+      (m) => m.kind === 'person' && m.notified && m.id !== author.id,
+    );
+    for (const person of addressed) {
+      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(person.id);
+      if (!user?.email) continue;
+      await sendEmail({
+        ownerId,
+        toEmail: user.email,
+        category: 'mention',
+        subject,
+        body: `${author.name} wrote to you in ${where}.\n\nOpen Kairos to read it.`,
+      });
+    }
+  } catch { /* Said above: something already saved does not fail over its mail. */ }
+}
+
 module.exports = {
-  parse, resolve, of, forBodies, handleFrom, uniqueContactHandle, TOKEN_RE,
+  parse, resolve, of, forBodies, notify, handleFrom, uniqueContactHandle, TOKEN_RE,
 };

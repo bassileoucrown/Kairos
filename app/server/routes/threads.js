@@ -7,7 +7,6 @@ const { resolveAccess, spaceAudience, markThreadRead } = require('../lib/spaceAc
 const { syncStageFromRecords } = require('../lib/stageStatus');
 const voice = require('../lib/voiceNotes');
 const mentions = require('../lib/mentions');
-const { sendEmail } = require('../lib/email');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -133,43 +132,19 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
   });
 });
 
-/**
- * Tell the people a message was addressed to.
- *
- * This is the whole difference between an address and a mention, and it only
- * holds if it actually happens. Three rules, each of them a promise the screen
- * has already made on this function's behalf:
- *
- *   - only people IN the space, because addressing somebody who cannot open
- *     the thread would announce something they then cannot read;
- *   - never the author, who does not need telling what they just wrote;
- *   - the message is not quoted. A thread can hold anything, and Kairos does
- *     not push the contents of one into an inbox. It says where to look.
- *
- * Failure here must not fail the send. The message is already filed, and a
- * mail provider having a bad afternoon is not a reason to reject a sentence
- * somebody has written.
- */
+/** Tell whoever a message was addressed to. The rule itself is in lib/mentions. */
 async function tellAddressed({ body, thread, space, author }) {
-  try {
-    const audience = await spaceAudience(space);
-    const found = await mentions.of(body, {
-      viewerId: author.id, ownerId: space.owner_id, audience,
-    });
-    const addressed = found.filter((m) => m.kind === 'person' && m.notified && m.id !== author.id);
-    for (const person of addressed) {
-      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(person.id);
-      if (!user?.email) continue;
-      await sendEmail({
-        ownerId: space.owner_id,
-        toEmail: user.email,
-        category: 'mention',
-        subject: `${author.name} mentioned you in ${thread.name}`,
-        body: `${author.name} wrote to you in "${thread.name}" (${space.name}).`
-          + '\n\nOpen Kairos to read it.',
-      });
-    }
-  } catch { /* Said above: a message already filed does not fail over its mail. */ }
+  const audience = await spaceAudience(space);
+  const found = await mentions.of(body, {
+    viewerId: author.id, ownerId: space.owner_id, audience,
+  });
+  await mentions.notify({
+    found,
+    author,
+    ownerId: space.owner_id,
+    subject: `${author.name} mentioned you in ${thread.name}`,
+    where: `"${thread.name}" (${space.name})`,
+  });
 }
 
 async function nextRecordSeq(threadId) {

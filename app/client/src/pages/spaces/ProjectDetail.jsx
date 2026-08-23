@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 import TaskList from './TaskList.jsx';
+import { MentionPicker } from '../../components/Mention.jsx';
 
 export const STAGE_STATUS_LABELS = {
   not_started: 'Not started', active: 'Active', blocked: 'Blocked', done: 'Done',
@@ -19,6 +20,7 @@ export default function ProjectDetail() {
   const [stageDue, setStageDue] = useState('');
   const [tasks, setTasks] = useState([]);
   const [taskTitle, setTaskTitle] = useState('');
+  const taskRef = useRef(null);
 
   function load() {
     return Promise.all([
@@ -146,15 +148,24 @@ export default function ProjectDetail() {
         <TaskList tasks={tasks} onChanged={load} emptyText="No tasks on this project yet." />
         {canWrite && (
           <form onSubmit={addTask} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-            <input
-              type="text"
-              placeholder="New task"
-              aria-label="New project task"
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              required
-              style={{ flex: 1, minWidth: 200 }}
-            />
+            <div className="mention-anchor" style={{ flex: 1, minWidth: 200 }}>
+              <input
+                type="text"
+                ref={taskRef}
+                placeholder="New task — @ to name someone"
+                aria-label="New project task"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                required
+                style={{ width: '100%' }}
+              />
+              <MentionPicker
+                spaceId={data.space.id}
+                value={taskTitle}
+                onChange={setTaskTitle}
+                textareaRef={taskRef}
+              />
+            </div>
             <button className="btn btn-primary btn-sm" type="submit">Add task</button>
           </form>
         )}

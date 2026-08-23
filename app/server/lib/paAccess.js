@@ -51,4 +51,25 @@ function requireSchedulingAccess(req, res, next) {
   next();
 }
 
-module.exports = { requirePaAccess, requireSchedulingAccess };
+/**
+ * Everyone in a principal's office, as a set of user ids.
+ *
+ * The office is the principal plus their active assistants — exactly the set
+ * requirePaAccess admits, gathered rather than tested one at a time. Briefs and
+ * instructions belong to an office rather than to a space, so this is the
+ * audience an @ in one of them can reach: naming somebody outside it would
+ * promise to tell a person who cannot open the thing they were named in.
+ *
+ * The space equivalent lives in spaceAccess.spaceAudience. Two functions
+ * because they are two different rooms, not one rule spelled twice — a space
+ * has members of its own, and an office does not.
+ */
+async function officeAudience(ownerId) {
+  const rows = await db.prepare(`
+    SELECT member_user_id AS id FROM memberships
+     WHERE owner_id = ? AND status = 'active' AND member_user_id IS NOT NULL
+  `).all(ownerId);
+  return new Set([ownerId, ...rows.map((r) => r.id)]);
+}
+
+module.exports = { requirePaAccess, requireSchedulingAccess, officeAudience };

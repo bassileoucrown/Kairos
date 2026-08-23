@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { MentionText, MentionPicker } from '../../components/Mention.jsx';
 
 export default function InstructionsTab({ ownerId }) {
   const [instructions, setInstructions] = useState(null);
@@ -8,6 +9,7 @@ export default function InstructionsTab({ ownerId }) {
   const [priority, setPriority] = useState('normal');
   const [submitting, setSubmitting] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  const composerRef = useRef(null);
 
   function load() {
     api.get(`/pa/${ownerId}/instructions`).then((data) => setInstructions(data.instructions)).catch((err) => setError(err.message));
@@ -50,13 +52,22 @@ export default function InstructionsTab({ ownerId }) {
       <form onSubmit={handleAdd} className="card" style={{ marginBottom: 16 }}>
         <div className="field">
           <label htmlFor="instr-text">New instruction</label>
-          <textarea
-            id="instr-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="e.g. Always leave 15 minutes before board calls. Never schedule Fridays after 3pm."
-            required
-          />
+          <div className="mention-anchor">
+            <textarea
+              id="instr-text"
+              ref={composerRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. Always leave 15 minutes before board calls. Never schedule Fridays after 3pm. Use @ to name someone."
+              required
+            />
+            <MentionPicker
+              ownerId={ownerId}
+              value={text}
+              onChange={setText}
+              textareaRef={composerRef}
+            />
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <select aria-label="Priority" value={priority} onChange={(e) => setPriority(e.target.value)} style={{ width: 'auto' }}>
@@ -82,7 +93,7 @@ export default function InstructionsTab({ ownerId }) {
             <div>
               <div className="when" style={{ textDecoration: i.status === 'done' ? 'line-through' : 'none' }}>
                 {i.priority === 'urgent' && <span className="pill" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', marginRight: 8 }}>Urgent</span>}
-                {i.text}
+                <MentionText body={i.text} mentions={i.mentions} />
               </div>
               <div className="meta">Logged by {i.createdBy} · {new Date(i.createdAt).toLocaleDateString()}</div>
             </div>

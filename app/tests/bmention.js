@@ -243,6 +243,94 @@ function client() {
     const shut = await outsider('GET', `/mentions/space/${spaceId}/lookup?q=`);
     ok('somebody with no access cannot read it at all', shut.s === 404, String(shut.s));
 
+    // --- The same @ everywhere else it can be written --------------------
+    //
+    // A thread is not the only place with a text box. An instruction, a brief
+    // and a task each carry writing that names people, and if @ resolved in
+    // one and stayed dead text in the others, the symbol would mean different
+    // things on different screens of the same product.
+    head('An instruction:');
+    r = await pa('POST', `/pa/${me.id}/instructions`, {
+      text: `@adaeze-${ID} the car leaves at six. @tunde-bakare has the documents.`,
+    });
+    ok('is accepted', r.s === 201, JSON.stringify(r.d).slice(0, 160));
+    let seenM = Object.fromEntries((r.d.instruction.mentions || []).map((m) => [m.handle, m]));
+    ok('the principal is an address', seenM[`adaeze-${ID}`]?.kind === 'person');
+    ok('and is told', seenM[`adaeze-${ID}`]?.notified === true);
+    ok('a contact is a mention', seenM['tunde-bakare']?.kind === 'contact');
+    ok('and is not told', seenM['tunde-bakare']?.notified === false);
+
+    r = await pa('GET', `/pa/${me.id}/instructions`);
+    ok('and the list carries them too',
+      (r.d.instructions[0].mentions || []).length === 2,
+      JSON.stringify(r.d.instructions[0].mentions));
+
+    r = await boss('GET', '/emails');
+    ok('the person named is told', (r.d.emails || [])
+      .some((e) => /named you in an instruction/i.test(e.subject || '')));
+    ok('and the instruction is not quoted into the mail',
+      !(r.d.emails || []).some((e) => /car leaves at six/i.test(e.body || '')));
+
+    head('A brief:');
+    // A brief hangs off a booking, so there has to be one. Open all week and
+    // around the clock, deliberately: an availability window that only covers
+    // office hours makes this suite pass in the morning and fail at eleven at
+    // night, which is a whole family of bugs this repo has already been bitten
+    // by more than once.
+    await boss('PUT', '/availability', {
+      rules: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: '00:00', endTime: '23:30' })),
+    });
+    r = await boss('POST', '/meeting-types', {
+      name: 'Intro', durationMinutes: 30, locationType: 'video', accessTier: 1,
+    });
+    const mt = r.d.meetingType;
+    const anon = client();
+    const slots = (await anon('GET', `/public/adaeze-${ID}/${mt.slug}/slots`)).d.slots || [];
+    ok('there is a slot to book', slots.length > 0, String(slots.length));
+    await anon('POST', `/public/adaeze-${ID}/${mt.slug}/book`, {
+      timezone: 'UTC', startAt: slots[0].startAt, name: 'Chidi Eze', email: `chidi${ID}@x.com`,
+    });
+
+    const bk = await boss('GET', '/bookings');
+    const booking = (bk.d.bookings || [])[0];
+    if (booking) {
+      r = await pa('PUT', `/pa/${me.id}/briefs/${booking.id}`, {
+        sections: { who: `@adaeze-${ID} is attending`, background: '@tunde-bakare briefed us' },
+      });
+      ok('saving resolves what it names', r.s === 200 && (r.d.mentions || []).length === 2,
+        JSON.stringify(r.d.mentions));
+      const briefMail = ((await boss('GET', '/emails')).d.emails || [])
+        .filter((e) => /named you in a brief/i.test(e.subject || '')).length;
+      ok('and tells whoever was named', briefMail === 1, String(briefMail));
+
+      // The one that stops a brief becoming a notification machine.
+      await pa('PUT', `/pa/${me.id}/briefs/${booking.id}`, {
+        sections: { who: `@adaeze-${ID} is attending`, background: '@tunde-bakare briefed us', logistics: 'Car at six' },
+      });
+      const again = ((await boss('GET', '/emails')).d.emails || [])
+        .filter((e) => /named you in a brief/i.test(e.subject || '')).length;
+      ok('saving again does not tell them twice', again === 1, String(again));
+
+      r = await pa('GET', `/pa/${me.id}/briefs/${booking.id}`);
+      ok('and reading it back says what each @ is',
+        (r.d.mentions || []).some((m) => m.handle === 'tunde-bakare' && m.notified === false),
+        JSON.stringify(r.d.mentions));
+    } else {
+      ok('a booking existed to brief', false, JSON.stringify(bk.d).slice(0, 200));
+    }
+
+    head('A task:');
+    r = await pa('POST', '/tasks', {
+      spaceId, title: `Confirm cars with @adaeze-${ID} and @tunde-bakare`,
+    });
+    ok('is accepted', r.s === 201, JSON.stringify(r.d).slice(0, 160));
+    seenM = Object.fromEntries((r.d.task.mentions || []).map((m) => [m.handle, m]));
+    ok('a member of the space is an address', seenM[`adaeze-${ID}`]?.kind === 'person');
+    ok('and a contact is still only a mention', seenM['tunde-bakare']?.notified === false);
+    r = await pa('GET', `/tasks?spaceId=${spaceId}`);
+    ok('the list carries them', (r.d.tasks[0].mentions || []).length === 2,
+      JSON.stringify(r.d.tasks[0]?.mentions));
+
     // A member who is not the owner's assistant is not handed the address book
     // merely for being added to a thread.
     r = await boss('POST', `/spaces/${spaceId}/members`, { email: `ngozi${ID}@x.com`, role: 'member' });

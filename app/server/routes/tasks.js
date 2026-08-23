@@ -3,7 +3,8 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
-const { resolveAccess, listVisibleSpaces } = require('../lib/spaceAccess');
+const { resolveAccess, spaceAudience, listVisibleSpaces } = require('../lib/spaceAccess');
+const mentions = require('../lib/mentions');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -26,10 +27,12 @@ const SELECT_TASK = `
   LEFT JOIN threads th ON th.id = msg.thread_id
 `;
 
-function serialize(t) {
+function serialize(t, found) {
   return {
     id: t.id,
     title: t.title,
+    // A task's text is its title, so that is where an @ lives.
+    mentions: found || [],
     status: t.status,
     priority: t.priority,
     dueAt: t.due_at,
@@ -48,6 +51,35 @@ function serialize(t) {
     completedAt: t.completed_at,
     createdAt: t.created_at,
   };
+}
+
+/**
+ * Serialize a list of tasks, resolving the @s in their titles.
+ *
+ * Grouped by space rather than resolved in one pass, because who can be
+ * addressed depends on which room the task is in — and My Tasks deliberately
+ * spans every space at once. One audience for all of them would either promise
+ * a delivery across a boundary or deny one inside it. The grouping keeps it to
+ * a couple of passes per space rather than one per task.
+ */
+async function serializeAll(rows, viewerId) {
+  const bySpace = new Map();
+  for (const t of rows) {
+    if (!bySpace.has(t.space_id)) bySpace.set(t.space_id, []);
+    bySpace.get(t.space_id).push(t);
+  }
+  const out = new Map();
+  for (const [spaceId, tasks] of bySpace) {
+    const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId);
+    if (!space) continue;
+    const audience = await spaceAudience(space);
+    const found = await mentions.forBodies(
+      tasks.map((t) => t.title),
+      { viewerId, ownerId: space.owner_id, audience },
+    );
+    tasks.forEach((t, i) => out.set(t.id, found[i]));
+  }
+  return rows.map((t) => serialize(t, out.get(t.id)));
 }
 
 async function loadTask(req, res, next) {
@@ -73,7 +105,9 @@ router.get('/mine', async (req, res) => {
   // Belt and braces: a task is only visible if its space still is. Membership
   // can be revoked after the task was assigned.
   const visible = new Set((await listVisibleSpaces(req.user.id)).map((s) => s.id));
-  res.json({ tasks: rows.filter((t) => visible.has(t.space_id)).map(serialize) });
+  res.json({
+    tasks: await serializeAll(rows.filter((t) => visible.has(t.space_id)), req.user.id),
+  });
 });
 
 router.get('/', async (req, res) => {
@@ -105,7 +139,7 @@ router.get('/', async (req, res) => {
     CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,
     t.due_at ASC, t.created_at DESC
   `).all(...values);
-  res.json({ tasks: rows.map(serialize) });
+  res.json({ tasks: await serializeAll(rows, req.user.id) });
 });
 
 router.post('/', async (req, res) => {
@@ -150,7 +184,20 @@ router.post('/', async (req, res) => {
     String(title).trim().slice(0, 300), assigneeId || null, req.user.id,
     dueAt || null, priority || 'normal', new Date().toISOString());
 
-  res.status(201).json({ task: serialize(await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(id)) });
+  const audience = await spaceAudience(access.space);
+  const found = await mentions.of(String(title).trim(), {
+    viewerId: req.user.id, ownerId: access.space.owner_id, audience,
+  });
+  await mentions.notify({
+    found,
+    author: req.user,
+    ownerId: access.space.owner_id,
+    subject: `${req.user.name} named you in a task`,
+    where: `a task in "${access.space.name}"`,
+  });
+
+  const row = await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(id);
+  res.status(201).json({ task: serialize(row, found) });
 });
 
 router.patch('/:taskId', loadTask, async (req, res) => {
@@ -190,7 +237,25 @@ router.patch('/:taskId', loadTask, async (req, res) => {
 
   values.push(req.task.id);
   await db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  res.json({ task: serialize(await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.task.id)) });
+
+  const row = await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.task.id);
+  const audience = await spaceAudience(req.access.space);
+  const found = await mentions.of(row.title, {
+    viewerId: req.user.id, ownerId: req.access.space.owner_id, audience,
+  });
+
+  // Only whoever the edit newly named. Retitling a task should not re-announce
+  // it to people who were already in the title and have long since read it.
+  const before = new Set(mentions.parse(req.task.title));
+  await mentions.notify({
+    found: found.filter((m) => !before.has(m.handle)),
+    author: req.user,
+    ownerId: req.access.space.owner_id,
+    subject: `${req.user.name} named you in a task`,
+    where: `a task in "${req.access.space.name}"`,
+  });
+
+  res.json({ task: serialize(row, found) });
 });
 
 router.delete('/:taskId', loadTask, async (req, res) => {

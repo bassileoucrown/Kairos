@@ -1,7 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import { MentionPicker } from '../../components/Mention.jsx';
+
+/**
+ * One brief section, with its own picker.
+ *
+ * A component rather than seven refs in the parent: each textarea needs a ref
+ * of its own for the picker to read the caret out of, and hooks cannot be
+ * called in a loop.
+ */
+function SectionField({ field, ownerId, value, onChange }) {
+  const ref = useRef(null);
+  return (
+    <div className="field">
+      <label htmlFor={`brief-${field.key}`}>{field.label}</label>
+      <div className="mention-anchor">
+        <textarea
+          id={`brief-${field.key}`}
+          ref={ref}
+          value={value}
+          placeholder={field.placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <MentionPicker
+          ownerId={ownerId}
+          value={value}
+          onChange={onChange}
+          textareaRef={ref}
+        />
+      </div>
+    </div>
+  );
+}
 
 const SECTION_FIELDS = [
   { key: 'who', label: "Who you're meeting", placeholder: 'Role, company, how they connect to the principal…' },
@@ -70,15 +102,13 @@ function BriefEditor({ ownerId, booking, onBack }) {
             sections still empty. Talking points and outcomes are yours to write.
           </p>
           {SECTION_FIELDS.map((f) => (
-            <div className="field" key={f.key}>
-              <label htmlFor={`brief-${f.key}`}>{f.label}</label>
-              <textarea
-                id={`brief-${f.key}`}
-                value={sections[f.key]}
-                placeholder={f.placeholder}
-                onChange={(e) => setSections({ ...sections, [f.key]: e.target.value })}
-              />
-            </div>
+            <SectionField
+              key={f.key}
+              field={f}
+              ownerId={ownerId}
+              value={sections[f.key]}
+              onChange={(v) => setSections({ ...sections, [f.key]: v })}
+            />
           ))}
           <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save brief'}

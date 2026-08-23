@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
+import { MentionText } from '../../components/Mention.jsx';
 
 export const TASK_STATUSES = [
   { value: 'open', label: 'Open' },
@@ -72,7 +73,7 @@ export default function TaskList({ tasks, onChanged, showContext = false, emptyT
             />
 
             <div className="task-main">
-              <div className="task-title">{t.title}</div>
+              <div className="task-title"><MentionText body={t.title} mentions={t.mentions} /></div>
               <div className="task-meta">
                 {showContext && (
                   <>
