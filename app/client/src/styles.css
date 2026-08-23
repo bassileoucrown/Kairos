@@ -2197,10 +2197,17 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .day-now.is-trailing { margin-top: 14px; }
 
 /* One entry at a time offers this, and it is a word rather than a button:
-   it is the escape hatch, not the point of the screen. */
+   it is the escape hatch, not the point of the screen.
+
+   It sits under its entry at every width, not beside it. Beside it, the one
+   row carrying the link was narrower than every other row by exactly the
+   width of the link, so the day's right edge stepped in and out for no reason
+   a reader could see. */
+.day-item.today-row { flex-wrap: wrap; }
+.day-item > .sched-row { flex: 1 1 100%; }
 .today-late {
   align-self: flex-start;
-  margin-top: 12px;
+  margin-top: 10px;
   flex: 0 0 auto;
   background: none;
   border: 0;
@@ -2216,6 +2223,20 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .today-late:hover { color: var(--danger); text-decoration-color: var(--danger); }
 
+/* The next thing, flagged on the row itself rather than announced above it
+   in the same words. Sits on the rail beside the entry it belongs to. */
+.day-item.is-next { padding-top: 17px; }
+.day-next-flag {
+  position: absolute;
+  top: 0; left: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.day-item.is-next::before { top: 35px; border-color: var(--accent); }
+
 /* ---- Quieter than the day ---- */
 .today-grid .section-head {
   font-size: 0.72rem;
@@ -2226,6 +2247,19 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   margin: 26px 0 10px;
 }
 .today-grid section:first-child .section-head:first-child { margin-top: 0; }
+
+/* Nothing waiting: the day takes the width instead of sharing it with a
+   column that has nothing in it — but only up to a readable measure. Given
+   the whole of a desktop the entries ran nearly a thousand pixels wide, which
+   put every title alone at the far left of its own card. */
+.today-grid.is-single { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.today-grid.is-single > section { max-width: 820px; }
+.today-nothing {
+  margin: 26px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
 
 /* The spine's indent is deliberately NOT responsive: the nodes and the now
    dot are positioned relative to each entry, the rail relative to the list,

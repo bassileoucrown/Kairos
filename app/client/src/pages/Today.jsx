@@ -252,11 +252,30 @@ export default function Today() {
     const e0 = e.endAt ? new Date(e.endAt).getTime() : s0;
     return now >= s0 && now < e0;
   });
-  const upcoming = nextUp && new Date(nextUp.startAt).getTime() > now ? nextUp : null;
   const minsLeft = running && running.endAt
     ? Math.max(0, Math.round((new Date(running.endAt).getTime() - now) / 60000))
     : null;
   const rows = shapeOf(schedule, now);
+
+  // The band used to announce the next thing even when that thing was the
+  // very next line on the screen, so the day opened by saying the same
+  // meeting twice in a row, in the same words. It earns its space in exactly
+  // two cases: something is running (where it knows things the row does not —
+  // how long is left, and where to join), or there is nothing left in today's
+  // spine at all, where an absence is worth stating out loud rather than
+  // leaving as blank space. When the next thing is already drawn below, the
+  // row says "in 8 hrs" itself and the band stays out of the way.
+  const nextInSpine = rows.some((r) => r.type === 'item' && r.live && !r.running);
+  // nextUp can be tomorrow's first thing, which is not in today's spine and so
+  // cannot be a repeat of anything — worth saying when today is done.
+  const beyondToday = !nextInSpine && nextUp && new Date(nextUp.startAt).getTime() > now
+    ? nextUp
+    : null;
+
+  // With nothing waiting, the right-hand column was a whole column of nothing:
+  // a heading and a sentence, floated beside a day that could have used the
+  // width. When there is nothing to put in it, there is no column.
+  const needsAnything = needsYou.count > 0 || relationships.length > 0;
 
   return (
     <AppShell
@@ -294,29 +313,29 @@ export default function Today() {
               target="_blank" rel="noreferrer">Join</a>
           )}
         </div>
-      ) : upcoming ? (
+      ) : beyondToday ? (
         <div className="now-band">
-          <span className="now-label">Next {untilLabel(upcoming.startAt)}</span>
-          <span className="now-title">{upcoming.title}</span>
+          <span className="now-label">Next {untilLabel(beyondToday.startAt)}</span>
+          <span className="now-title">{beyondToday.title}</span>
           <span className="now-detail">
-            {upcoming.startLabel}
-            {upcoming.location ? ` · ${upcoming.location}` : ''}
+            {beyondToday.startLabel}
+            {beyondToday.location ? ` · ${beyondToday.location}` : ''}
           </span>
         </div>
-      ) : (
+      ) : !nextInSpine ? (
         <div className="now-band is-clear">
           <span className="now-label">Now</span>
           <span className="now-title">
             {schedule.length === 0 ? 'Nothing in the diary today.' : 'The day is clear from here.'}
           </span>
         </div>
-      )}
+      ) : null}
 
       {data.directLine && (
         <DirectLine line={data.directLine} isSelf={data.isSelf} principalName={data.principal.name} />
       )}
 
-      <div className="today-grid">
+      <div className={'today-grid' + (needsAnything ? '' : ' is-single')}>
         <section>
           {lateItem && (
             <RunningLate
@@ -355,9 +374,13 @@ export default function Today() {
                   <li
                     className={'day-item today-row'
                       + (row.running ? ' is-running' : '')
-                      + (row.done ? ' is-done' : '')}
+                      + (row.done ? ' is-done' : '')
+                      + (row.live && !row.running ? ' is-next' : '')}
                     key={e.id}
                   >
+                    {row.live && !row.running && (
+                      <span className="day-next-flag">Next {untilLabel(e.startAt)}</span>
+                    )}
                     <ScheduleEntry e={e} />
                     {e.source === 'itinerary' && row.live && (
                       <button
@@ -392,13 +415,15 @@ export default function Today() {
         </section>
 
         <section>
-          <h2 className="section-head">
-            Needs you
-            {needsYou.count > 0 && <span className="count-pill">{needsYou.count}</span>}
-          </h2>
-
-          {needsYou.count === 0 && (
-            <div className="empty-state">Nothing waiting on you. Genuinely.</div>
+          {needsAnything ? (
+            <h2 className="section-head">
+              Needs you
+              {needsYou.count > 0 && <span className="count-pill">{needsYou.count}</span>}
+            </h2>
+          ) : (
+            /* One line, at the foot of the day, rather than a heading and an
+               empty box holding open a column beside it. */
+            <p className="today-nothing">Nothing waiting on you. Genuinely.</p>
           )}
 
           {needsYou.approvals.map((a) => (
