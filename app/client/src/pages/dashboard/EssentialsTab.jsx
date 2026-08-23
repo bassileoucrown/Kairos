@@ -75,6 +75,17 @@ export default function EssentialsTab({ ownerId }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ category: 'preferences', field: '', value: '', expiresOn: '' });
 
+  // Arriving from a summary somewhere else — a trip's document warning, most
+  // often — which named a document but could not show it. The id in the URL
+  // says which row was meant; this scrolls to it and marks it, so the answer
+  // to "which passport?" is not left as an exercise.
+  const focusId = new URLSearchParams(window.location.search).get('essential');
+  useEffect(() => {
+    if (!focusId || !data) return;
+    const el = document.getElementById(`essential-${focusId}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusId, data]);
+
   function load() {
     return api.get(`/essentials/${ownerId}`).then(setData).catch((err) => setError(err.message));
   }
@@ -274,7 +285,11 @@ export default function EssentialsTab({ ownerId }) {
         <section className="ess-group" key={group.id}>
           <h3 className="ess-heading">{group.label}</h3>
           {group.items.map((e) => (
-            <div className="card ess-row" key={e.id}>
+            <div
+              className={'card ess-row' + (e.id === focusId ? ' is-focused' : '')}
+              key={e.id}
+              id={`essential-${e.id}`}
+            >
               <div className="ess-main">
                 <div className="ess-label">
                   {e.label}

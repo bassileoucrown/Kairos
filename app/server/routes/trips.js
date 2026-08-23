@@ -175,6 +175,74 @@ router.patch('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
 
 // --- Who else is going, and who to call there -----------------------------
 
+/**
+ * Removing a trip, which is two different intentions and so two operations.
+ *
+ * CANCEL says the journey is not happening. It keeps everything: the flight
+ * stays in the diary because a cancelled trip is exactly when somebody still
+ * has to ring the airline, and quietly clearing it from the day would hide
+ * work that is still owed. The trip stops moving the principal's clock,
+ * because that is tied to being confirmed.
+ *
+ * DELETE says the record should not exist — it was a duplicate, or a plan that
+ * never became real. That takes the legs with it, because they were built as
+ * part of it, and leaving four orphans scattered through the diary to be
+ * removed one at a time is not what anybody means by deleting a trip.
+ *
+ * Which is why both exist. Cancel is the safe one and it is the default the
+ * screen offers first.
+ */
+router.post('/:ownerId/:tripId/cancel', requirePaAccess, async (req, res) => {
+  const trip = await trips.get(req.principal.id, req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+  if (trip.status === 'cancelled') {
+    return res.status(409).json({ error: 'That trip is already cancelled.' });
+  }
+  await db.prepare('UPDATE trips SET status = ? WHERE id = ?').run('cancelled', trip.id);
+  res.json({ trip: await trips.get(req.principal.id, trip.id) });
+});
+
+router.delete('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
+  const trip = await trips.get(req.principal.id, req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+
+  // A confirmed trip is drawing the principal's days in another timezone.
+  // Undoing that is theirs, for the same reason confirming it was.
+  if (trip.status === 'confirmed' && req.paRole !== 'owner') {
+    return res.status(403).json({
+      error: 'Only the principal deletes a confirmed trip — it is drawing their days in another timezone. Cancel it instead, or ask them.',
+    });
+  }
+
+  // travellers and contacts go with the trip through ON DELETE CASCADE.
+  // Itinerary items carry a plain trip_id with no constraint behind it, so
+  // they have to be removed here or they would survive pointing at nothing.
+  const removed = await db.prepare('SELECT COUNT(*) AS n FROM itinerary_items WHERE owner_id = ? AND trip_id = ?')
+    .get(req.principal.id, trip.id);
+  await db.prepare('DELETE FROM itinerary_items WHERE owner_id = ? AND trip_id = ?')
+    .run(req.principal.id, trip.id);
+  await db.prepare('DELETE FROM trips WHERE id = ?').run(trip.id);
+
+  res.json({ deleted: true, itemsRemoved: Number(removed?.n || 0) });
+});
+
+/** What deleting would take with it, so the screen can say so before it asks. */
+router.get('/:ownerId/:tripId/deletion', requirePaAccess, async (req, res) => {
+  const trip = await trips.get(req.principal.id, req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+  const [items, travellers, contacts] = await Promise.all([
+    db.prepare('SELECT COUNT(*) AS n FROM itinerary_items WHERE owner_id = ? AND trip_id = ?').get(req.principal.id, trip.id),
+    db.prepare('SELECT COUNT(*) AS n FROM trip_travellers WHERE trip_id = ?').get(trip.id),
+    db.prepare('SELECT COUNT(*) AS n FROM trip_contacts WHERE trip_id = ?').get(trip.id),
+  ]);
+  res.json({
+    items: Number(items?.n || 0),
+    travellers: Number(travellers?.n || 0),
+    contacts: Number(contacts?.n || 0),
+    needsPrincipal: trip.status === 'confirmed' && req.paRole !== 'owner',
+  });
+});
+
 router.post('/:ownerId/:tripId/travellers', requirePaAccess, async (req, res) => {
   const trip = await trips.get(req.principal.id, req.params.tripId);
   if (!trip) return res.status(404).json({ error: 'Not found.' });

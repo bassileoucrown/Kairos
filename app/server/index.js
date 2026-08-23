@@ -1,6 +1,7 @@
 const path = require('path');
 const express = require('express');
 const { attachUser } = require('./lib/auth');
+const errorReports = require('./lib/errorReports');
 
 const { router: authRouter } = require('./routes/auth');
 const profileRouter = require('./routes/profile');
@@ -8,6 +9,7 @@ const availabilityRouter = require('./routes/availability');
 const meetingTypesRouter = require('./routes/meetingTypes');
 const bookingsRouter = require('./routes/bookings');
 const publicBookingRouter = require('./routes/publicBooking');
+const errorsRouter = require('./routes/errors');
 const emailsRouter = require('./routes/emails');
 const membersRouter = require('./routes/members');
 const invitesRouter = require('./routes/invites');
@@ -123,6 +125,7 @@ app.use('/api/essentials', essentialsRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/household', householdRouter);
 app.use('/api/announcements', announcementsRouter);
+app.use('/api/errors', errorsRouter);
 app.use('/api/attention', attentionRouter);
 app.use('/api/rhythm', rhythmRouter);
 app.use('/api/access-codes', accessCodesRouter);
@@ -161,6 +164,11 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     return res.status(413).json({ error: 'That is too large to send.' });
   }
   console.error(err);
+  // Write it down as well as printing it. A log nobody reads is how a fault
+  // stays invisible until a customer writes in about it. record() never
+  // throws and is not awaited — the response owes the caller nothing more
+  // than the 500 it is about to get.
+  errorReports.record(err, { req, kind: 'server' });
   res.status(500).json({ error: 'Something went wrong.' });
 });
 

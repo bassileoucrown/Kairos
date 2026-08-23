@@ -934,3 +934,30 @@ CREATE TABLE IF NOT EXISTS thread_reads (
   PRIMARY KEY (thread_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_thread_reads_user ON thread_reads(user_id);
+
+-- What broke, so somebody can find out before a customer writes in.
+--
+-- Deliberately narrow. A crash report is a place personal data goes to hide —
+-- request bodies carry passport numbers, query strings carry the capability
+-- that opens a booking, and a stack trace can carry either. So the body is
+-- never read, the query string is dropped, and the signed-in user is an id
+-- rather than a name. See lib/errorReports.js.
+--
+-- ON DELETE SET NULL rather than CASCADE: closing an account must not quietly
+-- erase the evidence that the app failed while they were using it.
+CREATE TABLE IF NOT EXISTS error_reports (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL DEFAULT 'server',  -- server | client
+  route       TEXT NOT NULL DEFAULT '',
+  method      TEXT NOT NULL DEFAULT '',
+  message     TEXT NOT NULL DEFAULT '',
+  stack       TEXT NOT NULL DEFAULT '',
+  user_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  user_agent  TEXT NOT NULL DEFAULT '',
+  -- The same fault seen twice shares this, so a screen can say it happened
+  -- four hundred times rather than listing it four hundred times.
+  fingerprint TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_error_reports_at ON error_reports(created_at);
+CREATE INDEX IF NOT EXISTS idx_error_reports_fp ON error_reports(fingerprint, created_at);

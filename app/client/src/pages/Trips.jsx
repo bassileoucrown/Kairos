@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import SignalPanel from '../components/SignalPanel.jsx';
@@ -136,6 +137,7 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
   const [error, setError] = useState('');
   const [cards, setCards] = useState({});
   const [adding, setAdding] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   function load() {
     return api.get(`/trips/${ownerId}/${tripId}`).then(setData).catch((e) => setError(e.message));
@@ -187,14 +189,58 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
         <StatusPill status={trip.status} />
       </div>
 
-      {trip.status !== 'confirmed' && (
-        <button
-          className="btn btn-primary btn-sm"
-          type="button"
-          onClick={() => act(() => api.patch(`/trips/${ownerId}/${tripId}`, { status: 'confirmed' }))}
-        >
-          Confirm this trip
+      <div className="code-actions">
+        {trip.status !== 'confirmed' && trip.status !== 'cancelled' && (
+          <button
+            className="btn btn-primary btn-sm"
+            type="button"
+            onClick={() => act(() => api.patch(`/trips/${ownerId}/${tripId}`, { status: 'confirmed' }))}
+          >
+            Confirm this trip
+          </button>
+        )}
+        {/* Two ways out, and the difference is the point. Cancelling keeps the
+            flight in the diary, because a cancelled trip is exactly when
+            somebody still has to ring the airline. */}
+        {trip.status !== 'cancelled' && (
+          <button
+            className="itin-tool"
+            type="button"
+            onClick={() => act(() => api.post(`/trips/${ownerId}/${tripId}/cancel`))}
+          >
+            Cancel the trip
+          </button>
+        )}
+        {trip.status === 'cancelled' && (
+          <button
+            className="itin-tool"
+            type="button"
+            onClick={() => act(() => api.patch(`/trips/${ownerId}/${tripId}`, { status: 'draft' }))}
+          >
+            Reinstate it
+          </button>
+        )}
+        <button className="itin-tool is-danger" type="button" onClick={() => setDeleting(true)}>
+          Delete
         </button>
+      </div>
+
+      {trip.status === 'cancelled' && (
+        <div className="alert" style={{ marginTop: 12 }}>
+          This trip is cancelled. Its days are drawn in the home timezone again, and
+          anything below is still in the diary — cancelling the journey does not
+          cancel the bookings, and somebody still has to.
+        </div>
+      )}
+
+      {deleting && (
+        <DeleteTrip
+          ownerId={ownerId}
+          tripId={tripId}
+          name={trip.name}
+          onCancel={() => setDeleting(false)}
+          onDeleted={() => { setDeleting(false); onBack(); }}
+        />
       )}
 
       {/* Checked against the trip's own dates. A passport with four months left
@@ -203,10 +249,17 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
       {documentWarnings.length > 0 && (
         <div className="alert alert-warning">
           <strong>Documents worth checking before this trip.</strong>
+          {/* Each line is a summary of a document held elsewhere, and naming a
+              passport without offering a way to reach it leaves the reader to
+              go and find which one. The link lands on that exact row. */}
           <ul className="trip-warnings">
             {documentWarnings.map((w) => (
               <li key={w.essentialId}>
-                {w.label || w.field} — {w.severity === 'expired'
+                <Link to={`/dashboard?tab=essentials&essential=${w.essentialId}`}>
+                  {w.label || w.field}
+                </Link>
+                {' — '}
+                {w.severity === 'expired'
                   ? `expires ${w.expiresOn}, before the trip ends`
                   : `expires ${w.expiresOn}, under six months after arrival`}
               </li>
@@ -351,6 +404,70 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
         onSubmit={(body) => act(() => api.post(`/trips/${ownerId}/${tripId}/contacts`, body))}
       />
 
+    </div>
+  );
+}
+
+/**
+ * Deleting a trip, having first said what that takes with it.
+ *
+ * The count is fetched rather than guessed, because "this also removes 6
+ * things from the diary" is the whole reason somebody would stop and choose
+ * Cancel instead. A confirmation that says "are you sure?" and nothing else
+ * is a button with an extra step.
+ */
+function DeleteTrip({ ownerId, tripId, name, onCancel, onDeleted }) {
+  const [what, setWhat] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get(`/trips/${ownerId}/${tripId}/deletion`).then(setWhat).catch((e) => setError(e.message));
+  }, [ownerId, tripId]);
+
+  async function go() {
+    setBusy(true); setError('');
+    try {
+      await api.del(`/trips/${ownerId}/${tripId}`);
+      onDeleted();
+    } catch (e) { setError(e.message); setBusy(false); }
+  }
+
+  const parts = what ? [
+    what.items && `${what.items} thing${what.items === 1 ? '' : 's'} in the diary`,
+    what.travellers && `${what.travellers} traveller${what.travellers === 1 ? '' : 's'}`,
+    what.contacts && `${what.contacts} local contact${what.contacts === 1 ? '' : 's'}`,
+  ].filter(Boolean) : [];
+
+  return (
+    <div className="card danger-zone" style={{ marginTop: 12 }}>
+      <strong>Delete “{name}”?</strong>
+      {error && <div className="alert alert-error" style={{ marginTop: 8 }}>{error}</div>}
+      {!what && !error && <p className="hint">Checking what this would remove…</p>}
+      {what?.needsPrincipal && (
+        <p className="hint">
+          This trip is confirmed, so it is drawing their days in another timezone —
+          only the principal can delete it. Cancel it instead, or ask them.
+        </p>
+      )}
+      {what && !what.needsPrincipal && (
+        <p className="hint">
+          {parts.length === 0
+            ? 'Nothing else goes with it — the trip is empty.'
+            : `This also removes ${parts.join(', ')}. Cancelling instead keeps all of it and just marks the journey as not happening.`}
+        </p>
+      )}
+      <div className="code-actions">
+        <button
+          className="btn btn-danger btn-sm"
+          type="button"
+          disabled={busy || !what || what.needsPrincipal}
+          onClick={go}
+        >
+          {busy ? 'Deleting…' : 'Delete it'}
+        </button>
+        <button className="btn btn-sm" type="button" onClick={onCancel}>Keep it</button>
+      </div>
     </div>
   );
 }

@@ -103,7 +103,23 @@ const shiftKey = (key, n) => {
       })).d.booking;
 
     const all = await slotsOf(open);
-    const firstDay = dayKey(all[0].startAt);
+    // The first day with room for everything this suite puts on one day, which
+    // is not the same as the day holding the first slot.
+    //
+    // Three bookings land on this day, and a booking blocks the principal's
+    // time whichever meeting type it came through. Taking the day of all[0]
+    // meant that running late in the evening — after 21:00, with availability
+    // ending at 23:30 and a breather between appointments — left two slots
+    // where three were needed, and the third booking read as a product fault.
+    // The same shape as the horizon bug: green all day, red for the last hours
+    // of it.
+    const perDay = new Map();
+    for (const s of all) {
+      const k = dayKey(s.startAt);
+      perDay.set(k, (perDay.get(k) || 0) + 1);
+    }
+    const firstDay = [...perDay.keys()].find((k) => perDay.get(k) >= 4);
+    if (!firstDay) throw new Error('no day in the horizon has room for four bookings');
 
     // Weeks run Sunday to Saturday, so "eight days away" is not reliably "next
     // week" — eight days from a Saturday is the week after next, and one click
@@ -116,7 +132,8 @@ const shiftKey = (key, n) => {
     const later = all.find((s) => dayKey(s.startAt) >= nextWeekStart && dayKey(s.startAt) < weekAfter);
     if (!later) throw new Error('the slot horizon does not reach next week');
 
-    const near = await bookAt(open, all[0].startAt, 'Near Meeting');
+    // On firstDay, not merely first: everything below asserts against that day.
+    const near = await bookAt(open, all.find((s) => dayKey(s.startAt) === firstDay).startAt, 'Near Meeting');
     const far = await bookAt(open, later.startAt, 'Far Meeting');
 
     // One held, one called off, on the same first day. Slots are refetched

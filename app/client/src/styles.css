@@ -2443,3 +2443,14 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 @media (max-width: 700px) {
   .now-band { margin-bottom: 18px; }
 }
+
+/* Arrived here from a summary that named this row. The mark fades rather than
+   sticking, because it answers "which one" and then stops being useful. */
+.ess-row.is-focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: focus-fade 2.4s ease-out 1.2s forwards;
+}
+@keyframes focus-fade {
+  to { box-shadow: 0 0 0 0 transparent; border-color: var(--border); }
+}
