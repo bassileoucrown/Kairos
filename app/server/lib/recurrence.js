@@ -30,7 +30,22 @@ const { zonedTimeToUtc, utcToZonedParts } = require('./timezone');
  * ships.
  */
 
-const FREQUENCIES = new Set(['daily', 'weekly', 'fortnightly', 'monthly', 'yearly']);
+// Two different things are called "monthly", and a diary has to tell them
+// apart. The 15th of every month is one rule; the second Tuesday of every
+// month is another, and they only coincide by accident. Board meetings,
+// standing reviews and payroll are usually the second kind — "the first
+// Monday" — so it gets its own frequency rather than being approximated by
+// the first and drifting a week out.
+// "The fourth Friday" and "the last Friday" are also two different rules, and
+// they are the same day in roughly two months out of three — which is what
+// makes picking one for somebody dangerous. A board that meets on the last
+// Friday does not meet on the fourth in a month with five. So both exist and
+// the choice is made on screen, rather than inferred from whichever date
+// happened to be typed first.
+const FREQUENCIES = new Set([
+  'daily', 'weekdays', 'weekly', 'fortnightly',
+  'monthly', 'monthly-weekday', 'monthly-last-weekday', 'yearly',
+]);
 
 // Enough to be useful, small enough that one mistyped form cannot write
 // thousands of rows. A standing weekly meeting for two years is 104.
@@ -43,20 +58,75 @@ const DEFAULT_HORIZON_MONTHS = 12;
 
 const LABELS = {
   daily: 'Every day',
+  weekdays: 'Every weekday',
   weekly: 'Every week',
   fortnightly: 'Every two weeks',
-  monthly: 'Every month',
+  monthly: 'Every month, on the same date',
   yearly: 'Every year',
 };
 
-/** Prose for the screen, or null when there is nothing repeating. */
-function label(freq) {
-  return LABELS[freq] || null;
-}
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const ORDINALS = ['', 'first', 'second', 'third', 'fourth'];
 
 /** How many days in a given month — used to decide whether a date exists. */
 function daysInMonth(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** 0 = Sunday. Pure calendar arithmetic, no zone involved. */
+function weekdayOf(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/**
+ * Which "second Tuesday"-style position a date occupies.
+ *
+ * A fifth weekday exists only in some months, and "the fifth" and "the last"
+ * name the same day in every month where a fifth exists at all — so reading it
+ * as "last" agrees with the literal meaning wherever that is defined and gives
+ * a sensible answer where it is not. That is the only case this collapses;
+ * a date that is both the fourth AND the last of its month stays the fourth,
+ * because monthly-last-weekday exists for people who mean the other thing.
+ */
+function positionOf(year, month, day) {
+  const nth = Math.ceil(day / 7);
+  return nth >= 5 ? 'last' : nth;
+}
+
+/** The date of the nth (or last) given weekday in a month. */
+function weekdayPositionDate(year, month, weekday, position) {
+  const total = daysInMonth(year, month);
+  if (position === 'last') {
+    for (let d = total; d > total - 7; d--) if (weekdayOf(year, month, d) === weekday) return d;
+    return null;
+  }
+  const firstMatch = 1 + ((weekday - weekdayOf(year, month, 1) + 7) % 7);
+  const d = firstMatch + (position - 1) * 7;
+  return d <= total ? d : null;
+}
+
+/**
+ * Prose for the screen, or null when there is nothing repeating.
+ *
+ * The weekday-position rule cannot be described without knowing the date it
+ * was built from — "every month" says nothing about which Tuesday — so the
+ * start is passed in and the label reads the way somebody would say it aloud.
+ */
+function label(freq, parts) {
+  if (freq === 'monthly-weekday' || freq === 'monthly-last-weekday') {
+    if (!parts) {
+      return freq === 'monthly-last-weekday'
+        ? 'The last weekday of that name, every month'
+        : 'Every month, on the same weekday';
+    }
+    const name = WEEKDAYS[weekdayOf(parts.year, parts.month, parts.day)];
+    if (freq === 'monthly-last-weekday') return `The last ${name} of every month`;
+    const position = positionOf(parts.year, parts.month, parts.day);
+    return position === 'last'
+      ? `The last ${name} of every month`
+      : `The ${ORDINALS[position]} ${name} of every month`;
+  }
+  return LABELS[freq] || null;
 }
 
 /**
@@ -75,23 +145,42 @@ function daysInMonth(year, month) {
 function step(parts, freq, n) {
   const { year, month, day, hour, minute } = parts;
 
+  const at = (moved) => ({
+    year: moved.getUTCFullYear(),
+    month: moved.getUTCMonth() + 1,
+    day: moved.getUTCDate(),
+    hour,
+    minute,
+  });
+
   if (freq === 'daily' || freq === 'weekly' || freq === 'fortnightly') {
     const days = freq === 'daily' ? 1 : (freq === 'weekly' ? 7 : 14);
     // Day arithmetic has no missing dates, so UTC is a safe neutral calendar
     // here — no zone is involved, only the counting.
-    const moved = new Date(Date.UTC(year, month - 1, day + days * n));
-    return {
-      year: moved.getUTCFullYear(),
-      month: moved.getUTCMonth() + 1,
-      day: moved.getUTCDate(),
-      hour,
-      minute,
-    };
+    return at(new Date(Date.UTC(year, month - 1, day + days * n)));
+  }
+
+  // Monday to Friday. Counted in working days rather than filtered out of a
+  // daily series, so "twenty times" means twenty actual weekdays instead of
+  // four weeks with the weekends silently dropped.
+  if (freq === 'weekdays') {
+    // The weekend shift happens FIRST, once, and everything counts from there.
+    // Normalising after stepping made a Saturday start land on Monday at n = 0
+    // and again at n = 1 — the same day twice, because the shift and the first
+    // step both crossed the same weekend.
+    let d = new Date(Date.UTC(year, month - 1, day));
+    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = new Date(d.getTime() + 86400000);
+    for (let moved = 0; moved < n;) {
+      d = new Date(d.getTime() + 86400000);
+      const dow = d.getUTCDay();
+      if (dow !== 0 && dow !== 6) moved++;
+    }
+    return at(d);
   }
 
   let y = year;
   let m = month;
-  if (freq === 'monthly') {
+  if (freq === 'monthly' || freq === 'monthly-weekday' || freq === 'monthly-last-weekday') {
     const total = (year * 12) + (month - 1) + n;
     y = Math.floor(total / 12);
     m = (total % 12) + 1;
@@ -99,6 +188,14 @@ function step(parts, freq, n) {
     y = year + n;
   } else {
     return null;
+  }
+
+  if (freq === 'monthly-weekday' || freq === 'monthly-last-weekday') {
+    const position = freq === 'monthly-last-weekday'
+      ? 'last'
+      : positionOf(year, month, day);
+    const d = weekdayPositionDate(y, m, weekdayOf(year, month, day), position);
+    return d ? { year: y, month: m, day: d, hour, minute } : null;
   }
 
   if (day > daysInMonth(y, m)) return null;
@@ -152,7 +249,11 @@ function expand({ startAt, endAt, timeZone, freq, count, until }) {
   // 31st" — cannot spin looking for occurrences that a short horizon will
   // never yield.
   for (let n = 0; out.length < limit && n < MAX_OCCURRENCES * 4; n++) {
-    const parts = n === 0 ? base : step(base, freq, n);
+    // The first occurrence goes through the same rule as the rest rather than
+    // being taken as given. Every frequency returns the start unchanged at
+    // n = 0 except "every weekday", where a series begun on a Saturday should
+    // open on the Monday instead of putting one lone item on a weekend.
+    const parts = step(base, freq, n);
     if (!parts) continue;
     const start = zonedTimeToUtc(parts.year, parts.month, parts.day, parts.hour, parts.minute, timeZone);
     if (start > horizon) break;
