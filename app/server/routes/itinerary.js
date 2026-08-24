@@ -7,7 +7,8 @@ const { requirePaAccess } = require('../lib/paAccess');
 const { arrangementProblem } = require('../lib/trips');
 const pickup = require('../lib/pickup');
 const pickupSignal = require('../lib/pickupSignal');
-const { isValidTimeZone } = require('../lib/timezone');
+const { isValidTimeZone, utcToZonedParts } = require('../lib/timezone');
+const recurrence = require('../lib/recurrence');
 const { planDelay } = require('../lib/cascade');
 const { sendEmail } = require('../lib/email');
 const { directLineFor } = require('../lib/directLine');
@@ -77,6 +78,15 @@ function serializeItem(i, ownerTz) {
     reference: i.reference,
     notes: i.notes,
     bookingId: i.booking_id,
+    // Part of something that happens again. The label is built here rather
+    // than on the screen because "every month" does not describe the rule on
+    // its own — the second Tuesday and the last Friday are both monthly, and
+    // only the date they were built from says which.
+    seriesId: i.series_id || null,
+    recurrence: i.recurrence || null,
+    recurrenceLabel: i.recurrence
+      ? recurrence.label(i.recurrence, utcToZonedParts(new Date(i.start_at), startTz))
+      : null,
     status: i.status || 'confirmed',
     proposalNote: i.proposal_note || '',
     proposedAt: i.proposed_at || null,
@@ -354,24 +364,64 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
     status = requested || 'draft';
   }
 
-  const id = crypto.randomUUID();
-  await db.prepare(`
-    INSERT INTO itinerary_items
-      (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
-       location, destination, reference, notes, status, created_at,
-       trip_id, arrangement, provider, contact_name, contact_phone, terminal, seat)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.principal.id, req.user.id, kind, String(title).trim(),
-    start.toISOString(), endAt ? new Date(endAt).toISOString() : null,
-    startTimezone || null, endTimezone || null,
-    String(location || '').trim(), String(destination || '').trim(),
-    String(reference || '').trim(), String(notes || '').trim(), status, new Date().toISOString(),
-    tripId || null, arrangement || '', String(provider || '').trim(),
-    String(contactName || '').trim(), String(contactPhone || '').trim(),
-    String(terminal || '').trim(), String(seat || '').trim());
+  // Something that happens again.
+  //
+  // The zone matters and is not a detail: a weekly nine o'clock has to stay at
+  // nine, which means recurring on the item's own calendar rather than adding
+  // a fixed number of hours. See lib/recurrence.js.
+  const repeat = req.body?.recurrence;
+  if (repeat) {
+    const bad = recurrence.problem(repeat);
+    if (bad) return res.status(400).json({ error: bad });
+  }
+  const zone = startTimezone || req.principal.timezone || 'UTC';
+  const occurrences = repeat
+    ? recurrence.expand({
+      startAt: start.toISOString(),
+      endAt: endAt ? new Date(endAt).toISOString() : null,
+      timeZone: zone,
+      freq: repeat.freq,
+      count: repeat.count,
+      until: repeat.until,
+    })
+    : [{ startAt: start.toISOString(), endAt: endAt ? new Date(endAt).toISOString() : null }];
 
-  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
-  res.status(201).json({ item: serializeItem(row, req.principal.timezone || 'UTC') });
+  // Null for a one-off rather than an id nothing shares, so "is this part of a
+  // series" stays a question about the data instead of a count.
+  const seriesId = repeat ? crypto.randomUUID() : null;
+  const now = new Date().toISOString();
+  const ids = [];
+
+  for (const occurrence of occurrences) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    await db.prepare(`
+      INSERT INTO itinerary_items
+        (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
+         location, destination, reference, notes, status, created_at,
+         trip_id, arrangement, provider, contact_name, contact_phone, terminal, seat,
+         series_id, recurrence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.principal.id, req.user.id, kind, String(title).trim(),
+      occurrence.startAt, occurrence.endAt,
+      startTimezone || null, endTimezone || null,
+      String(location || '').trim(), String(destination || '').trim(),
+      String(reference || '').trim(), String(notes || '').trim(), status, now,
+      tripId || null, arrangement || '', String(provider || '').trim(),
+      String(contactName || '').trim(), String(contactPhone || '').trim(),
+      String(terminal || '').trim(), String(seat || '').trim(),
+      seriesId, repeat ? repeat.freq : null);
+  }
+
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(ids[0]);
+  res.status(201).json({
+    item: serializeItem(row, req.principal.timezone || 'UTC'),
+    // Said back plainly. Creating one thing and silently getting fifty-two is
+    // the kind of surprise that costs trust, so the count is part of the
+    // answer and the screen repeats it.
+    occurrences: ids.length,
+    seriesId,
+  });
 });
 
 // --- Meeting a car without a name board ---------------------------------
@@ -628,12 +678,53 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
   res.json({ item: serializeItem(updated, req.principal.timezone || 'UTC') });
 });
 
+/**
+ * Removing one, or the rest of them, or the lot.
+ *
+ * A standing Tuesday meeting has three different cancellations and they are
+ * not interchangeable. The principal is away next week: that is ONE. The
+ * arrangement has ended: that is THIS AND EVERY ONE AFTER, and the past stays
+ * on the record because it happened. The whole thing was set up wrongly: that
+ * is ALL of them.
+ *
+ * `scope` defaults to `one`, so the plain delete somebody already relies on
+ * means exactly what it always meant. A wrong guess here deletes a year of
+ * somebody's diary, which is not a thing to infer from silence.
+ *
+ * Deliberately never deletes what is already past when the scope is
+ * "following": history is not tidied up by a cancellation made today.
+ */
 router.delete('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
     .get(req.params.itemId, req.principal.id);
   if (!row || hiddenFromViewer(row, req)) return res.status(404).json({ error: 'Item not found.' });
-  await db.prepare('DELETE FROM itinerary_items WHERE id = ?').run(row.id);
-  res.status(204).end();
+
+  const scope = String(req.query.scope || 'one');
+  if (!['one', 'following', 'series'].includes(scope)) {
+    return res.status(400).json({ error: 'Unknown scope.' });
+  }
+
+  if (scope === 'one' || !row.series_id) {
+    await db.prepare('DELETE FROM itinerary_items WHERE id = ?').run(row.id);
+    return res.json({ removed: 1 });
+  }
+
+  if (scope === 'series') {
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM itinerary_items WHERE series_id = ? AND owner_id = ?')
+      .get(row.series_id, req.principal.id);
+    await db.prepare('DELETE FROM itinerary_items WHERE series_id = ? AND owner_id = ?')
+      .run(row.series_id, req.principal.id);
+    return res.json({ removed: Number(n?.n || 0) });
+  }
+
+  // From this one onwards, counted before the delete so the answer is the
+  // number actually removed rather than an assumption about it.
+  const n = await db.prepare(
+    'SELECT COUNT(*) AS n FROM itinerary_items WHERE series_id = ? AND owner_id = ? AND start_at >= ?',
+  ).get(row.series_id, req.principal.id, row.start_at);
+  await db.prepare('DELETE FROM itinerary_items WHERE series_id = ? AND owner_id = ? AND start_at >= ?')
+    .run(row.series_id, req.principal.id, row.start_at);
+  return res.json({ removed: Number(n?.n || 0) });
 });
 
 // Pull a confirmed booking onto the itinerary so it can carry the things a

@@ -158,6 +158,10 @@ export function ScheduleEntry({ e, viewerIsPrincipal = true }) {
             </span></>
           )}
           {!e.crossesTimezone && e.overnight && <> · <span className="sched-tz">arrives next day</span></>}
+          {/* Said in words rather than with a loop glyph, because the rule is
+              what matters: "every month" does not distinguish the second
+              Tuesday from the last Friday, and the label does. */}
+          {e.recurrenceLabel && <> · <span className="sched-repeat">{e.recurrenceLabel}</span></>}
         </div>
         {e.notes && <div className="sched-notes">{e.notes}</div>}
       </div>

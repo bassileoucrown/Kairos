@@ -899,6 +899,9 @@ textarea { resize: vertical; min-height: 70px; }
 .sched-kind { font-weight: 600; }
 .sched-ref { font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem; }
 .sched-tz { color: #4C5B7A; font-weight: 600; }
+/* Quieter than the time and the place, which are what the entry is for. That
+   this one repeats is context, not the headline. */
+.sched-repeat { color: var(--text-muted); font-style: italic; }
 .sched-notes {
   font-size: 0.8rem; margin-top: 6px; padding-top: 6px;
   border-top: 1px dashed var(--border); color: var(--text-muted); white-space: pre-wrap;

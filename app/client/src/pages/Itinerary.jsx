@@ -60,6 +60,8 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [justAdded, setJustAdded] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const [repeatCount, setRepeatCount] = useState(12);
   const titleRef = useRef(null);
   const isTravel = TRAVEL_KINDS.has(kind);
 
@@ -84,12 +86,15 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
         startTimezone: timezone,
         endTimezone: isTravel && endTimezone ? endTimezone : undefined,
         location, destination, reference, notes,
+        // Left off entirely for a one-off rather than sent as "none", so the
+        // server's "is this repeating" question has one answer, not two.
+        recurrence: repeat ? { freq: repeat, count: Number(repeatCount) } : undefined,
       });
       // Stay open. A trip is a sequence — outbound, car, hotel, dinner — and
       // closing the form after each leg means re-opening it and re-picking the
       // kind four more times. What varies between legs is cleared; what
       // usually carries (the kind, roughly when) is kept.
-      setJustAdded(title);
+      setJustAdded(repeat ? `${title} — ${repeatCount} times` : title);
       setTitle('');
       setLocation('');
       setDestination('');
@@ -189,6 +194,55 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
           placeholder="Anything they should know before they walk in." />
       </div>
 
+      {/* Two monthlies, deliberately offered as two things. The 15th of every
+          month and the second Tuesday of every month are different rules that
+          only coincide by accident, and a standing board meeting is almost
+          always the second. The last-weekday option is separate again: "the
+          fourth Friday" and "the last Friday" are the same day in about two
+          months out of three, which is exactly what makes guessing dangerous. */}
+      <div className="field">
+        <label htmlFor="itin-repeat">Repeats</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select
+            id="itin-repeat"
+            value={repeat}
+            onChange={(e) => setRepeat(e.target.value)}
+            style={{ width: 'auto', flex: '1 1 220px' }}
+          >
+            <option value="">Once — does not repeat</option>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Every weekday</option>
+            <option value="weekly">Every week</option>
+            <option value="fortnightly">Every two weeks</option>
+            <option value="monthly">Every month, same date</option>
+            <option value="monthly-weekday">Every month, same weekday</option>
+            <option value="monthly-last-weekday">Every month, last such weekday</option>
+            <option value="yearly">Every year</option>
+          </select>
+          {repeat && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+              <input
+                type="number"
+                min={2}
+                max={260}
+                value={repeatCount}
+                aria-label="How many times"
+                onChange={(e) => setRepeatCount(e.target.value)}
+                style={{ width: 90 }}
+              />
+              <span className="hint" style={{ margin: 0 }}>times</span>
+            </label>
+          )}
+        </div>
+        {repeat && (
+          <p className="hint">
+            Each one is a real entry you can move or cancel on its own. A date that does
+            not exist is skipped rather than moved — the 31st happens only in months that
+            have one.
+          </p>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-primary" type="submit" disabled={saving}>
           {saving ? 'Adding…' : 'Add to the day'}
@@ -204,6 +258,9 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
 export default function Itinerary() {
   // Replaces window.prompt; see components/Ask.jsx.
   const [ask, askDialog] = useAsk();
+  // Which entry is mid-removal, so a repeating one can be asked which of the
+  // three removals is meant before anything goes.
+  const [removing, setRemoving] = useState(null);
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -246,10 +303,11 @@ export default function Itinerary() {
     }
   }
 
-  async function remove(id) {
+  async function remove(id, scope = 'one') {
     setError('');
     try {
-      await api.del(`/itinerary/${ownerId}/items/${id}`);
+      await api.del(`/itinerary/${ownerId}/items/${id}?scope=${scope}`);
+      setRemoving(null);
       load();
     } catch (err) { setError(err.message); }
   }
@@ -454,9 +512,27 @@ export default function Itinerary() {
                 {mine && e.location && e.destination && (
                   <TravelTime ownerId={ownerId} item={e} onApplied={load} />
                 )}
-                {mine && (
+                {/* A repeating entry has three different removals and they are
+                    not interchangeable: away next week, the arrangement has
+                    ended, or it was set up wrongly. Asked inline rather than
+                    guessed, because guessing wrong deletes a year of diary. */}
+                {mine && removing === e.id && e.seriesId && (
+                  <>
+                    <span className="hint" style={{ margin: 0 }}>Remove</span>
+                    <button className="itin-tool is-danger" type="button"
+                      onClick={() => remove(e.id, 'one')}>just this one</button>
+                    <button className="itin-tool is-danger" type="button"
+                      onClick={() => remove(e.id, 'following')}>this and later</button>
+                    <button className="itin-tool is-danger" type="button"
+                      onClick={() => remove(e.id, 'series')}>all of them</button>
+                    <button className="itin-tool" type="button"
+                      onClick={() => setRemoving(null)}>Keep</button>
+                  </>
+                )}
+                {mine && removing !== e.id && (
                   <button className="itin-tool is-danger" type="button"
-                    aria-label={`Remove ${e.title}`} onClick={() => remove(e.id)}>Remove</button>
+                    aria-label={`Remove ${e.title}`}
+                    onClick={() => (e.seriesId ? setRemoving(e.id) : remove(e.id))}>Remove</button>
                 )}
                 {e.source === 'booking' && <span className="pill">From a booking</span>}
               </div>

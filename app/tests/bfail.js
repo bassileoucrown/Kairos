@@ -49,7 +49,38 @@ function boot(env, { settleMs = 25000 } = {}) {
     let exited = null;
     proc.on('exit', (code) => { exited = code; });
 
-    (async () => {
+    /**
+ * Is there actually a Postgres to fail against?
+ *
+ * Every assertion below distinguishes one kind of database failure from
+ * another, which only means anything when a working database exists to be the
+ * control. Without one, half the suite fails with messages like "did not retry
+ * an authentication failure" — technically true, wholly misleading, and
+ * indistinguishable from a real regression at a glance. It has cost time more
+ * than once.
+ *
+ * So the precondition is checked and named. This still fails the run, as the
+ * README says it should, but it fails saying the thing that is actually wrong.
+ */
+async function postgresIsUp() {
+  const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
+  const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
+  try {
+    await client.connect();
+    await client.end();
+    return true;
+  } catch { return false; }
+}
+
+(async () => {
+  if (!await postgresIsUp()) {
+    console.log('\n  ✗ Postgres is not reachable at 127.0.0.1:5432.');
+    console.log('    This suite compares kinds of database failure, so it needs a');
+    console.log('    working database as the control. Nothing here is a product fault.');
+    console.log('    Start Postgres and run it again.');
+    console.log('\n1 FAILED');
+    process.exit(1);
+  }
       const deadline = Date.now() + settleMs;
       let status = null;
       for (;;) {

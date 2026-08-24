@@ -469,6 +469,14 @@ function ready() {
       await ensureColumn('itinerary_items', 'pickup_token', 'TEXT');
       // The moment the principal picked this driver out. See lib/pickupSignal.js.
       await ensureColumn('itinerary_items', 'pickup_found_at', 'TEXT');
+      // Something that happens again. See lib/recurrence.js for why every
+      // occurrence is a real row rather than a rule expanded when somebody
+      // looks: almost everything done to an item needs an id, and a virtual
+      // occurrence has none. Both columns are null for a one-off, which is
+      // what every existing row is.
+      await ensureColumn('itinerary_items', 'series_id', 'TEXT');
+      await ensureColumn('itinerary_items', 'recurrence', 'TEXT');
+      await ensureIndex('idx_itinerary_series', 'itinerary_items(series_id)');
       await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
       await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');
       await ensureIndex('idx_itinerary_status', 'itinerary_items(owner_id, status)');
