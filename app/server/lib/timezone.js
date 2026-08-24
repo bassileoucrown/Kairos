@@ -29,6 +29,32 @@ function zonedTimeToUtc(year, month, day, hour, minute, timeZone) {
   return new Date(utcGuess);
 }
 
+/**
+ * The wall clock somebody in `timeZone` would read off an instant.
+ *
+ * The inverse of zonedTimeToUtc, and needed by anything that has to keep a
+ * local time fixed while the UTC instant moves — a weekly meeting at nine has
+ * to stay at nine through a daylight-saving change, which means recurring on
+ * the calendar and converting back, not adding 168 hours.
+ */
+function utcToZonedParts(date, timeZone) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const map = {};
+  for (const p of dtf.formatToParts(date)) map[p.type] = p.value;
+  return {
+    year: parseInt(map.year, 10),
+    month: parseInt(map.month, 10),
+    day: parseInt(map.day, 10),
+    hour: parseInt(map.hour, 10),
+    minute: parseInt(map.minute, 10),
+  };
+}
+
 // Returns {year, month, day} for "now" as seen in timeZone.
 function todayInZone(timeZone, now = new Date()) {
   const dtf = new Intl.DateTimeFormat('en-US', {
@@ -62,4 +88,6 @@ function isValidTimeZone(tz) {
   }
 }
 
-module.exports = { zonedTimeToUtc, todayInZone, addCalendarDays, dayOfWeek, isValidTimeZone };
+module.exports = {
+  zonedTimeToUtc, utcToZonedParts, todayInZone, addCalendarDays, dayOfWeek, isValidTimeZone,
+};
