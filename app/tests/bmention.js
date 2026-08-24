@@ -112,6 +112,19 @@ function client() {
     ok('a contact who is not on Kairos has none, and none is invented',
       tunde.handle === null, String(tunde.handle));
 
+    // The username, and nothing else about the account it came from.
+    //
+    // Pinned as a whole-payload check rather than a list of absences, so a
+    // field added later — an account id, a category, a timezone — fails here
+    // instead of quietly turning a name into a way into somebody's account.
+    ok('a contact carries the username and no other trace of the account',
+      Object.keys(ngoziContact).sort().join(',')
+        === ['anniversary', 'birthday', 'email', 'handle', 'id', 'lastMeetingAt',
+          'meetingCount', 'name', 'notes', 'relationshipTier'].join(','),
+      Object.keys(ngoziContact).sort().join(','));
+    ok('and its id is the contact record, not the account',
+      ngoziContact.id !== (await stranger('GET', '/auth/me')).d.user.id);
+
     // And it follows the account, because it belongs to the account.
     await stranger('PATCH', '/profile', { slug: `ngozi-renamed-${ID}` });
     r = await pa('GET', `/pa/${me.id}/contacts`);

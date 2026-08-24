@@ -2547,6 +2547,12 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .handle-row .hint { margin: 0; word-break: break-all; }
 
-/* A contact who is on Kairos, named the way they named themselves. Carries the
-   accent because it is a real identity, not a label this office applied. */
-.contact-handle { color: var(--accent); font-weight: 600; }
+/* A contact who is on Kairos, named the way they named themselves.
+   Deliberately NOT in the accent colour the app uses for links and addresses:
+   this is a name to read and to type after an @, not a door into somebody's
+   account. It should be easy to pick out of a line and lead nowhere. */
+.contact-handle {
+  color: var(--text);
+  font-weight: 600;
+  cursor: text;
+}

@@ -76,10 +76,13 @@ function ContactCard({ contact, ownerId, onSaved }) {
       </div>
 
       <div className="meta contact-meta">
-        {/* Shown when this person holds a Kairos account, and it is THEIR
-            username — looked up from the account, never derived from the name
-            on this record. A contact who is not on Kairos has none, and the
-            office does not get to invent one for them. */}
+        {/* Their username, when they have one — looked up from the account,
+            never derived from the name on this record.
+
+            Shown so it can be read and typed after an @, and DELIBERATELY not
+            a link. The office needs to know what to call this person; it does
+            not get a way into their account from here, and the row says
+            nothing else about the account it came from. */}
         {contact.handle && (
           <>
             <span className="contact-handle">@{contact.handle}</span>
