@@ -240,37 +240,22 @@ if (USE_PG && CONFIG_ERROR) {
 }
 
 /**
- * A handle for every contact that predates the column.
+ * Clear the usernames this app invented for people.
  *
- * Deliberately not importing lib/mentions: that module requires this one, and
- * a cycle here runs during boot, before either is fully built. The rule is
- * small enough to state twice, and stating it twice is cheaper than a
- * require() that resolves to an empty object at exactly the wrong moment.
+ * An earlier version derived a handle for every contact from their name, so
+ * that any contact could be written after an @. That was a mistake of the
+ * quiet kind: a username belongs to whoever holds the account, and coining one
+ * on somebody's behalf — in an office they may never have heard of — makes up
+ * an identity for them. Two principals who both knew Tunde Bakare each got a
+ * different invented name for the same person.
+ *
+ * The column stays, because a NOT NULL it never was and dropping a column is a
+ * harder migration than emptying one. It is simply no longer written or read:
+ * a contact's username is now looked up from the account that owns the
+ * address, every time, or is nothing at all.
  */
-async function backfillContactHandles() {
-  const rows = await impl.prepare(
-    'SELECT id, owner_id, name, email FROM contacts WHERE handle IS NULL OR handle = \'\'',
-  ).all();
-  if (rows.length === 0) return;
-
-  // Uniqueness is per owner, so the taken set is built per owner as we go.
-  const taken = new Map();
-  for (const r of rows) {
-    if (!taken.has(r.owner_id)) {
-      const existing = await impl.prepare(
-        'SELECT handle FROM contacts WHERE owner_id = ? AND handle IS NOT NULL',
-      ).all(r.owner_id);
-      taken.set(r.owner_id, new Set(existing.map((e) => e.handle)));
-    }
-    const set = taken.get(r.owner_id);
-    const base = String(r.name || r.email || '')
-      .split('@')[0].toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 38) || 'contact';
-    let candidate = base.length < 3 ? `c-${base}` : base;
-    for (let n = 2; set.has(candidate); n++) candidate = `${base}-${n}`.slice(0, 40);
-    set.add(candidate);
-    await impl.prepare('UPDATE contacts SET handle = ? WHERE id = ?').run(candidate, r.id);
-  }
+async function clearInventedContactHandles() {
+  await impl.prepare("UPDATE contacts SET handle = NULL WHERE handle IS NOT NULL AND handle != ''").run();
 }
 
 // Retrofits columns added after a table already existed — CREATE TABLE IF NOT
@@ -364,7 +349,7 @@ function ready() {
       // for people added afterwards. Runs once — the WHERE clause empties
       // itself — and is deliberately done here rather than lazily on read, so
       // no request ever pays for it.
-      await backfillContactHandles();
+      await clearInventedContactHandles();
       await ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
       // Which plan the account is on. Existing rows land on 'founding' — see
       // lib/plans.js for why that is a fact in the row rather than a promise.

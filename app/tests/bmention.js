@@ -90,11 +90,35 @@ function client() {
     await stranger('PATCH', '/profile', { slug: `ngozi-${ID}` });
     await pa('POST', `/pa/${me.id}/contacts`, { name: 'Ngozi Okafor', email: `ngozi${ID}@x.com` });
 
-    // --- A contact gets a handle ----------------------------------------
-    head('A contact is nameable:');
+    // On Kairos, in the address book, and connected to nobody — so their
+    // username exists and naming them still reaches no one. Ngozi accepts a
+    // connection later in this suite and stops being that case.
+    const femi = client();
+    await femi('POST', '/auth/signup', { name: 'Femi Adeyemi', email: `femi${ID}@x.com`, password: PW });
+    await femi('PATCH', '/profile', { slug: `femi-${ID}` });
+    await pa('POST', `/pa/${me.id}/contacts`, { name: 'Femi Adeyemi', email: `femi${ID}@x.com` });
+
+    // --- Whose username is it? -------------------------------------------
+    //
+    // The rule this section exists for: a username is made by the person who
+    // holds the account. An office writing somebody into its address book does
+    // not get to name them.
+    head('A contact shows the username its owner chose, or none:');
     let r = await pa('GET', `/pa/${me.id}/contacts`);
     const tunde = r.d.contacts.find((c) => /Tunde/.test(c.name));
-    ok('one is derived from their name', tunde.handle === 'tunde-bakare', String(tunde.handle));
+    const ngoziContact = r.d.contacts.find((c) => /Ngozi/.test(c.name));
+    ok('a contact who is on Kairos shows THEIR username',
+      ngoziContact.handle === `ngozi-${ID}`, String(ngoziContact.handle));
+    ok('a contact who is not on Kairos has none, and none is invented',
+      tunde.handle === null, String(tunde.handle));
+
+    // And it follows the account, because it belongs to the account.
+    await stranger('PATCH', '/profile', { slug: `ngozi-renamed-${ID}` });
+    r = await pa('GET', `/pa/${me.id}/contacts`);
+    ok('and when they rename themselves, the contact says the new one',
+      r.d.contacts.find((c) => /Ngozi/.test(c.name)).handle === `ngozi-renamed-${ID}`,
+      String(r.d.contacts.find((c) => /Ngozi/.test(c.name)).handle));
+    await stranger('PATCH', '/profile', { slug: `ngozi-${ID}` });
 
     // --- What the picker offers ------------------------------------------
     head('What the picker offers:');
@@ -102,8 +126,11 @@ function client() {
     ok('the principal is somebody the assistant can address',
       r.d.people.some((p) => p.handle === `adaeze-${ID}`), JSON.stringify(r.d.people));
     ok('and people are marked as being told', r.d.people.every((p) => p.notified === true));
-    ok('contacts are offered too', r.d.contacts.some((c) => c.handle === 'tunde-bakare'));
+    ok('a contact with an account is offered, by their own username',
+      r.d.contacts.some((c) => c.handle === `ngozi-${ID}`), JSON.stringify(r.d.contacts));
     ok('and marked as reaching nobody', r.d.contacts.every((c) => c.notified === false));
+    ok('a contact with no account is not offered at all, having no username',
+      !r.d.contacts.some((c) => /Tunde/.test(c.name)), JSON.stringify(r.d.contacts));
     const ngozi = r.d.contacts.find((c) => /Ngozi/.test(c.name));
     ok('a contact who is not connected can be invited', ngozi.canInvite === true);
 
@@ -116,25 +143,30 @@ function client() {
     head('What each @ turns out to be:');
     const paMe = (await pa('GET', '/auth/me')).d.user;
     const resolved = await mentions.of(
-      `@adaeze-${ID} please note @tunde-bakare is bringing papers, and @nobody-here is nothing`,
+      `@adaeze-${ID} please note @ngozi-${ID} is bringing papers, `
+      + 'and @tunde-bakare is nothing at all',
       { viewerId: paMe.id, ownerId: me.id },
     );
     const byKind = Object.fromEntries(resolved.map((m) => [m.handle, m]));
     ok('a connected person is an address', byKind[`adaeze-${ID}`].kind === 'person');
     ok('and is notified', byKind[`adaeze-${ID}`].notified === true);
-    ok('a contact is a mention', byKind['tunde-bakare'].kind === 'contact');
-    ok('and is explicitly not notified', byKind['tunde-bakare'].notified === false);
+    ok('a contact on Kairos you cannot reach is a mention',
+      byKind[`ngozi-${ID}`].kind === 'contact', JSON.stringify(byKind[`ngozi-${ID}`]));
+    ok('and is explicitly not notified', byKind[`ngozi-${ID}`].notified === false);
     ok('and it carries the name, so the screen need not look it up',
-      byKind['tunde-bakare'].name === 'Tunde Bakare', byKind['tunde-bakare'].name);
-    ok('a handle belonging to nobody stays nothing', byKind['nobody-here'].kind === 'unknown');
+      byKind[`ngozi-${ID}`].name === 'Ngozi Okafor', byKind[`ngozi-${ID}`].name);
+    // The name this app used to invent. It refers to nobody, and now says so.
+    ok('a name derived from a contact is not a username and resolves to nothing',
+      byKind['tunde-bakare'].kind === 'unknown', JSON.stringify(byKind['tunde-bakare']));
 
     // --- Contacts belong to an office ------------------------------------
     head('A contact belongs to one office:');
     const outsider = client();
     await outsider('POST', '/auth/signup', { name: 'Someone Else', email: `else${ID}@x.com`, password: PW });
     const outsiderMe = (await outsider('GET', '/auth/me')).d.user;
-    const leaked = await mentions.of('@tunde-bakare', { viewerId: outsiderMe.id, ownerId: outsiderMe.id });
-    ok('somebody else\'s contact does not resolve for them', leaked[0].kind === 'unknown');
+    const leaked = await mentions.of(`@ngozi-${ID}`, { viewerId: outsiderMe.id, ownerId: outsiderMe.id });
+    ok('somebody else\'s contact does not resolve for them', leaked[0].kind === 'unknown',
+      JSON.stringify(leaked[0]));
     const denied = await outsider('GET', `/mentions/${me.id}/lookup?q=`);
     ok('and they cannot read the list at all', denied.s === 403, String(denied.s));
 
@@ -200,7 +232,7 @@ function client() {
     // Filed under the space owner, so it is the owner's outbox that grows.
     const before = ((await boss('GET', '/emails')).d.emails || []).length;
     r = await boss('POST', `/threads/${threadId}/messages`, {
-      body: `@kit-${ID} please book the cars. @tunde-bakare has the list, `
+      body: `@kit-${ID} please book the cars. @femi-${ID} has the list, `
         + `and @ngozi-${ID} is not in this space.`,
     });
     ok('the message is accepted', r.s === 201, JSON.stringify(r.d));
@@ -212,8 +244,9 @@ function client() {
       (posted.mentions || []).length === 3, JSON.stringify(posted.mentions));
     ok('a member is an address', seen[`kit-${ID}`]?.kind === 'person');
     ok('and was told', seen[`kit-${ID}`]?.notified === true);
-    ok('a contact is a mention', seen['tunde-bakare']?.kind === 'contact');
-    ok('and was not told', seen['tunde-bakare']?.notified === false);
+    ok('a contact is a mention', seen[`femi-${ID}`]?.kind === 'contact',
+      JSON.stringify(seen[`femi-${ID}`]));
+    ok('and was not told', seen[`femi-${ID}`]?.notified === false);
     // The one this section exists for.
     ok('somebody outside the space is still named',
       seen[`ngozi-${ID}`]?.kind === 'person', JSON.stringify(seen[`ngozi-${ID}`]));
@@ -251,14 +284,15 @@ function client() {
     // things on different screens of the same product.
     head('An instruction:');
     r = await pa('POST', `/pa/${me.id}/instructions`, {
-      text: `@adaeze-${ID} the car leaves at six. @tunde-bakare has the documents.`,
+      text: `@adaeze-${ID} the car leaves at six. @femi-${ID} has the documents.`,
     });
     ok('is accepted', r.s === 201, JSON.stringify(r.d).slice(0, 160));
     let seenM = Object.fromEntries((r.d.instruction.mentions || []).map((m) => [m.handle, m]));
     ok('the principal is an address', seenM[`adaeze-${ID}`]?.kind === 'person');
     ok('and is told', seenM[`adaeze-${ID}`]?.notified === true);
-    ok('a contact is a mention', seenM['tunde-bakare']?.kind === 'contact');
-    ok('and is not told', seenM['tunde-bakare']?.notified === false);
+    ok('a contact is a mention', seenM[`femi-${ID}`]?.kind === 'contact',
+      JSON.stringify(seenM[`femi-${ID}`]));
+    ok('and is not told', seenM[`femi-${ID}`]?.notified === false);
 
     r = await pa('GET', `/pa/${me.id}/instructions`);
     ok('and the list carries them too',
@@ -295,7 +329,7 @@ function client() {
     const booking = (bk.d.bookings || [])[0];
     if (booking) {
       r = await pa('PUT', `/pa/${me.id}/briefs/${booking.id}`, {
-        sections: { who: `@adaeze-${ID} is attending`, background: '@tunde-bakare briefed us' },
+        sections: { who: `@adaeze-${ID} is attending`, background: `@femi-${ID} briefed us` },
       });
       ok('saving resolves what it names', r.s === 200 && (r.d.mentions || []).length === 2,
         JSON.stringify(r.d.mentions));
@@ -305,7 +339,7 @@ function client() {
 
       // The one that stops a brief becoming a notification machine.
       await pa('PUT', `/pa/${me.id}/briefs/${booking.id}`, {
-        sections: { who: `@adaeze-${ID} is attending`, background: '@tunde-bakare briefed us', logistics: 'Car at six' },
+        sections: { who: `@adaeze-${ID} is attending`, background: `@femi-${ID} briefed us`, logistics: 'Car at six' },
       });
       const again = ((await boss('GET', '/emails')).d.emails || [])
         .filter((e) => /named you in a brief/i.test(e.subject || '')).length;
@@ -313,7 +347,7 @@ function client() {
 
       r = await pa('GET', `/pa/${me.id}/briefs/${booking.id}`);
       ok('and reading it back says what each @ is',
-        (r.d.mentions || []).some((m) => m.handle === 'tunde-bakare' && m.notified === false),
+        (r.d.mentions || []).some((m) => m.handle === `femi-${ID}` && m.notified === false),
         JSON.stringify(r.d.mentions));
     } else {
       ok('a booking existed to brief', false, JSON.stringify(bk.d).slice(0, 200));
@@ -321,12 +355,12 @@ function client() {
 
     head('A task:');
     r = await pa('POST', '/tasks', {
-      spaceId, title: `Confirm cars with @adaeze-${ID} and @tunde-bakare`,
+      spaceId, title: `Confirm cars with @adaeze-${ID} and @femi-${ID}`,
     });
     ok('is accepted', r.s === 201, JSON.stringify(r.d).slice(0, 160));
     seenM = Object.fromEntries((r.d.task.mentions || []).map((m) => [m.handle, m]));
     ok('a member of the space is an address', seenM[`adaeze-${ID}`]?.kind === 'person');
-    ok('and a contact is still only a mention', seenM['tunde-bakare']?.notified === false);
+    ok('and a contact is still only a mention', seenM[`femi-${ID}`]?.notified === false);
     r = await pa('GET', `/tasks?spaceId=${spaceId}`);
     ok('the list carries them', (r.d.tasks[0].mentions || []).length === 2,
       JSON.stringify(r.d.tasks[0]?.mentions));

@@ -62,18 +62,18 @@ router.get('/space/:spaceId/lookup', requireAuth, async (req, res) => {
   ).get(access.space.owner_id, req.user.id);
 
   const contacts = mayReadContacts ? await db.prepare(`
-    SELECT id, name, email, handle FROM contacts
-     WHERE owner_id = ?
-       AND handle IS NOT NULL
-       AND (? = '' OR lower(name) LIKE ? ESCAPE '\\' OR lower(handle) LIKE ? ESCAPE '\\')
-     ORDER BY name
+    SELECT c.id, c.name, c.email, u.slug AS handle FROM contacts c
+      JOIN users u ON lower(u.email) = lower(c.email)
+     WHERE c.owner_id = ?
+       AND (? = '' OR lower(c.name) LIKE ? ESCAPE '\\' OR lower(u.slug) LIKE ? ESCAPE '\\')
+     ORDER BY c.name
      LIMIT 10
   `).all(access.space.owner_id, q, like, like) : [];
 
-  // On the address, never on the handle — a contact's is derived from their
-  // name and a user's is whatever they chose, so the two strings differ for
-  // one and the same person. Used to suppress the duplicate below and
-  // deliberately not returned.
+  // Matched on the address. Both rows now carry the same handle when they are
+  // the same person, but the address is what makes them the same person —
+  // matching on it says what is meant rather than relying on a value that
+  // happens to agree. Used to suppress the duplicate below, never returned.
   const addressable = new Set(people.map((p) => String(p.email || '').toLowerCase()));
 
   res.json({
@@ -106,9 +106,14 @@ router.get('/space/:spaceId/lookup', requireAuth, async (req, res) => {
  * already — the same rule handles have always followed, so this list can never
  * become a directory of strangers.
  *
- * CONTACTS cannot. They are records this office keeps, and naming one in a
- * sentence tells nobody anything. The picker says so rather than leaving it to
- * be discovered when nobody turns up.
+ * CONTACTS cannot. These are people in the office's address book who hold a
+ * Kairos account — so there is a username to type — but whom the caller has no
+ * way to reach: no shared space, no accepted connection. Naming one is a
+ * reference, and the picker says so rather than leaving it to be discovered
+ * when nobody turns up.
+ *
+ * A contact with no account appears in neither list, because there is no
+ * username to offer. Kairos does not invent one on their behalf.
  */
 router.get('/:ownerId/lookup', requireAuth, requirePaAccess, async (req, res) => {
   const q = normalizeQuery(req.query.q);
@@ -131,23 +136,23 @@ router.get('/:ownerId/lookup', requireAuth, requirePaAccess, async (req, res) =>
      LIMIT 10
   `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, q, like, like);
 
+  // A contact can only be offered after an @ if there is a username to type,
+  // and a username exists only where the person holds an account. The join is
+  // the whole filter: no account, no handle, not offered.
   const contacts = await db.prepare(`
-    SELECT id, name, email, handle
-      FROM contacts
-     WHERE owner_id = ?
-       AND handle IS NOT NULL
-       AND (? = '' OR lower(name) LIKE ? ESCAPE '\\' OR lower(handle) LIKE ? ESCAPE '\\')
-     ORDER BY name
+    SELECT c.id, c.name, c.email, u.slug AS handle
+      FROM contacts c
+      JOIN users u ON lower(u.email) = lower(c.email)
+     WHERE c.owner_id = ?
+       AND (? = '' OR lower(c.name) LIKE ? ESCAPE '\\' OR lower(u.slug) LIKE ? ESCAPE '\\')
+     ORDER BY c.name
      LIMIT 10
   `).all(req.principal.id, q, like, like);
 
-  // Matched on the address, not the handle.
-  //
-  // A contact's handle is derived from their name (tunde-bakare) while a
-  // user's is whatever they chose at signup (tunde, or t-bakare). Comparing
-  // those two strings answers a different question and always said "not
-  // connected" — so somebody already reachable was still offered an
-  // invitation. The email is the same person in both tables.
+  // Matched on the address, which is the thing that makes a contact row and a
+  // user row the same human being. An earlier version compared handles while
+  // contacts carried invented ones, so it always answered "not connected" and
+  // offered to invite somebody already reachable.
   const addressable = new Set(people.map((p) => String(p.email || '').toLowerCase()));
 
   res.json({

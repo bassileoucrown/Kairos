@@ -30,6 +30,47 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
  * faults rather than one impatient test. So it now waits for the verdict
  * itself: ready, or an error to report. `settleMs` is only the deadline.
  */
+/**
+ * Is there actually a Postgres to fail against?
+ *
+ * Every assertion below distinguishes one kind of database failure from
+ * another, which only means anything when a working database exists as the
+ * control. Without one, half the suite fails with messages like "did not retry
+ * an authentication failure" — technically true, wholly misleading, and
+ * indistinguishable from a real regression at a glance.
+ */
+async function postgresIsUp() {
+  const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
+  const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
+  try {
+    await client.connect();
+    await client.end();
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Every server this suite starts, so none of them can outlive it.
+ *
+ * These are servers that deliberately CANNOT reach a database, and the
+ * contract being tested is that such a server stays up and keeps retrying. So
+ * a leaked one does not sit idle — it retries forever, pinning a core, and
+ * every test run for the next hour is slower and stranger for it. That is not
+ * hypothetical: one escaped and spent twenty minutes at 100% CPU, which
+ * destabilised Postgres, which failed this suite, which leaked another.
+ *
+ * proc.kill() at the end of a happy path is not enough on its own, because the
+ * paths that matter are the unhappy ones.
+ */
+const started = [];
+function reapAll() {
+  for (const p of started.splice(0)) {
+    try { p.kill('SIGKILL'); } catch { /* already gone */ }
+  }
+}
+for (const signal of ['exit', 'SIGINT', 'SIGTERM']) process.on(signal, reapAll);
+process.on('uncaughtException', (e) => { reapAll(); throw e; });
+
 function boot(env, { settleMs = 25000 } = {}) {
   return new Promise((resolve) => {
     const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
@@ -42,6 +83,7 @@ function boot(env, { settleMs = 25000 } = {}) {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    started.push(proc);
     let out = '';
     proc.stdout.on('data', (d) => { out += d; });
     proc.stderr.on('data', (d) => { out += d; });
@@ -49,38 +91,7 @@ function boot(env, { settleMs = 25000 } = {}) {
     let exited = null;
     proc.on('exit', (code) => { exited = code; });
 
-    /**
- * Is there actually a Postgres to fail against?
- *
- * Every assertion below distinguishes one kind of database failure from
- * another, which only means anything when a working database exists to be the
- * control. Without one, half the suite fails with messages like "did not retry
- * an authentication failure" — technically true, wholly misleading, and
- * indistinguishable from a real regression at a glance. It has cost time more
- * than once.
- *
- * So the precondition is checked and named. This still fails the run, as the
- * README says it should, but it fails saying the thing that is actually wrong.
- */
-async function postgresIsUp() {
-  const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
-  const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
-  try {
-    await client.connect();
-    await client.end();
-    return true;
-  } catch { return false; }
-}
-
-(async () => {
-  if (!await postgresIsUp()) {
-    console.log('\n  ✗ Postgres is not reachable at 127.0.0.1:5432.');
-    console.log('    This suite compares kinds of database failure, so it needs a');
-    console.log('    working database as the control. Nothing here is a product fault.');
-    console.log('    Start Postgres and run it again.');
-    console.log('\n1 FAILED');
-    process.exit(1);
-  }
+    (async () => {
       const deadline = Date.now() + settleMs;
       let status = null;
       for (;;) {
@@ -98,6 +109,17 @@ async function postgresIsUp() {
 }
 
 (async () => {
+  // Checked before anything is spawned. Bailing out mid-boot is what leaked a
+  // server the last time this check lived in the wrong place.
+  if (!await postgresIsUp()) {
+    console.log('\n  ✗ Postgres is not reachable at 127.0.0.1:5432.');
+    console.log('    This suite compares kinds of database failure, so it needs a');
+    console.log('    working database as the control. Nothing here is a product fault.');
+    console.log('    Start Postgres and run it again.');
+    console.log('\n1 FAILED');
+    process.exit(1);
+  }
+
   console.log('Unreachable host (transient — retries, then waits rather than dying):');
   const refused = await boot({
     DATABASE_URL: 'postgres://kairos:secretpw@127.0.0.1:5999/kairos',

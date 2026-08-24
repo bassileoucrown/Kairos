@@ -259,8 +259,11 @@ function serializeContact(c) {
     relationshipTier: c.relationship_tier,
     birthday: c.birthday,
     anniversary: c.anniversary,
-    // What to type after the @ to refer to them. See lib/mentions.js.
-    handle: c.handle || null,
+    // Their username, when they have one — which means when they hold a
+    // Kairos account. A username is made by the person it belongs to, so a
+    // contact who is not on Kairos has none, and this stays null rather than
+    // inventing something from their name. See lib/mentions.js.
+    handle: c.account_handle || null,
     meetingCount: c.meeting_count,
     lastMeetingAt: c.last_meeting_at,
   };
@@ -270,11 +273,16 @@ router.get('/:ownerId/contacts', requirePaAccess, async (req, res) => {
   const rows = await db.prepare(`
     SELECT c.*,
       COUNT(b.id) as meeting_count,
-      MAX(b.start_at) as last_meeting_at
+      MAX(b.start_at) as last_meeting_at,
+      -- A username belongs to whoever holds the account. If this contact is
+      -- somebody on Kairos, theirs is shown; if not, there is none to show and
+      -- none is invented. See serializeContact.
+      u.slug AS account_handle
     FROM contacts c
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
+    LEFT JOIN users u ON lower(u.email) = lower(c.email)
     WHERE c.owner_id = ?
-    GROUP BY c.id
+    GROUP BY c.id, u.slug
     -- Repeat the aggregate rather than referring to its alias: Postgres
     -- allows a bare alias in ORDER BY but not one nested inside an
     -- expression, where SQLite is happy either way.
@@ -305,18 +313,22 @@ router.post('/:ownerId/contacts', requirePaAccess, async (req, res) => {
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const handle = await mentions.uniqueContactHandle(req.principal.id, String(name || '').trim() || cleanEmail);
   await db.prepare(`
-    INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, birthday, anniversary, handle, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.principal.id, cleanEmail, String(name || '').trim(), String(notes || '').trim(), tier, birthday || null, anniversary || null, handle, now, now);
+    INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, birthday, anniversary, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.principal.id, cleanEmail, String(name || '').trim(), String(notes || '').trim(), tier, birthday || null, anniversary || null, now, now);
 
   const row = await db.prepare(`
-    SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at
+    SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at,
+      u.slug AS account_handle
     FROM contacts c
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
+    LEFT JOIN users u ON lower(u.email) = lower(c.email)
     WHERE c.id = ?
-    GROUP BY c.id
+    -- u.slug is selected, so it is grouped. SQLite tolerates a bare column
+    -- beside an aggregate; Postgres does not, and the whole request became a
+    -- 500 on the backend production actually runs.
+    GROUP BY c.id, u.slug
   `).get(id);
   res.status(201).json({ contact: serializeContact(row) });
 });
@@ -348,11 +360,16 @@ router.patch('/:ownerId/contacts/:id', requirePaAccess, async (req, res) => {
   await db.prepare(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
   const updated = await db.prepare(`
-    SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at
+    SELECT c.*, COUNT(b.id) as meeting_count, MAX(b.start_at) as last_meeting_at,
+      u.slug AS account_handle
     FROM contacts c
     LEFT JOIN bookings b ON b.owner_id = c.owner_id AND b.booker_email = c.email AND b.status = 'confirmed'
+    LEFT JOIN users u ON lower(u.email) = lower(c.email)
     WHERE c.id = ?
-    GROUP BY c.id
+    -- u.slug is selected, so it is grouped. SQLite tolerates a bare column
+    -- beside an aggregate; Postgres does not, and the whole request became a
+    -- 500 on the backend production actually runs.
+    GROUP BY c.id, u.slug
   `).get(row.id);
   res.json({ contact: serializeContact(updated) });
 });
@@ -739,10 +756,9 @@ router.post('/:ownerId/ai-assist/book', requirePaAccess, async (req, res) => {
   const existingContact = await db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(req.principal.id, cleanEmail);
   if (!existingContact) {
     await db.prepare(`
-      INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, handle, created_at, updated_at)
-      VALUES (?, ?, ?, ?, '', 'professional', ?, ?, ?)
+      INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, created_at, updated_at)
+      VALUES (?, ?, ?, ?, '', 'professional', ?, ?)
     `).run(crypto.randomUUID(), req.principal.id, cleanEmail, cleanName,
-      await mentions.uniqueContactHandle(req.principal.id, cleanName || cleanEmail),
       new Date().toISOString(), new Date().toISOString());
   }
 

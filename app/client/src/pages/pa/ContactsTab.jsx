@@ -76,6 +76,16 @@ function ContactCard({ contact, ownerId, onSaved }) {
       </div>
 
       <div className="meta contact-meta">
+        {/* Shown when this person holds a Kairos account, and it is THEIR
+            username — looked up from the account, never derived from the name
+            on this record. A contact who is not on Kairos has none, and the
+            office does not get to invent one for them. */}
+        {contact.handle && (
+          <>
+            <span className="contact-handle">@{contact.handle}</span>
+            {' · '}
+          </>
+        )}
         {contact.email} · {contact.meetingCount} meeting{contact.meetingCount === 1 ? '' : 's'}
         {contact.lastMeetingAt ? ` · last ${new Date(contact.lastMeetingAt).toLocaleDateString()}` : ''}
         {dates.length > 0 && ` · ${dates.join(' · ')}`}

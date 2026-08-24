@@ -3,7 +3,6 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const formats = require('../lib/meetingFormats');
-const mentions = require('../lib/mentions');
 const events = require('../lib/bookingEvents');
 const { getOpenSlots, windowDaysFor } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
@@ -160,10 +159,9 @@ router.post('/:slug/:meetingSlug/book', async (req, res) => {
   const existingContact = await db.prepare('SELECT id FROM contacts WHERE owner_id = ? AND email = ?').get(owner.id, cleanEmail);
   if (!existingContact) {
     await db.prepare(`
-      INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, handle, created_at, updated_at)
-      VALUES (?, ?, ?, ?, '', 'professional', ?, ?, ?)
+      INSERT INTO contacts (id, owner_id, email, name, notes, relationship_tier, created_at, updated_at)
+      VALUES (?, ?, ?, ?, '', 'professional', ?, ?)
     `).run(crypto.randomUUID(), owner.id, cleanEmail, cleanName,
-      await mentions.uniqueContactHandle(owner.id, cleanName || cleanEmail),
       new Date().toISOString(), new Date().toISOString());
   }
 

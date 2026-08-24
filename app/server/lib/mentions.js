@@ -8,11 +8,15 @@ const { sendEmail } = require('./email');
  * AN ADDRESS is a connected user: someone with an account who can be told.
  * Writing @ada in a thread reaches Ada, and she can answer.
  *
- * A MENTION is one of the principal's contacts: a person the office keeps a
- * record about, who usually has no account at all. "@tunde-bakare is bringing
- * the documents" is a reference in a sentence, exactly like writing the name,
- * except that it points at the record — so the reader can see who that is
- * without leaving the thread.
+ * A MENTION is one of the principal's contacts who turns out to be on Kairos,
+ * written by the username THEY chose, but whom this reader cannot address —
+ * no shared space, no accepted connection. Naming them points at the office's
+ * record of them; it reaches nobody.
+ *
+ * Nobody else has a username here, and none is invented for them. A username
+ * is made by the person it belongs to, so a contact with no Kairos account
+ * cannot be written after an @ at all — @ada stays plain text, which is the
+ * truth: there is no @ada.
  *
  * THE RULE THAT MAKES BOTH SAFE: a mention must never look like an address.
  * Nobody is notified by one, and if the two rendered alike, an assistant would
@@ -45,46 +49,27 @@ function parse(body) {
 }
 
 /**
- * A handle for a contact, derived from what the office already knows.
+ * A CONTACT DOES NOT GET A USERNAME OF ITS OWN.
  *
- * Contacts are not users and have no slug of their own, so one is made from
- * the name — or the local part of the address when there is no name — and kept
- * unique within this principal's contacts. Not globally: two principals may
- * each know a different Tunde, and neither has any business colliding with the
- * other.
+ * This used to derive one from the name — Tunde Bakare became @tunde-bakare —
+ * so that any contact could be written after an @. That was wrong, and wrong
+ * in a way worth naming: a username is made by the person it belongs to.
+ * Minting one on somebody's behalf, from a record they never saw, in an office
+ * they may not know exists, invents an identity for them. Two offices would
+ * have coined two different names for the same person, and neither would be
+ * what that person called themselves if they ever signed up.
+ *
+ * So a contact's handle is now looked up rather than made: if the address
+ * belongs to a Kairos account, it is THAT account's handle, chosen by them. If
+ * it belongs to nobody, there is no handle, and none is invented.
  */
-function handleFrom(nameOrEmail) {
-  const base = String(nameOrEmail || '')
-    .split('@')[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 38);
-  if (base.length < 3) return `c-${base}`.slice(0, 40);
-  return base;
-}
-
-// Two spellings rather than one clever one.
-//
-// This began as a single query with `(? IS NULL OR id != ?)` so that the
-// exclusion could be switched off by passing null. SQLite accepts that
-// happily. Postgres cannot: a bare parameter as the whole left side of IS NULL
-// has no inferable type, so it rejected the statement with 42P18 and every
-// attempt to save a contact became a 500 — on the production backend only,
-// where the sqlite test suite could not see it.
-const CLASH_SQL = 'SELECT id FROM contacts WHERE owner_id = ? AND handle = ?';
-const CLASH_SQL_EXCLUDING = `${CLASH_SQL} AND id != ?`;
-
-async function uniqueContactHandle(ownerId, desired, excludeId = null) {
-  let candidate = handleFrom(desired);
-  for (let n = 2; n < 200; n++) {
-    const clash = excludeId
-      ? await db.prepare(CLASH_SQL_EXCLUDING).get(ownerId, candidate, excludeId)
-      : await db.prepare(CLASH_SQL).get(ownerId, candidate);
-    if (!clash) return candidate;
-    candidate = `${handleFrom(desired)}-${n}`.slice(0, 40);
-  }
-  return `${handleFrom(desired)}-${Date.now().toString(36)}`.slice(0, 40);
+async function contactHandle(ownerId, contactId) {
+  const row = await db.prepare(`
+    SELECT u.slug FROM contacts c
+    JOIN users u ON lower(u.email) = lower(c.email)
+    WHERE c.id = ? AND c.owner_id = ?
+  `).get(contactId, ownerId);
+  return row?.slug || null;
 }
 
 /**
@@ -123,9 +108,14 @@ async function resolve(viewerId, ownerId, handles, audience = null) {
       });
       continue;
     }
-    const contact = ownerId ? await db.prepare(
-      'SELECT id, name, email FROM contacts WHERE owner_id = ? AND handle = ?',
-    ).get(ownerId, handle) : null;
+    // Not "a contact whose handle is this" — a contact whose ADDRESS belongs to
+    // the account that owns this handle. The username is the account holder's;
+    // the contact record is only this office's note about the same person.
+    const contact = ownerId ? await db.prepare(`
+      SELECT c.id, c.name, c.email FROM contacts c
+      JOIN users u ON lower(u.email) = lower(c.email)
+      WHERE c.owner_id = ? AND u.slug = ?
+    `).get(ownerId, handle) : null;
     if (contact) {
       out.push({
         handle, kind: 'contact', id: contact.id,
@@ -134,7 +124,10 @@ async function resolve(viewerId, ownerId, handles, audience = null) {
         // renderer has to make this distinction and none of them should have
         // to know the rule.
         notified: false,
-        reason: 'no-account',
+        // They have an account — that is how the username exists at all. What
+        // they do not have is any way to see this, so naming them tells them
+        // nothing.
+        reason: 'not-connected',
       });
       continue;
     }
@@ -207,5 +200,5 @@ async function notify({ found, author, ownerId, subject, where }) {
 }
 
 module.exports = {
-  parse, resolve, of, forBodies, notify, handleFrom, uniqueContactHandle, TOKEN_RE,
+  parse, resolve, of, forBodies, notify, contactHandle, TOKEN_RE,
 };

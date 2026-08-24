@@ -2546,3 +2546,7 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-weight: 700; font-size: 1.1rem; color: var(--accent);
 }
 .handle-row .hint { margin: 0; word-break: break-all; }
+
+/* A contact who is on Kairos, named the way they named themselves. Carries the
+   accent because it is a real identity, not a label this office applied. */
+.contact-handle { color: var(--accent); font-weight: 600; }

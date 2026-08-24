@@ -16,7 +16,7 @@ import { api } from '../lib/api.js';
 function titleFor(m) {
   if (m.notified) return `${m.name} — they were told`;
   if (m.reason === 'no-access') return `${m.name} — not in this space, so not told`;
-  return `${m.name} — a contact, not told`;
+  return `${m.name} — in your contacts, but you cannot reach them here`;
 }
 
 export function MentionText({ body, mentions = [] }) {
@@ -55,10 +55,13 @@ export function MentionText({ body, mentions = [] }) {
  * The picker.
  *
  * Opens on "@" and offers two groups. The second group is the interesting one:
- * contacts, marked as not notified, and — where the contact is not already
- * someone the caller can reach — an offer to invite them to connect. That
- * offer is the point. Typing @ for a contact used to find nothing at all,
- * which reads as a bug rather than as "this person has no account yet".
+ * contacts who hold a Kairos account, written by the username they chose,
+ * marked as not notified, with an offer to connect. That offer is the point:
+ * the username exists, so the person is reachable in principle — they just are
+ * not reachable by you yet.
+ *
+ * A contact with no account is not offered, because there is no username to
+ * type. Kairos does not mint one on their behalf.
  */
 export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }) {
   // Inside a space the answer to "who can I address" is narrower — the people
@@ -139,7 +142,7 @@ export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }
       )}
       {found.contacts.length > 0 && (
         <>
-          <div className="mention-group">Contacts — a reference, nobody is told</div>
+          <div className="mention-group">In your contacts — naming them tells them nothing</div>
           {found.contacts.map((c) => (
             <div className="mention-row" key={c.handle}>
               <button className="mention-option" type="button" onClick={() => insert(c.handle)}>
