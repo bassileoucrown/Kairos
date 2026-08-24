@@ -43,6 +43,8 @@ async function signup(p, name, email, roleLabel) {
     const pa = await (await b.newContext()).newPage();
     pa.on('pageerror', (e) => errs.push('principal: ' + e.message));
     await signup(pa, 'Ada Boss', `ada${ID}@x.com`, 'Principal');
+    await pa.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await pa.click('button:has-text("Skip for now")');
     await pa.waitForURL('**/onboarding/meeting-type', { timeout: 15000 });
     await pa.fill('#mt-name', 'Intro');
     await pa.click('button:has-text("Finish setup")');

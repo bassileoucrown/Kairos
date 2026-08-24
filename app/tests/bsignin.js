@@ -58,6 +58,8 @@ let SECRET = '';
     await p.waitForURL('**/onboarding/profile', { timeout: 15000 });
     await p.fill('#slug', `ada${ID}`);
     await p.click('button:has-text("Continue")');
+    await p.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await p.click('button:has-text("Skip for now")');
     await p.waitForURL('**/onboarding/meeting-type', { timeout: 15000 });
     await p.fill('#mt-name', 'Intro');
     await p.click('button:has-text("Finish setup")');

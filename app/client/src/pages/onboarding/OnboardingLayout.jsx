@@ -3,7 +3,7 @@ import { api } from '../../lib/api.js';
 import { peekPostOnboardingRedirect } from '../../lib/postAuthRedirect.js';
 import { BRAND_SHORT } from '../../lib/brand.js';
 
-const STEPS = ['profile', 'meeting_type'];
+const STEPS = ['profile', 'connect', 'meeting_type'];
 
 function InviteContextBanner() {
   const [invite, setInvite] = useState(null);

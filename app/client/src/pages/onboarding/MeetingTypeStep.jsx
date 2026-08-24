@@ -14,6 +14,23 @@ export default function MeetingTypeStep() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Nothing downstream needs a meeting type to exist. The booking page already
+  // says "No meeting types are open for booking right now" when there are
+  // none, which is both true and better than a type somebody invented to get
+  // past this screen and then forgot was live.
+  async function skip() {
+    setError('');
+    setSubmitting(true);
+    try {
+      const { user: stepped } = await api.post('/profile/onboarding-step', { step: 'done' });
+      updateUser({ onboardingStep: stepped.onboardingStep });
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message);
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -38,7 +55,10 @@ export default function MeetingTypeStep() {
   return (
     <OnboardingLayout step="meeting_type">
       <h1>Create your first meeting type</h1>
-      <p className="subtitle">This is what people will book. You can add more later.</p>
+      <p className="subtitle">
+        This is what people will book from your page — a name, a length, and how you meet.
+        You can add more later, or skip this and decide when you know what you want to offer.
+      </p>
 
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -73,7 +93,9 @@ export default function MeetingTypeStep() {
         </div>
 
         <div className="onboarding-actions">
-          <span />
+          <button className="btn btn-secondary" type="button" onClick={skip} disabled={submitting}>
+            Skip for now
+          </button>
           <button className="btn btn-primary" type="submit" disabled={submitting}>
             {submitting ? 'Finishing…' : 'Finish setup'}
           </button>

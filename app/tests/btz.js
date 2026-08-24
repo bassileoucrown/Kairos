@@ -128,6 +128,8 @@ const head = (s) => console.log(`\n${s}`);
 
     // Now finish onboarding and prove the choice actually persisted.
     await p.click('button:has-text("Continue")');
+    await p.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await p.click('button:has-text("Skip for now")');
     await p.waitForURL('**/onboarding/meeting-type', { timeout: 15000 });
     await p.fill('#mt-name', 'Intro');
     await p.click('button:has-text("Finish setup")');

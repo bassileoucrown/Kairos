@@ -69,6 +69,8 @@ const seen = (p, sel) => p.locator(sel).first().isVisible().catch(() => false);
     await o.waitForURL('**/onboarding/profile', { timeout: 15000 });
     await o.fill('#slug', SLUG);
     await o.click('button:has-text("Continue")');
+    await o.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await o.click('button:has-text("Skip for now")');
     await o.waitForURL('**/onboarding/meeting-type', { timeout: 15000 });
     await o.fill('#mt-name', 'Intro call');
     await o.click('button:has-text("Finish setup")');

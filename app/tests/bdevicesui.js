@@ -61,6 +61,8 @@ const PHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKi
     await laptop.waitForURL('**/onboarding/profile', { timeout: 15000 });
     await laptop.fill('#slug', `ada-${ID}`);
     await laptop.click('button:has-text("Continue")');
+    await laptop.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await laptop.click('button:has-text("Skip for now")');
     await laptop.waitForURL('**/onboarding/meeting-type', { timeout: 15000 });
     await laptop.fill('#mt-name', 'Intro');
     await laptop.click('button:has-text("Finish setup")');

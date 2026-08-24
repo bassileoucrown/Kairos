@@ -53,7 +53,7 @@ router.post('/onboarding-step', async (req, res) => {
   // old flow can still finish it. 'security_question' is the last step before
   // done: it is where the principal sets the answer that guards signing other
   // devices out, and it can be skipped straight to done.
-  const allowed = ['profile', 'availability', 'meeting_type', 'security_question', 'done'];
+  const allowed = ['profile', 'connect', 'availability', 'meeting_type', 'security_question', 'done'];
   if (!allowed.includes(step)) {
     return res.status(400).json({ error: 'Invalid onboarding step.' });
   }

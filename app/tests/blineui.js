@@ -46,6 +46,8 @@ async function onboard(p, name, email, roleLabel) {
     await pa.waitForURL('**/onboarding/profile');
     await pa.fill('#slug', `ada${ID}`);
     await pa.click('button:has-text("Continue")');
+    await pa.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await pa.click('button:has-text("Skip for now")');
     await pa.waitForURL('**/onboarding/meeting-type');
     await pa.fill('#mt-name', 'Intro');
     await pa.click('button:has-text("Finish setup")');
@@ -81,6 +83,8 @@ async function onboard(p, name, email, roleLabel) {
     await pb.waitForURL('**/onboarding/profile', { timeout: 15000 });
     await pb.fill('#slug', `ben${ID}`);
     await pb.click('button:has-text("Continue")');
+    await pb.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await pb.click('button:has-text("Skip for now")');
     await pb.waitForURL(/\/pa|\/workspace/, { timeout: 15000 });
     await pb.goto(link.startsWith('http') ? link : `${BASE}${link}`);
     await pb.click('button:has-text("Accept")');

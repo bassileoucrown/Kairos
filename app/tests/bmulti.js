@@ -18,6 +18,13 @@ async function signup(b, name, email, cat, errs) {
   await p.fill('#slug', email.split('@')[0]);
   await p.click('button:has-text("Continue")');
   await p.waitForURL((u) => !u.pathname.startsWith('/onboarding/profile'), { timeout: 20000 });
+  // Naming who you work with sits between the profile and the rest, for
+  // principals and assistants alike. Skipped here: this helper exists to get
+  // an account made, and bconnect is where the step itself is proved.
+  if (p.url().includes('/onboarding/connect')) {
+    await p.click('button:has-text("Skip for now")');
+    await p.waitForURL((u) => !u.pathname.includes('/onboarding/connect'), { timeout: 20000 });
+  }
   if (p.url().includes('/onboarding/meeting-type')) {
     await p.fill('#mt-name', 'Intro'); await p.click('button:has-text("Finish setup")');
   }

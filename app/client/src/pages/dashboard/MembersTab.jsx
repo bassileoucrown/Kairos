@@ -75,6 +75,18 @@ export default function MembersTab() {
     }
   }
 
+  // Approving is what actually grants access, so it is the one click that
+  // matters on this screen. No confirm on either: approve is reversible with
+  // Revoke, and decline is reversible by them asking again.
+  async function decide(id, decision) {
+    try {
+      await api.post(`/members/${id}/${decision}`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function revoke(id) {
     if (!window.confirm('Revoke this access?')) return;
     try {
@@ -102,7 +114,37 @@ export default function MembersTab() {
           No one on your team yet — invite your PA, EA, or Chief of Staff below.
         </div>
       )}
-      {members && members.map((m) => (
+      {/* Somebody has asked to work for you, and nothing has been granted.
+          Deliberately not the same row as a member: no title to change, no
+          scheduling toggle, and "Revoke" would be the wrong word for a thing
+          that was never given. Two answers and the facts to answer on. */}
+      {members && members.filter((m) => m.status === 'requested').map((m) => (
+        <div className="card" key={m.id}>
+          <div className="meeting-type-card">
+            <div>
+              <div className="name">
+                {m.memberName || m.invitedEmail} <span className="pill is-off">Asking</span>
+              </div>
+              <div className="meta">
+                Says they are your {m.roleLabel} · {m.invitedEmail}
+              </div>
+              <p className="hint" style={{ marginTop: 6 }}>
+                They have no access until you approve this.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => decide(m.id, 'decline')}>
+                Decline
+              </button>
+              <button className="btn btn-primary btn-sm" type="button" onClick={() => decide(m.id, 'approve')}>
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {members && members.filter((m) => m.status !== 'requested').map((m) => (
         <div className="card" key={m.id}>
           <div className="meeting-type-card">
             <div>

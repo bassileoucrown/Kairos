@@ -4,6 +4,7 @@ import SignUp from './pages/SignUp.jsx';
 import Login from './pages/Login.jsx';
 import ProfileStep from './pages/onboarding/ProfileStep.jsx';
 import MeetingTypeStep from './pages/onboarding/MeetingTypeStep.jsx';
+import ConnectStep from './pages/onboarding/ConnectStep.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import PublicBookingPage from './pages/PublicBookingPage.jsx';
 import ManageBooking from './pages/ManageBooking.jsx';
@@ -36,6 +37,7 @@ import Announcements from './pages/Announcements.jsx';
 // a step here.
 const ONBOARDING_STEP_ROUTE = {
   profile: '/onboarding/profile',
+  connect: '/onboarding/connect',
   meeting_type: '/onboarding/meeting-type',
 };
 
@@ -131,6 +133,7 @@ export default function App() {
       <Route path="/reset-password/:token" element={<ResetPassword />} />
 
       <Route path="/onboarding/profile" element={<RequireOnboardingStep step="profile"><ProfileStep /></RequireOnboardingStep>} />
+      <Route path="/onboarding/connect" element={<RequireOnboardingStep step="connect"><ConnectStep /></RequireOnboardingStep>} />
       <Route path="/onboarding/meeting-type" element={<RequireOnboardingStep step="meeting_type"><MeetingTypeStep /></RequireOnboardingStep>} />
 
       <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />

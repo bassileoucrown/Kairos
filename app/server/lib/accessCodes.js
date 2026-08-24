@@ -188,6 +188,16 @@ async function redeem({ viewerId, handle, code }) {
   const existing = await db.prepare(`
     SELECT * FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status != 'revoked'
   `).get(owner.id, viewerId);
+  // A request they have already made is not access, and must not be mistaken
+  // for it. The code is the principal's own deliberate grant, so it answers
+  // the request rather than being turned away by it — refusing here would
+  // leave someone holding a valid code, denied, and still waiting.
+  if (existing && existing.status === 'requested') {
+    await db.prepare("UPDATE memberships SET status = 'active', role = ? WHERE id = ?")
+      .run(row.role, existing.id);
+    await db.prepare('UPDATE access_codes SET uses_spent = uses_spent + 1 WHERE id = ?').run(row.id);
+    return { owner: { id: owner.id, name: owner.name, handle: owner.slug }, role: row.role };
+  }
   if (existing) {
     // Also plain: the code was right, so they have already proved they were
     // meant to be here. Pretending otherwise would just be confusing.

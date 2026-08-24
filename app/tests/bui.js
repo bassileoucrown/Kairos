@@ -29,6 +29,13 @@ async function signup(browser, name, email, category, errors) {
   // Assistants have no bookable hours of their own to set, so onboarding ends
   // for them at the profile step — only principals continue to meeting types.
   await page.waitForURL((u) => !u.pathname.startsWith('/onboarding/profile'), { timeout: 20000 });
+  // Naming who you work with sits between the profile and the rest, for
+  // principals and assistants alike. Skipped here: this helper exists to get
+  // an account made, and bconnect is where the step itself is proved.
+  if (page.url().includes('/onboarding/connect')) {
+    await page.click('button:has-text("Skip for now")');
+    await page.waitForURL((u) => !u.pathname.includes('/onboarding/connect'), { timeout: 20000 });
+  }
   if (page.url().includes('/onboarding/meeting-type')) {
     await page.fill('#mt-name', 'Intro');
     await page.click('button:has-text("Finish setup")');

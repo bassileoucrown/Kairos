@@ -52,6 +52,8 @@ async function arm(p, code, roleText, uses) {
     await p.waitForURL('**/onboarding/profile');
     await p.fill('#slug', `ada${ID}`);
     await p.click('button:has-text("Continue")');
+    await p.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await p.click('button:has-text("Skip for now")');
     await p.waitForURL('**/onboarding/meeting-type');
     await p.fill('#mt-name', 'Intro');
     await p.click('button:has-text("Finish setup")');
@@ -111,6 +113,8 @@ async function arm(p, code, roleText, uses) {
     await pb.waitForURL('**/onboarding/profile', { timeout: 15000 });
     await pb.fill('#slug', `ben${ID}`);
     await pb.click('button:has-text("Continue")');
+    await pb.waitForURL('**/onboarding/connect', { timeout: 15000 });
+    await pb.click('button:has-text("Skip for now")');
     await pb.waitForURL(/\/pa|\/workspace/, { timeout: 15000 });
 
     await pb.goto(`${BASE}/workspace`);
