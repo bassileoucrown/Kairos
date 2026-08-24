@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import DeleteAccount from '../../components/DeleteAccount.jsx';
 import ConnectorsPanel from './ConnectorsPanel.jsx';
+import HandleCard from './HandleCard.jsx';
 import { api } from '../../lib/api.js';
 import { BRAND_SHORT } from '../../lib/brand.js';
 
@@ -67,6 +68,10 @@ export default function SettingsTab({ ownerId }) {
     <div>
       {error && <div className="alert alert-error">{error}</div>}
       {info && <div className="alert alert-success">{info}</div>}
+
+      {/* First, because it is the one thing on this screen that is about who
+          you are rather than what is wired up. */}
+      <HandleCard />
 
       <ConnectorsPanel ownerId={ownerId} />
 

@@ -2535,3 +2535,14 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .mention-row .mention-option { flex: 1; min-width: 0; }
 .mention-notice { padding: 6px 10px 8px; margin: 0; }
+
+/* ---- Your handle ----
+   The handle reads as the identity it is, with the booking address beside it
+   as the consequence of changing it. */
+.handle-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.handle-current {
+  font-weight: 700; font-size: 1.1rem; color: var(--accent);
+}
+.handle-row .hint { margin: 0; word-break: break-all; }
