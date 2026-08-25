@@ -5,6 +5,7 @@ import AppShell from '../components/AppShell.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
 import MoveAppointment from '../components/MoveAppointment.jsx';
+import QuickJot from '../components/QuickJot.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 
 /**
@@ -210,6 +211,21 @@ export default function BookingDetail() {
           <div className="card">
             <h2 className="section-head" style={{ marginTop: 0 }}>Notes</h2>
             <BookingNotes ownerId={ownerId} bookingId={bookingId} onChanged={load} />
+          </div>
+
+          {/* Not the same thing as a note on the appointment, and worth the
+              second box. A note here is ABOUT the meeting and stays with it; a
+              line on the pad is something YOU have to do, which outlives the
+              meeting and belongs on a list you actually work from. "Chase him
+              for the draft" filed as a booking note is a sentence nobody ever
+              reads again. */}
+          <div className="card">
+            <h2 className="section-head" style={{ marginTop: 0 }}>Something for you to do</h2>
+            <QuickJot
+              ownerId={ownerId}
+              about={{ kind: 'booking', id: bookingId }}
+              placeholder="Chase them for the draft…"
+            />
           </div>
 
           <div className="card">

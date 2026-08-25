@@ -2609,3 +2609,42 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .booking-line { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
 .booking-line h3 { margin: 0 0 8px; font-size: 0.95rem; }
 .booking-line .note-line.is-mine { padding-left: 12px; border-left: 2px solid var(--accent); }
+
+/* ── The pad ────────────────────────────────────────────────────────────
+   One field at the top and as little as possible in the way of it. The
+   register is words rather than a padlock glyph: somebody writing "ask about
+   the school fees" needs to know who can read it at a glance, and an icon is
+   not an answer to that question. See pages/Pad.jsx. */
+.pad-write { padding: 14px; }
+.pad-write textarea { margin-bottom: 8px; }
+.pad-write-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.pad-line { padding: 12px 14px; margin-bottom: 8px; }
+.pad-line.is-awake { border-left: 3px solid var(--accent); }
+.pad-line.is-done .pad-body { color: var(--text-muted); text-decoration: line-through; }
+.pad-line-main { display: flex; gap: 10px; align-items: flex-start; }
+.pad-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pad-tick {
+  flex: none; width: 24px; height: 24px; margin-top: -1px;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface); color: var(--text-muted);
+  cursor: pointer; font-size: 0.8rem; line-height: 1;
+}
+.pad-tick:hover { border-color: var(--accent); color: var(--accent); }
+.pad-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+.pad-tag {
+  font-size: 0.72rem; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
+}
+.pad-tag.is-private { background: var(--border); color: var(--text-muted); }
+.pad-about { color: inherit; }
+
+.pad-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.pad-action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.pad-action-label { font-size: 0.78rem; color: var(--text-muted); margin-right: 2px; min-width: 96px; }
+.pad-action-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.pad-action-form .hint { margin: 0; flex-basis: 100%; }
+
+/* The quick-add wherever you happen to be when the thought arrives. */
+.pad-jot { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.pad-jot textarea { flex: 1; min-width: 200px; }

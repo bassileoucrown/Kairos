@@ -42,6 +42,11 @@ const GROUPS = [
 const NAV = [
   { group: 'day', to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
   { group: 'day', to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
+  // Deliberately NOT principalScoped, unlike everything around it. A note you
+  // jotted is yours, and it should follow you between the principals you
+  // support rather than hiding on whichever account you happened to be
+  // looking at when the thought arrived.
+  { group: 'day', to: '/pad', label: 'Pad', icon: '✎' },
   { group: 'day', to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
   // Principal-scoped, like the three above it. It was the one entry in "The
   // day" that was not, so it went to /dashboard — the signed-in user's own

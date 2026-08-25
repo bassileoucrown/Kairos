@@ -22,6 +22,7 @@ import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
 import BookingDetail from './pages/BookingDetail.jsx';
+import Pad from './pages/Pad.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
 import Workspace from './pages/Workspace.jsx';
@@ -151,6 +152,7 @@ export default function App() {
           second tab, must land on the same appointment either way. */}
       <Route path="/appointments/:ownerId/:bookingId" element={<RequireAuth><BookingDetail /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
+      <Route path="/pad" element={<RequireAuth><Pad /></RequireAuth>} />
       <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />
       <Route path="/concierge" element={<RequireAuth><Concierge /></RequireAuth>} />
       <Route path="/coming" element={<RequireAuth><Coming /></RequireAuth>} />

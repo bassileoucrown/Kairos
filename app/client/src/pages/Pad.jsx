@@ -1,0 +1,341 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../lib/api.js';
+import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import { MentionText, MentionPicker } from '../components/Mention.jsx';
+import { useAuth } from '../lib/AuthContext.jsx';
+import { dayLabelInZone } from '../lib/timezones.js';
+
+/**
+ * The pad.
+ *
+ * One field at the top and nothing in the way of it. Everything else on this
+ * screen is what happens to a line AFTER it exists, and none of it is asked
+ * for at the moment of writing — that is the whole design. A thought arrives
+ * walking out of a meeting; if capturing it costs a form, it is not captured.
+ *
+ * Private by default, and the toggle says so in words rather than an icon.
+ * Somebody writing "ask about the school fees" needs to know at a glance who
+ * can read it, and a padlock glyph is not an answer to that question.
+ */
+
+// "Come back to it" in the words somebody would actually use, rather than
+// making them operate a date picker to mean "tomorrow".
+const LATER = [
+  { id: 'tomorrow', label: 'Tomorrow', at: () => atHour(1, 9) },
+  { id: 'week', label: 'Next week', at: () => atHour(7, 9) },
+  { id: 'month', label: 'In a month', at: () => atHour(30, 9) },
+];
+function atHour(daysAhead, hour) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
+
+function AboutLink({ about, ownerId }) {
+  if (!about) return null;
+  if (about.kind === 'booking') {
+    return <Link className="pad-about" to={`/appointments/${ownerId}/${about.id}`}>on an appointment</Link>;
+  }
+  if (about.kind === 'itinerary') return <span className="pad-about">on the itinerary</span>;
+  return <span className="pad-about">about a contact</span>;
+}
+
+export default function Pad() {
+  const { user } = useAuth();
+  const [items, setItems] = useState(null);
+  const [showDone, setShowDone] = useState(false);
+  const [body, setBody] = useState('');
+  const [visibility, setVisibility] = useState('private');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [ownerId, setOwnerId] = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const boxRef = useRef(null);
+
+  function load(done = showDone) {
+    return api.get(`/pad?state=${done ? 'done' : 'open'}`)
+      .then((d) => setItems(d.items))
+      .catch((err) => setError(err.message));
+  }
+
+  useEffect(() => {
+    resolveActivePrincipal(user).then((id) => setOwnerId(id || user?.id || null));
+  }, [user?.id]);
+  useEffect(() => { load(); }, [showDone]);
+
+  async function write(e) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/pad', { body, visibility, ownerId });
+      setBody('');
+      // Deliberately does not reset the register. Somebody adding three things
+      // to the office pad should not have to say so three times.
+      await load();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  async function change(id, patch) {
+    setError('');
+    try {
+      await api.patch(`/pad/${id}`, patch);
+      setOpenMenu(null);
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function remove(id) {
+    setError('');
+    try {
+      await api.del(`/pad/${id}`);
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  const list = items || [];
+  const waking = list.filter((i) => i.awake);
+  const resting = list.filter((i) => !i.awake);
+
+  return (
+    <AppShell
+      title="The pad"
+      active="pad"
+      actions={<span className="pill">{list.length} {showDone ? 'done' : 'open'}</span>}
+    >
+      {error && <div className="alert alert-error">{error}</div>}
+
+      <form className="card pad-write" onSubmit={write}>
+        <textarea
+          ref={boxRef}
+          aria-label="Something to come back to"
+          rows={2}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Anything. Sort it out later."
+        />
+        <MentionPicker ownerId={ownerId} value={body} onChange={setBody} textareaRef={boxRef} />
+        <div className="pad-write-row">
+          <select aria-label="Who can see this" value={visibility}
+            onChange={(e) => setVisibility(e.target.value)} style={{ width: 'auto' }}>
+            <option value="private">Only me</option>
+            <option value="office">The office can see it</option>
+          </select>
+          <button className="btn btn-primary btn-sm" type="submit" disabled={busy || !body.trim()}>
+            {busy ? 'Saving…' : 'Jot it'}
+          </button>
+        </div>
+      </form>
+
+      <div className="tabs" style={{ borderBottom: 'none', marginBottom: 12 }}>
+        <button className={'tab-btn' + (showDone ? '' : ' is-active')} type="button"
+          onClick={() => setShowDone(false)}>Open</button>
+        <button className={'tab-btn' + (showDone ? ' is-active' : '')} type="button"
+          onClick={() => setShowDone(true)}>Settled</button>
+      </div>
+
+      {items === null && <p className="hint">Loading…</p>}
+      {items && list.length === 0 && (
+        <div className="empty-state">
+          {showDone
+            ? 'Nothing settled yet.'
+            : 'Nothing on the pad. Write the next thing you would otherwise forget.'}
+        </div>
+      )}
+
+      {waking.length > 0 && (
+        <>
+          <h2 className="section-head">You asked to come back to these</h2>
+          {waking.map((i) => (
+            <PadLine key={i.id} item={i} ownerId={ownerId} me={user}
+              open={openMenu === i.id} onOpen={setOpenMenu}
+              onChange={change} onRemove={remove} onDone={() => load()} />
+          ))}
+        </>
+      )}
+
+      {resting.length > 0 && waking.length > 0 && <h2 className="section-head">The rest</h2>}
+      {resting.map((i) => (
+        <PadLine key={i.id} item={i} ownerId={ownerId} me={user}
+          open={openMenu === i.id} onOpen={setOpenMenu}
+          onChange={change} onRemove={remove} onDone={() => load()} />
+      ))}
+    </AppShell>
+  );
+}
+
+function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }) {
+  const mine = item.authorId === me?.id;
+  const settled = item.state === 'done';
+
+  return (
+    <div className={'card pad-line' + (item.awake ? ' is-awake' : '') + (settled ? ' is-done' : '')}>
+      <div className="pad-line-main">
+        <button
+          className="pad-tick"
+          type="button"
+          aria-label={settled ? `Reopen: ${item.body}` : `Settle: ${item.body}`}
+          onClick={() => onChange(item.id, { state: settled ? 'open' : 'done' })}
+        >
+          {settled ? '↺' : '○'}
+        </button>
+        <div className="pad-body">
+          <MentionText body={item.body} />
+          <div className="pad-meta">
+            {item.visibility === 'office'
+              ? <span className="pad-tag">Office</span>
+              : <span className="pad-tag is-private">Only me</span>}
+            {!mine && <> · {item.authorName}</>}
+            {item.assigneeName && <> · handed to {item.assigneeName}</>}
+            {item.wakeAt && !settled && (
+              <> · back {dayLabelInZone(item.wakeAt, me?.timezone || 'UTC')}</>
+            )}
+            {item.about && <> · <AboutLink about={item.about} ownerId={item.ownerId || ownerId} /></>}
+            {/* A promoted line is kept rather than deleted, so it can say what
+                it became instead of just vanishing from the pad. */}
+            {item.taskId && <> · <Link to="/tasks">now a task</Link></>}
+            {item.itineraryItemId && <> · <Link to="/itinerary">on the diary</Link></>}
+          </div>
+        </div>
+        {mine && !settled && (
+          <button className="btn btn-secondary btn-sm" type="button"
+            onClick={() => onOpen(open ? null : item.id)}>
+            {open ? 'Close' : 'Do something'}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <PadActions item={item} ownerId={ownerId} onChange={onChange}
+          onRemove={onRemove} onDone={onDone} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The four things a line can become.
+ *
+ * Behind a button rather than always on screen: most lines are ticked off and
+ * never promoted, and a pad where every entry carries four controls is a pad
+ * that is harder to read than the envelope it replaced.
+ */
+function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
+  const [spaces, setSpaces] = useState(null);
+  const [people, setPeople] = useState([]);
+  const [mode, setMode] = useState(null); // task | diary | hand
+  const [spaceId, setSpaceId] = useState('');
+  const [toUserId, setToUserId] = useState('');
+  const [when, setWhen] = useState({ date: '', time: '09:00' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get('/spaces').then((d) => {
+      setSpaces(d.spaces || []);
+      setSpaceId((d.spaces || [])[0]?.id || '');
+    }).catch(() => setSpaces([]));
+    api.get(`/mentions/${ownerId}/lookup?q=`).then((d) => setPeople(d.people || [])).catch(() => {});
+  }, [ownerId]);
+
+  async function run(path, payload) {
+    setBusy(true);
+    setError('');
+    try {
+      await api.post(`/pad/${item.id}/${path}`, payload);
+      onDone();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="pad-actions">
+      {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="pad-action-row">
+        <span className="pad-action-label">Come back to it</span>
+        {LATER.map((l) => (
+          <button key={l.id} className="itin-tool" type="button"
+            onClick={() => onChange(item.id, { wakeAt: l.at() })}>{l.label}</button>
+        ))}
+        {item.wakeAt && (
+          <button className="itin-tool" type="button"
+            onClick={() => onChange(item.id, { wakeAt: null })}>Not any more</button>
+        )}
+      </div>
+
+      <div className="pad-action-row">
+        <span className="pad-action-label">Make it</span>
+        <button className="itin-tool" type="button"
+          onClick={() => setMode(mode === 'task' ? null : 'task')}>A task</button>
+        <button className="itin-tool" type="button"
+          onClick={() => setMode(mode === 'diary' ? null : 'diary')}>Something on the diary</button>
+        <button className="itin-tool" type="button"
+          onClick={() => setMode(mode === 'hand' ? null : 'hand')}>Somebody else's</button>
+        <button className="itin-tool is-danger" type="button"
+          onClick={() => onRemove(item.id)}>Bin it</button>
+      </div>
+
+      {mode === 'task' && (
+        <div className="pad-action-form">
+          {spaces === null && <p className="hint">Loading spaces…</p>}
+          {spaces?.length === 0 && <p className="hint">You have no spaces to put it in yet.</p>}
+          {spaces?.length > 0 && (
+            <>
+              {/* The question the pad exists to postpone, asked at last. */}
+              <select aria-label="Which space" value={spaceId}
+                onChange={(e) => setSpaceId(e.target.value)} style={{ width: 'auto' }}>
+                {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button className="btn btn-primary btn-sm" type="button" disabled={busy || !spaceId}
+                onClick={() => run('task', { spaceId })}>
+                {busy ? 'Making…' : 'Make it a task'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {mode === 'diary' && (
+        <div className="pad-action-form">
+          <input aria-label="Which day" type="date" value={when.date}
+            onChange={(e) => setWhen((w) => ({ ...w, date: e.target.value }))} />
+          <input aria-label="What time" type="time" value={when.time}
+            onChange={(e) => setWhen((w) => ({ ...w, time: e.target.value }))} />
+          <button className="btn btn-primary btn-sm" type="button"
+            disabled={busy || !when.date || !when.time}
+            onClick={() => run('itinerary', {
+              ownerId,
+              startAt: new Date(`${when.date}T${when.time}`).toISOString(),
+            })}>
+            {busy ? 'Adding…' : 'Put it on the day'}
+          </button>
+        </div>
+      )}
+
+      {mode === 'hand' && (
+        <div className="pad-action-form">
+          {people.length === 0 && <p className="hint">Nobody shares an office with you yet.</p>}
+          {people.length > 0 && (
+            <>
+              <select aria-label="Who it is for" value={toUserId}
+                onChange={(e) => setToUserId(e.target.value)} style={{ width: 'auto' }}>
+                <option value="">Choose somebody</option>
+                {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {/* Said plainly, because this is the one action that widens who
+                  can read a private line. */}
+              <p className="hint">They will see this note and be told about it.</p>
+              <button className="btn btn-primary btn-sm" type="button" disabled={busy || !toUserId}
+                onClick={() => run('hand', { toUserId })}>
+                {busy ? 'Handing…' : 'Hand it over'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

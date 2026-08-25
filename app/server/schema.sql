@@ -995,3 +995,61 @@ CREATE TABLE IF NOT EXISTS error_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_error_reports_at ON error_reports(created_at);
 CREATE INDEX IF NOT EXISTS idx_error_reports_fp ON error_reports(fingerprint, created_at);
+
+-- ============================================================
+-- The pad — where a thing you have just thought of goes
+-- ============================================================
+--
+-- WHY THIS IS NOT THE TASKS TABLE. tasks.space_id is NOT NULL, so nothing can
+-- be written down until somebody has decided which space it belongs to. That
+-- is the wrong order. A thought arrives in the middle of something else —
+-- walking out of a meeting, halfway through a phone call — and the cost of
+-- capturing it has to be one line and nothing else. Filing is a later decision
+-- and often a different person's.
+--
+-- So the pad takes a line with no space, no project, no assignee and no date,
+-- and every one of those can be added afterwards. A line that turns out to
+-- matter is PROMOTED — into a real task, or onto the diary — and keeps a
+-- pointer to what it became, so it stops being a loose end without being
+-- deleted. The same shape threads already use for records.
+--
+-- PRIVATE BY DEFAULT, AND THAT IS LOAD-BEARING. A principal's own jottings are
+-- not their office's business. "Call the lawyer" and "ask about the school
+-- fees" are exactly the kind of line somebody stops writing down at all if a
+-- scheduling delegate can read it, and a capture tool nobody trusts is a
+-- capture tool nobody uses. Sharing a line with the office is a deliberate act
+-- on that line. See lib/pad.js, which is the only place the rule is written.
+CREATE TABLE IF NOT EXISTS pad_items (
+  id             TEXT PRIMARY KEY,
+  -- Whose pad this sits on. Their own id for a private line; the principal's
+  -- for a line put on the office pad, so an assistant's note to the office
+  -- lands where the office looks.
+  owner_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body           TEXT NOT NULL,
+  -- private | office
+  visibility     TEXT NOT NULL DEFAULT 'private',
+  -- open | done
+  state          TEXT NOT NULL DEFAULT 'open',
+  -- Handed to somebody. They see it whatever the visibility says, because a
+  -- line given to a person they cannot read is not a line given to anybody.
+  assignee_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+  -- When to put it back in front of somebody. NULL means it simply sits there.
+  -- A line whose wake_at has passed surfaces on Today, which is the whole of
+  -- "come back to it later".
+  wake_at        TEXT,
+  -- What it was written against, so the line can lead back to it rather than
+  -- leaving somebody to re-find the appointment they were looking at.
+  about_kind     TEXT,   -- booking | itinerary | contact
+  about_id       TEXT,
+  -- What it became. Set once; a line that is already a task is not promoted
+  -- into a second one.
+  task_id           TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  itinerary_item_id TEXT REFERENCES itinerary_items(id) ON DELETE SET NULL,
+  created_at     TEXT NOT NULL,
+  done_at        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pad_owner ON pad_items(owner_id, state, created_at);
+CREATE INDEX IF NOT EXISTS idx_pad_author ON pad_items(author_user_id, state);
+CREATE INDEX IF NOT EXISTS idx_pad_assignee ON pad_items(assignee_id, state);
+CREATE INDEX IF NOT EXISTS idx_pad_wake ON pad_items(wake_at);

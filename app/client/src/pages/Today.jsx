@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import RunningLate from '../components/RunningLate.jsx';
+import QuickJot from '../components/QuickJot.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { useAsk } from '../components/Ask.jsx';
 
@@ -236,6 +237,13 @@ export default function Today() {
   }
   useEffect(() => { load(); }, [user?.id]);
 
+  async function settlePad(id) {
+    try {
+      await api.patch(`/pad/${id}`, { state: 'done' });
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   async function decideItinerary(id, approve) {
     // A decline without a reason is just a dead end for whoever arranged it,
     // so ask — but never block on it.
@@ -450,6 +458,12 @@ export default function Today() {
             </ol>
           )}
 
+          {/* Under the day rather than above it: the day is what this screen
+              is for, and the box is for the thought you have while reading it. */}
+          <div className="card" style={{ marginTop: 16 }}>
+            <QuickJot ownerId={data.principal.id} onAdded={load} />
+          </div>
+
           {todayTasks.length > 0 && (
             <>
               <h2 className="section-head">Due today</h2>
@@ -477,6 +491,21 @@ export default function Today() {
                empty box holding open a column beside it. */
             <p className="today-nothing">Nothing waiting on you. Genuinely.</p>
           )}
+
+          {/* Lines you asked to be reminded of. First in the column because
+              they are the only thing here you put there yourself — everything
+              below arrived from somebody else. */}
+          {(needsYou.padWaking || []).map((p) => (
+            <div className="needs-card" key={p.id}>
+              <div className="needs-kind">You wanted to come back to this</div>
+              <div className="needs-title">{p.body}</div>
+              <div className="needs-actions">
+                <button className="btn btn-primary btn-sm" type="button"
+                  onClick={() => settlePad(p.id)}>Done</button>
+                <Link className="btn btn-secondary btn-sm" to="/pad">The pad</Link>
+              </div>
+            </div>
+          ))}
 
           {needsYou.approvals.map((a) => (
             <div className="needs-card" key={a.id}>

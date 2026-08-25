@@ -11,6 +11,7 @@ const { directLineFor } = require('../lib/directLine');
 const { serializeInstruction } = require('../lib/household');
 const { dueBand } = require('../lib/reminders');
 const { timezoneOn: tripTimezoneOn, tripOn } = require('../lib/trips');
+const pad = require('../lib/pad');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -214,9 +215,20 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     LIMIT 10
   `).all(req.principal.id)).map((i) => serializeInstruction(i)) : [];
 
+  // Lines from the pad whose day has come.
+  //
+  // Scoped to the VIEWER, not the principal, and that is the one thing on this
+  // screen that is. Everything else here answers "what does this principal
+  // need"; a note you asked to be reminded of is yours, and it should follow
+  // you between the principals you support rather than hiding on whichever
+  // account you happened to write it under.
+  const padWaking = (await pad.list(req.user.id, { state: 'open' }))
+    .filter((p) => p.awake)
+    .slice(0, 10);
+
   const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
-    + unconfirmedInstructions.length;
+    + unconfirmedInstructions.length + padWaking.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
 
@@ -239,7 +251,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       // Kept under the old name so an older client still shows something
       // sensible rather than an empty section during a rolling deploy.
       overdueTasks: dueTasks.filter((t) => t.band === 'overdue'),
-      expiring, unconfirmedInstructions,
+      expiring, unconfirmedInstructions, padWaking,
       count: needsYouCount,
     },
     todayTasks,
