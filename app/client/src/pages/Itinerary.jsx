@@ -261,6 +261,10 @@ export default function Itinerary() {
   // Which entry is mid-removal, so a repeating one can be asked which of the
   // three removals is meant before anything goes.
   const [removing, setRemoving] = useState(null);
+  // Which appointment is mid-move, and to when. A booking is somebody else's
+  // diary too, so moving one is done deliberately rather than by dragging.
+  const [moving, setMoving] = useState(null);
+  const [moveTo, setMoveTo] = useState({ date: '', time: '' });
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -308,6 +312,30 @@ export default function Itinerary() {
     try {
       await api.del(`/itinerary/${ownerId}/items/${id}?scope=${scope}`);
       setRemoving(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  // A booking carries "booking:" in front of its id on the day sheet, because
+  // the sheet merges two kinds of thing. The API wants the booking's own id.
+  const bookingIdOf = (e) => String(e.id).replace(/^booking:/, '');
+
+  async function moveBooking(e) {
+    setError('');
+    try {
+      await api.post(`/pa/${ownerId}/bookings/${bookingIdOf(e)}/reschedule`, {
+        startAt: zonedToUtc(moveTo.date, moveTo.time, data?.timezone || 'UTC'),
+      });
+      setMoving(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function cancelBooking(e) {
+    setError('');
+    try {
+      await api.post(`/pa/${ownerId}/bookings/${bookingIdOf(e)}/cancel`, {});
+      setMoving(null);
       load();
     } catch (err) { setError(err.message); }
   }
@@ -533,6 +561,46 @@ export default function Itinerary() {
                   <button className="itin-tool is-danger" type="button"
                     aria-label={`Remove ${e.title}`}
                     onClick={() => (e.seriesId ? setRemoving(e.id) : remove(e.id))}>Remove</button>
+                )}
+                {/* An appointment somebody booked is still an appointment, and
+                    until now the day sheet offered nothing at all for one —
+                    the tools above are gated to items this office created. So
+                    an assistant who needed to move a confirmed meeting had to
+                    cancel it and ask the booker to book again, which costs the
+                    booker two emails and loses the thread. */}
+                {e.source === 'booking' && e.status !== 'cancelled' && moving !== e.id && (
+                  <>
+                    <button className="itin-tool" type="button"
+                      aria-label={`Move ${e.title}`}
+                      onClick={() => {
+                        setMoving(e.id);
+                        setMoveTo({ date, time: e.startLabel ? '' : '' });
+                      }}>Move</button>
+                    <button className="itin-tool is-danger" type="button"
+                      aria-label={`Cancel ${e.title}`}
+                      onClick={() => cancelBooking(e)}>Cancel</button>
+                  </>
+                )}
+                {e.source === 'booking' && moving === e.id && (
+                  <span className="itin-move">
+                    <input
+                      type="date"
+                      aria-label="New date"
+                      value={moveTo.date}
+                      onChange={(ev) => setMoveTo((m) => ({ ...m, date: ev.target.value }))}
+                    />
+                    <input
+                      type="time"
+                      aria-label="New time"
+                      value={moveTo.time}
+                      onChange={(ev) => setMoveTo((m) => ({ ...m, time: ev.target.value }))}
+                    />
+                    <button className="itin-tool" type="button"
+                      disabled={!moveTo.date || !moveTo.time}
+                      onClick={() => moveBooking(e)}>Move it</button>
+                    <button className="itin-tool" type="button"
+                      onClick={() => setMoving(null)}>Keep</button>
+                  </span>
                 )}
                 {e.source === 'booking' && <span className="pill">From a booking</span>}
               </div>

@@ -17,6 +17,7 @@ const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
+const { rescheduleBooking } = require('../lib/rescheduleBooking');
 const events = require('../lib/bookingEvents');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -427,6 +428,25 @@ router.post('/:ownerId/bookings/:bookingId/cancel', requirePaAccess, async (req,
     return res.status(400).json({ error: 'That request was declined — there is nothing to cancel.' });
   }
   await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  res.json({ booking: await history.get(req.principal.id, row.id) });
+});
+
+// Moving one, which is the other half of calling it off. An assistant whose
+// only options are "leave it" and "cancel it" will cancel and rebook, and the
+// booker gets two emails and a lost thread for what was a change of time.
+router.post('/:ownerId/bookings/:bookingId/reschedule', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.bookingId, req.principal.id);
+  if (!row) return res.status(404).json({ error: 'Booking not found.' });
+
+  const result = await rescheduleBooking({
+    booking: row,
+    owner: req.principal,
+    startAt: req.body?.startAt,
+    movedByUserId: req.user.id,
+    note: String(req.body?.note || '').trim().slice(0, 280),
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ booking: await history.get(req.principal.id, row.id) });
 });
 

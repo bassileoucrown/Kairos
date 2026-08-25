@@ -2556,3 +2556,9 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   font-weight: 600;
   cursor: text;
 }
+
+/* Moving an appointment: the date and time sit inline with the row's other
+   tools rather than in a dialog, because the surrounding day is the context
+   somebody needs to choose a new time. */
+.itin-move { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.itin-move input { width: auto; padding: 4px 6px; font-size: 0.8rem; }
