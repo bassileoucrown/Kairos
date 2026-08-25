@@ -151,7 +151,24 @@ router.post('/:id/hand', loadItem, async (req, res) => {
      )
      LIMIT 1
   `).get(req.user.id, toUserId, toUserId, req.user.id, toUserId, req.user.id);
-  if (!shared) return res.status(400).json({ error: 'You do not share an office with them.' });
+  if (!shared) {
+    // "You do not share an office with them" was true and useless. By far the
+    // commonest cause is an invite nobody has accepted — the principal added
+    // them on the Team screen, which reads as putting them on your team, and
+    // no link between the accounts exists until they accept. Say that, since
+    // it is both the likely reason and the thing to go and do.
+    const pending = await db.prepare(`
+      SELECT 1 AS ok FROM memberships m
+       JOIN users u ON lower(u.email) = lower(m.invited_email)
+       WHERE u.id = ? AND m.owner_id = ? AND m.status = 'invited'
+       LIMIT 1
+    `).get(toUserId, req.user.id);
+    return res.status(400).json({
+      error: pending
+        ? 'They have not accepted your invitation yet, so there is nothing linking your accounts. Team, under Account, can send it again.'
+        : 'You do not share an office with them.',
+    });
+  }
 
   await db.prepare('UPDATE pad_items SET assignee_id = ? WHERE id = ?').run(toUserId, req.item.id);
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);

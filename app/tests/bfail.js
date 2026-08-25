@@ -53,9 +53,10 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
  * to stop somebody reading a database outage as a product bug, and a flaky one
  * spends that credibility teaching the reader to ignore it.
  */
-async function postgresIsUp(attempts = 5) {
+async function postgresIsUp(waitMs = 20000) {
   const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
-  for (let i = 0; i < attempts; i++) {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
     const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
     try {
       await client.connect();
@@ -63,10 +64,14 @@ async function postgresIsUp(attempts = 5) {
       return true;
     } catch {
       await client.end().catch(() => {});
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+      if (Date.now() > deadline) return false;
+      // Long enough to ride out a restart. Postgres refuses connections while
+      // it runs crash recovery, which took four seconds the day this was
+      // written, so a check that gave up after one attempt reported an outage
+      // that had already ended by the time anybody read the log.
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
-  return false;
 }
 
 /**
@@ -131,13 +136,26 @@ function boot(env, { settleMs = 25000 } = {}) {
 (async () => {
   // Checked before anything is spawned. Bailing out mid-boot is what leaked a
   // server the last time this check lived in the wrong place.
+  // SKIPPED, NOT FAILED — and the difference matters.
+  //
+  // This suite needs a working Postgres as its control, and Postgres on a
+  // development box is not an always-on service: it gets restarted, and the
+  // log the day this was written showed it down for crash recovery in the
+  // middle of a board run. Exiting 1 for that painted the whole board red for
+  // a reason that had nothing to do with the code — three runs in a row — and
+  // a board that cries wolf is a board people stop reading. A missing
+  // dependency is an environment condition, not a defect.
+  //
+  // Loud rather than silent, and its own exit code, so allsuites.sh can tally
+  // it apart from a pass. Nothing here is quietly waved through: a skip says
+  // so on the line, and a real regression in this suite still fails normally.
   if (!await postgresIsUp()) {
-    console.log('\n  ✗ Postgres is not reachable at 127.0.0.1:5432.');
-    console.log('    This suite compares kinds of database failure, so it needs a');
-    console.log('    working database as the control. Nothing here is a product fault.');
-    console.log('    Start Postgres and run it again.');
-    console.log('\n1 FAILED');
-    process.exit(1);
+    console.log('\n  — Postgres is not reachable at 127.0.0.1:5432, so this suite cannot run.');
+    console.log('    It compares kinds of database failure and needs a working database');
+    console.log('    as the control. Nothing here is a product fault. Start Postgres to');
+    console.log('    cover this ground.');
+    console.log('\nSKIPPED (no control database)');
+    process.exit(99);
   }
 
   console.log('Unreachable host (transient — retries, then waits rather than dying):');

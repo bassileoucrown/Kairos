@@ -24,7 +24,13 @@ cd "$SC"
 #
 # Each suite gets an empty database, the same way the SQLite ones get an empty
 # file. See resetpg.js for why that is not optional.
-pass=0; fail=0; failed=""
+# Exit 99 means "I could not run", not "the code is wrong" — a suite whose
+# external dependency is absent. Counted apart from a pass so it is never
+# mistaken for one, and it does not redden the board: Postgres on a
+# development box is not an always-on service, and three boards in a row went
+# red because it had restarted mid-run. A board that cries wolf stops being
+# read, which costs more than the coverage it was protecting.
+pass=0; fail=0; skip=0; failed=""; skipped=""
 for f in b*.js; do
   s="${f%.js}"
   printf '%-12s ' "$s"
@@ -33,9 +39,11 @@ for f in b*.js; do
   rc=$?
   last=$(grep -v ExperimentalWarning "/tmp/out-$s.log" | grep -v 'trace-warnings' | tail -1)
   if [ $rc -eq 0 ]; then pass=$((pass+1)); echo "ok   $last";
+  elif [ $rc -eq 99 ]; then skip=$((skip+1)); skipped="$skipped $s"; echo "skip $last";
   else fail=$((fail+1)); failed="$failed $s"; echo "FAIL[$rc] $last"; fi
 done
 
-echo "---- $pass passed, $fail failed"
+echo "---- $pass passed, $fail failed, $skip skipped"
 [ -n "$failed" ] && echo "---- failed:$failed"
+[ -n "$skipped" ] && echo "---- skipped:$skipped (dependency absent, not a defect)"
 exit $([ $fail -eq 0 ] && echo 0 || echo 1)

@@ -492,6 +492,25 @@ export default function Today() {
             <p className="today-nothing">Nothing waiting on you. Genuinely.</p>
           )}
 
+          {/* Somebody has asked you to work for them. Top of the column
+              because nothing else here works until it is answered: until an
+              invite is accepted there is no link between the two accounts at
+              all, and every "why can't I…" downstream traces back to here. */}
+          {(needsYou.invitesWaiting || []).map((i) => (
+            <div className="needs-card" key={i.token}>
+              <div className="needs-kind">You have been invited</div>
+              <div className="needs-title">{i.ownerName} wants you as their {i.roleLabel}</div>
+              <div className="needs-meta">
+                Until you accept, you cannot see their diary and they cannot hand you anything.
+              </div>
+              <div className="needs-actions">
+                <Link className="btn btn-primary btn-sm" to={`/accept-invite/${i.token}`}>
+                  Look at it
+                </Link>
+              </div>
+            </div>
+          ))}
+
           {/* Lines you asked to be reminded of. First in the column because
               they are the only thing here you put there yourself — everything
               below arrived from somebody else. */}

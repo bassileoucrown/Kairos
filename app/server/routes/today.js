@@ -12,6 +12,7 @@ const { serializeInstruction } = require('../lib/household');
 const { dueBand } = require('../lib/reminders');
 const { timezoneOn: tripTimezoneOn, tripOn } = require('../lib/trips');
 const pad = require('../lib/pad');
+const { roleLabel } = require('../lib/roles');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -226,9 +227,23 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     .filter((p) => p.awake)
     .slice(0, 10);
 
+  // Somebody has asked you to work for them and is waiting on an answer.
+  //
+  // Viewer-scoped like the pad above, and here for the same reason it was a
+  // bug not to be: an invite used to exist only as an emailed token, so one
+  // that was missed was invisible to everybody. The principal's Team screen
+  // said "Invited" and their PA had no idea they had been asked.
+  const invitesWaiting = await db.prepare(`
+    SELECT m.invite_token AS token, m.role, m.created_at, u.name AS owner_name
+      FROM memberships m
+      JOIN users u ON u.id = m.owner_id
+     WHERE lower(m.invited_email) = ? AND m.status = 'invited'
+     ORDER BY m.created_at DESC
+  `).all(String(req.user.email || '').toLowerCase());
+
   const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
-    + unconfirmedInstructions.length + padWaking.length;
+    + unconfirmedInstructions.length + padWaking.length + invitesWaiting.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
 
@@ -252,6 +267,11 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       // sensible rather than an empty section during a rolling deploy.
       overdueTasks: dueTasks.filter((t) => t.band === 'overdue'),
       expiring, unconfirmedInstructions, padWaking,
+      invitesWaiting: invitesWaiting.map((i) => ({
+        token: i.token,
+        ownerName: i.owner_name,
+        roleLabel: roleLabel(i.role),
+      })),
       count: needsYouCount,
     },
     todayTasks,

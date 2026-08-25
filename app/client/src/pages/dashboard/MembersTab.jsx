@@ -54,6 +54,30 @@ export default function MembersTab() {
     }
   }
 
+  // An invite that only ever existed in an email is one nobody can chase. The
+  // link comes back from the server so it can be pasted into WhatsApp, which
+  // is how this actually gets settled between a principal and their PA.
+  const [resent, setResent] = useState({});
+  const [copied, setCopied] = useState(null);
+
+  async function resend(id) {
+    setError('');
+    try {
+      const d = await api.post(`/members/${id}/resend`);
+      setResent((r) => ({ ...r, [id]: d.inviteLink }));
+    } catch (err) { setError(err.message); }
+  }
+
+  async function copyLink(id) {
+    const link = resent[id];
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${link}`);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    } catch { setError('Could not copy — the link is ' + window.location.origin + link); }
+  }
+
   // Hold the intended value locally while the request is in flight. A
   // checkbox bound purely to server state springs back on click and reads as
   // broken.
@@ -149,8 +173,32 @@ export default function MembersTab() {
           <div className="meeting-type-card">
             <div>
               <div className="name">
-                {m.memberName || m.invitedEmail} <span className={'pill' + (m.status === 'invited' ? ' is-off' : '')}>{m.status === 'invited' ? 'Invited' : 'Active'}</span>
+                {m.memberName || m.invitedEmail}{' '}
+                {/* "Invited" was a true word that told nobody anything. Adding
+                    someone here reads as putting them on your team, so the
+                    screen has to say plainly that nothing is connected yet —
+                    otherwise the first sign is a PA who cannot be @-mentioned
+                    or handed a note, with no explanation anywhere. */}
+                <span className={'pill' + (m.status === 'invited' ? ' is-warn' : '')}>
+                  {m.status === 'invited' ? "Hasn't accepted yet" : 'Active'}
+                </span>
               </div>
+              {m.status === 'invited' && (
+                <div className="meta">
+                  They cannot see anything of yours, be @-mentioned, or be handed work until
+                  they accept.
+                  {' '}
+                  <button className="link-button" type="button" onClick={() => resend(m.id)}>
+                    Send the invite again
+                  </button>
+                  {resent[m.id] && (
+                    <> · <button className="link-button" type="button"
+                      onClick={() => copyLink(m.id)}>
+                      {copied === m.id ? 'Link copied' : 'Copy the link instead'}
+                    </button></>
+                  )}
+                </div>
+              )}
               <div className="meta">
                 <select
                   className="role-select"

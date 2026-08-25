@@ -18,6 +18,64 @@ async function findHouseholdInvite(token) {
   `).get(token);
 }
 
+/**
+ * Invites addressed to you that you have not accepted.
+ *
+ * THE BUG THIS FIXES. An invite existed in exactly one place: an emailed link
+ * holding a token. If that mail went to spam, or to an address somebody reads
+ * once a week, or was simply skimmed past, the invitation was invisible to
+ * everybody — the invitee never saw it, and the principal's Team screen said
+ * "Invited" as though something had happened. A principal would then find that
+ * their PA could not be @-mentioned, handed a note, or given anything at all,
+ * with nothing on any screen explaining why.
+ *
+ * That is worst precisely where it should be easiest: when the person already
+ * holds a Kairos account. They are signed in, they are one tap from accepting,
+ * and we were sending them an email and hoping.
+ *
+ * MUST STAY ABOVE '/:token'. Express matches in order, so a literal route
+ * declared after a parameter route is never reached — '/waiting' would be read
+ * as a token and 404 forever.
+ */
+router.get('/waiting', requireAuth, async (req, res) => {
+  const email = String(req.user.email || '').toLowerCase();
+
+  const offices = await db.prepare(`
+    SELECT m.id, m.role, m.invite_token, m.created_at, u.name AS owner_name
+      FROM memberships m
+      JOIN users u ON u.id = m.owner_id
+     WHERE lower(m.invited_email) = ? AND m.status = 'invited'
+     ORDER BY m.created_at DESC
+  `).all(email);
+
+  const households = await db.prepare(`
+    SELECT h.id, h.job_title, h.invite_token, h.created_at, u.name AS owner_name
+      FROM household_members h
+      JOIN users u ON u.id = h.owner_id
+     WHERE lower(h.invited_email) = ? AND h.status = 'invited'
+     ORDER BY h.created_at DESC
+  `).all(email);
+
+  res.json({
+    invites: [
+      ...offices.map((m) => ({
+        token: m.invite_token,
+        ownerName: m.owner_name,
+        roleLabel: roleLabel(m.role),
+        kind: 'office',
+        createdAt: m.created_at,
+      })),
+      ...households.map((h) => ({
+        token: h.invite_token,
+        ownerName: h.owner_name,
+        roleLabel: h.job_title || 'Household',
+        kind: 'household',
+        createdAt: h.created_at,
+      })),
+    ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+  });
+});
+
 router.get('/:token', async (req, res) => {
   const household = await findHouseholdInvite(req.params.token);
   if (household) {

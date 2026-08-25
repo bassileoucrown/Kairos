@@ -289,6 +289,33 @@ router.patch('/:id', async (req, res) => {
   res.json({ member: serialize(updated) });
 });
 
+/**
+ * Send the invitation again, and hand back the link.
+ *
+ * An invite lived only in an email. When that mail went astray the invitation
+ * was unreachable by everybody: the invitee never saw it, and the principal
+ * had no way to try again short of revoking and re-inviting. The link comes
+ * back in the response too, so it can be pasted into WhatsApp — which is how
+ * this actually gets resolved between a principal and their PA.
+ */
+router.post('/:id/resend', async (req, res) => {
+  const row = await db.prepare('SELECT * FROM memberships WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Member not found.' });
+  if (row.status !== 'invited') {
+    return res.status(400).json({ error: 'They have already accepted.' });
+  }
+
+  const label = roleLabel(row.role);
+  await sendEmail({
+    ownerId: req.user.id, toEmail: row.invited_email, category: 'invite',
+    subject: `Reminder: ${req.user.name} invited you to ${BRAND_FULL} as their ${label}`,
+    body: `${req.user.name} added you as their ${label} on ${BRAND_FULL}.`
+      + `\n\nAccept the invite: /accept-invite/${row.invite_token}`,
+  });
+  res.json({ inviteLink: `/accept-invite/${row.invite_token}` });
+});
+
 router.post('/:id/revoke', async (req, res) => {
   const row = await db.prepare('SELECT * FROM memberships WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Member not found.' });
