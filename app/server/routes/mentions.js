@@ -58,6 +58,30 @@ router.get('/space/:spaceId/lookup', requireAuth, async (req, res) => {
     `).all(...audience, q, like, like);
   }
 
+  /**
+   * People you work with who are NOT in this room yet.
+   *
+   * The missing rung. Everything needed to bring a colleague into a
+   * conversation already existed — they hold an account, you work together,
+   * the room takes members — and the only way to do it was to leave the
+   * thread, find the members screen, and come back. So it did not happen, and
+   * the message got sent to somebody who could not read it.
+   *
+   * Offered as its own group, never mixed in with the room: naming one of
+   * these people tells them nothing until they are actually added, and the
+   * picker has to keep saying so. Adding is a separate tap.
+   */
+  const inRoom = new Set([...await spaceAudience(access.space)]);
+  const nearbyRows = await db.prepare(`
+    SELECT DISTINCT u.id, u.name, u.slug
+      FROM users u
+     WHERE u.id IN (${reachable.REACHABLE_IDS})
+       AND (? = '' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.slug) LIKE ? ESCAPE '\\')
+     ORDER BY u.name
+     LIMIT 10
+  `).all(...reachable.idsParams(req.user.id), q, like, like);
+  const nearby = nearbyRows.filter((u) => !inRoom.has(u.id));
+
   const mayReadContacts = access.space.owner_id === req.user.id || await db.prepare(
     "SELECT 1 FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status = 'active'",
   ).get(access.space.owner_id, req.user.id);
@@ -81,6 +105,12 @@ router.get('/space/:spaceId/lookup', requireAuth, async (req, res) => {
     people: people.map((p) => ({
       handle: p.slug, name: p.name, kind: 'person', notified: true,
     })),
+    nearby: nearby.map((u) => ({ id: u.id, handle: u.slug, name: u.name })),
+    // Whether this reader may act on the group above. A button that refuses
+    // on click is worse than no button, and adding somebody to a room is not
+    // everybody's to do.
+    canAddMembers: !!access.canManageMembers
+      && access.space.context !== 'private' && access.space.kind !== 'direct',
     // Dropped before mapping, while the address is still there to compare on.
     // Somebody already in the room is offered once, as a person, not a second
     // time as a record about themselves.

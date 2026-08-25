@@ -16,18 +16,32 @@ const db = require('./db');
  * choice must both come through here, or the same bug grows back.
  */
 
-// The four ways two accounts are joined in Kairos. Kept as one SQL fragment
-// rather than four calls: it is used as a subquery for listing and as an
-// existence check for permission, and those must be the same set.
+// The ways two accounts are joined in Kairos. Kept as one SQL fragment rather
+// than several calls: it is used as a subquery for listing and as an existence
+// check for permission, and those must be the same set.
+//
+// THE FOURTH CLAUSE IS EASY TO FORGET AND WAS. Two assistants who work for the
+// same principal are colleagues — they cover the same diary, and the direct
+// line already puts them in one room precisely because "two assistants
+// covering the same principal need to see each other's traffic". Without this
+// they could not @ each other or hand each other a note, which is nonsense for
+// two people on the same team. The pad's own hand-check used to carry this
+// clause and lost it when the query moved here; the test that caught it is
+// broom.js, asking whether one assistant is offered the other.
 const REACHABLE_IDS = `
   SELECT owner_id AS id FROM memberships WHERE member_user_id = ? AND status = 'active'
   UNION SELECT member_user_id FROM memberships WHERE owner_id = ? AND status = 'active'
+  UNION SELECT m2.member_user_id
+    FROM memberships m1
+    JOIN memberships m2 ON m2.owner_id = m1.owner_id
+   WHERE m1.member_user_id = ? AND m1.status = 'active'
+     AND m2.status = 'active' AND m2.member_user_id IS NOT NULL
   UNION SELECT addressee_id FROM connections WHERE requester_id = ? AND status = 'accepted'
   UNION SELECT requester_id FROM connections WHERE addressee_id = ? AND status = 'accepted'
 `;
 
-/** Params for REACHABLE_IDS — four copies of the same id, in one place. */
-const idsParams = (userId) => [userId, userId, userId, userId];
+/** Params for REACHABLE_IDS — the same id, once per clause, in one place. */
+const idsParams = (userId) => [userId, userId, userId, userId, userId];
 
 /** Can these two act on each other at all? */
 async function canReach(userId, otherId) {

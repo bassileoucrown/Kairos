@@ -71,8 +71,9 @@ export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }
   const source = spaceId ? `/mentions/space/${spaceId}/lookup` : (ownerId && `/mentions/${ownerId}/lookup`);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
-  const [found, setFound] = useState({ people: [], contacts: [] });
+  const [found, setFound] = useState({ people: [], contacts: [], nearby: [], canAddMembers: false });
   const [inviting, setInviting] = useState(null);
+  const [adding, setAdding] = useState(null);
   const [notice, setNotice] = useState('');
   const anchor = useRef(0);
 
@@ -125,8 +126,32 @@ export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }
     } finally { setInviting(null); }
   }
 
+  /**
+   * Bring somebody into the room, from inside the sentence about them.
+   *
+   * A SEPARATE TAP FROM NAMING THEM, deliberately. It would be neater for @
+   * alone to add people, and it would be wrong: a room holds everything said
+   * in it before you arrived, so adding somebody discloses a history, and that
+   * is not something to do as a side effect of typing a name. It would also
+   * break the one distinction this component exists to keep — that naming a
+   * person and reaching them are different things. So the picker offers, says
+   * what it will do, and waits to be asked.
+   */
+  async function addToRoom(p) {
+    setAdding(p.id);
+    setNotice('');
+    try {
+      await api.post(`/spaces/${spaceId}/members`, { handle: p.handle });
+      setNotice(`${p.name} is in this room now, and can read what was said before.`);
+      insert(p.handle);
+    } catch (e) {
+      setNotice(e.message);
+    } finally { setAdding(null); }
+  }
+
   if (!open) return notice ? <p className="hint mention-notice">{notice}</p> : null;
-  const nothing = found.people.length === 0 && found.contacts.length === 0;
+  const nearby = found.nearby || [];
+  const nothing = found.people.length === 0 && found.contacts.length === 0 && nearby.length === 0;
 
   return (
     <div className="mention-picker">
@@ -137,6 +162,32 @@ export function MentionPicker({ ownerId, spaceId, value, onChange, textareaRef }
             <button className="mention-option" type="button" key={p.handle} onClick={() => insert(p.handle)}>
               <strong>{p.name}</strong> <span className="hint">@{p.handle}</span>
             </button>
+          ))}
+        </>
+      )}
+      {nearby.length > 0 && (
+        <>
+          <div className="mention-group">
+            {found.canAddMembers
+              ? 'You work with them — not in this room yet'
+              : 'You work with them — not in this room, so naming them tells them nothing'}
+          </div>
+          {nearby.map((p) => (
+            <div className="mention-row" key={p.handle}>
+              <button className="mention-option" type="button" onClick={() => insert(p.handle)}>
+                <strong>{p.name}</strong> <span className="hint">@{p.handle}</span>
+              </button>
+              {found.canAddMembers && (
+                <button
+                  className="itin-tool"
+                  type="button"
+                  disabled={adding === p.id}
+                  onClick={() => addToRoom(p)}
+                >
+                  {adding === p.id ? 'Adding…' : 'Add to room'}
+                </button>
+              )}
+            </div>
           ))}
         </>
       )}

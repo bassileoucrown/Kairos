@@ -144,7 +144,17 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     // The move form used to be two bare boxes: you typed a time, pressed Move,
     // and found out from a red banner whether anything was already there.
     head('The day says where there is room:');
-    const dayKey = booking.startAt.slice(0, 10);
+    // PINNED TO A FIXED DAY, deliberately. This used to ask about whatever day
+    // the slot grid happened to hand out, which is usually today — and the
+    // office day runs 06:00 to 22:00, so a run after ten at night found no
+    // future openings and failed on a product that was behaving correctly.
+    // A fixture that depends on the hour it runs at is not testing the thing
+    // it claims to.
+    const dayKey = '2027-06-15';
+    const ngoziBooking = (await boss('GET', '/bookings')).d.bookings
+      .find((b) => /Ngozi/.test(b.bookerName));
+    await boss('POST', `/bookings/${ngoziBooking.id}/reschedule`, { startAt: `${dayKey}T14:00:00.000Z` });
+    await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: `${dayKey}T09:00:00.000Z` });
     r = await boss('GET', `/bookings/${booking.id}/openings?date=${dayKey}`);
     ok('the day comes back', r.s === 200, JSON.stringify(r.d).slice(0, 200));
     ok('with times to choose from', (r.d.openings || []).length > 0, String((r.d.openings || []).length));
@@ -280,7 +290,13 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
 
     head('Moving it shows the day rather than asking you to guess:');
     await page.click('button:has-text("Move it")');
-    // The picker reads the day before it can draw anything.
+    // The picker opens on the appointment's own day, which is today. Late in
+    // the evening today genuinely has no room left — the office day ends at
+    // ten — and the picker says so rather than showing an empty grid. Stepping
+    // to the next day is what somebody would actually do, and it makes this
+    // assertion independent of the hour the suite runs at.
+    await page.waitForSelector('.move-picker', { timeout: 20000 });
+    await page.click('.move-day button:has-text("→")');
     await page.waitForSelector('.move-picker .slot-grid .slot-btn', { timeout: 20000 });
     const offered = await page.locator('.move-picker .slot-btn').count();
     ok('free times are on screen to pick from', offered > 0, String(offered));
