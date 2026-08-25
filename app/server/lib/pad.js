@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const mentions = require('./mentions');
+const { sendEmail } = require('./email');
 const { officeAudience } = require('./paAccess');
 
 /**
@@ -35,7 +36,12 @@ const STATES = new Set(['open', 'done']);
 const ABOUT_KINDS = new Set(['booking', 'itinerary', 'contact']);
 
 const SELECT = `
-  SELECT p.*, a.name AS author_name, s.name AS assignee_name, o.name AS owner_name
+  SELECT p.*, a.name AS author_name, s.name AS assignee_name, o.name AS owner_name,
+    (SELECT COUNT(*) FROM pad_replies r WHERE r.pad_item_id = p.id) AS reply_count,
+    (SELECT r.author_id FROM pad_replies r WHERE r.pad_item_id = p.id
+      ORDER BY r.created_at DESC LIMIT 1) AS last_reply_by,
+    (SELECT r.created_at FROM pad_replies r WHERE r.pad_item_id = p.id
+      ORDER BY r.created_at DESC LIMIT 1) AS last_reply_at
     FROM pad_items p
     JOIN users a ON a.id = p.author_user_id
     LEFT JOIN users s ON s.id = p.assignee_id
@@ -68,7 +74,35 @@ function visibleTo(userId) {
   };
 }
 
-function serialize(p) {
+/**
+ * Whose move it is.
+ *
+ * Worked out from who spoke last rather than from a table of what everybody
+ * has read. Read-tracking answers "have you seen this", which is not the
+ * question — you can read "which car?" on a bus and it is still your answer
+ * that is missing. "Nobody has replied to the last thing said, and the last
+ * thing said was not yours" is the same sentence somebody would use out loud,
+ * needs no extra table, and cannot drift out of step with the conversation
+ * because it IS the conversation.
+ *
+ * Only lines with two people on them can be somebody's turn. A private note
+ * nobody has been handed is not waiting on anybody, and a pad that nagged
+ * about your own jottings would be a pad you stopped writing on.
+ */
+function turnBelongsTo(p) {
+  if (p.state !== 'open') return null;
+  if (!p.assignee_id) return null;
+  const lastSpoke = p.last_reply_by || p.author_user_id;
+  // The other party to this line — whichever of the two did not speak last.
+  if (lastSpoke === p.author_user_id) return p.assignee_id;
+  if (lastSpoke === p.assignee_id) return p.author_user_id;
+  // Somebody from the office chipped in on a shared line. It goes back to
+  // whoever it was handed to, since they are the one who owes an answer.
+  return p.assignee_id;
+}
+
+function serialize(p, viewerId = null) {
+  const turn = turnBelongsTo(p);
   return {
     id: p.id,
     body: p.body,
@@ -90,6 +124,11 @@ function serialize(p) {
     itineraryItemId: p.itinerary_item_id || null,
     createdAt: p.created_at,
     doneAt: p.done_at || null,
+    // The conversation this line has grown, if any.
+    replyCount: Number(p.reply_count || 0),
+    lastReplyAt: p.last_reply_at || null,
+    turnBelongsTo: turn,
+    yoursToAnswer: !!viewerId && turn === viewerId,
   };
 }
 
@@ -112,11 +151,14 @@ async function list(userId, { state = 'open', about = null } = {}) {
     ${SELECT} WHERE ${where.join(' AND ')} ORDER BY p.created_at DESC
   `).all(...params);
 
-  const items = rows.map(serialize);
+  const items = rows.map((r) => serialize(r, userId));
   // Sorted here rather than in SQL: "awake" depends on the clock, and the two
   // backends disagree about how to compare a timestamp to now in a way that is
   // not worth writing twice.
-  return items.sort((a, b) => (Number(b.awake) - Number(a.awake))
+  // Waiting on you first, then what you asked to be reminded of, then the
+  // rest newest-first. Somebody else being held up outranks your own reminder.
+  return items.sort((a, b) => (Number(b.yoursToAnswer) - Number(a.yoursToAnswer))
+    || (Number(b.awake) - Number(a.awake))
     || (Date.parse(b.createdAt) - Date.parse(a.createdAt)));
 }
 
@@ -201,7 +243,82 @@ async function tell({ item, author, ownerId }) {
   return found;
 }
 
+/**
+ * Telling somebody a line is now theirs.
+ *
+ * SEPARATE FROM MENTIONS, and that separation is a bug fix. Handing used to go
+ * through mentions.notify, which only reaches @handles written in the text —
+ * so handing "Book the car" to somebody with no "@kit" in it told them
+ * NOTHING. The line appeared on their pad and they found out by opening a
+ * screen they had no reason to open. Being given work is not a mention of you;
+ * it is the thing itself, and it has to knock.
+ *
+ * A knock, not a transcript: the words stay in Kairos, where the answer can
+ * land beside them, rather than starting a conversation in an inbox that never
+ * comes back. Same rule as a booking follow-up.
+ */
+async function knock({ toUserId, ownerId, author, subject, line }) {
+  try {
+    if (!toUserId || toUserId === author.id) return;
+    const to = await db.prepare('SELECT email FROM users WHERE id = ?').get(toUserId);
+    if (!to?.email) return;
+    await sendEmail({
+      ownerId,
+      sentByUserId: author.id,
+      toEmail: to.email,
+      category: 'mention',
+      subject,
+      body: `${author.name} ${line}\n\nOpen the pad in Kairos to read it and reply.`,
+    });
+  } catch { /* Something already saved does not fail over its mail. */ }
+}
+
+/** Everything said about a line, oldest first, for somebody who may see it. */
+async function replies(padItemId) {
+  return db.prepare(`
+    SELECT r.*, u.name AS author_name
+      FROM pad_replies r
+      JOIN users u ON u.id = r.author_id
+     WHERE r.pad_item_id = ?
+     ORDER BY r.created_at ASC
+  `).all(padItemId);
+}
+
+function serializeReply(r) {
+  return {
+    id: r.id,
+    body: r.body,
+    authorId: r.author_id,
+    authorName: r.author_name,
+    createdAt: r.created_at,
+  };
+}
+
+/**
+ * Saying something back.
+ *
+ * No visibility of its own. A reply is readable by exactly whoever can read
+ * the line, so it cannot widen an audience or leak a private note into the
+ * office by being written in the wrong register — there is no register to get
+ * wrong. The permission was decided once, above, on the line.
+ */
+async function addReply({ padItemId, authorId, body }) {
+  const text = String(body || '').trim();
+  if (!text) return { ok: false, status: 400, error: 'Write something first.' };
+  const id = crypto.randomUUID();
+  await db.prepare(`
+    INSERT INTO pad_replies (id, pad_item_id, author_id, body, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, padItemId, authorId, text.slice(0, 2000), new Date().toISOString());
+  const row = await db.prepare(`
+    SELECT r.*, u.name AS author_name FROM pad_replies r
+    JOIN users u ON u.id = r.author_id WHERE r.id = ?
+  `).get(id);
+  return { ok: true, reply: serializeReply(row) };
+}
+
 module.exports = {
-  list, get, add, serialize, canEdit, canSettle, tell, visibleTo,
+  list, get, add, serialize, canEdit, canSettle, tell, visibleTo, knock,
+  replies, addReply, serializeReply, turnBelongsTo,
   VISIBILITIES, STATES, ABOUT_KINDS, SELECT,
 };

@@ -1053,3 +1053,33 @@ CREATE INDEX IF NOT EXISTS idx_pad_owner ON pad_items(owner_id, state, created_a
 CREATE INDEX IF NOT EXISTS idx_pad_author ON pad_items(author_user_id, state);
 CREATE INDEX IF NOT EXISTS idx_pad_assignee ON pad_items(assignee_id, state);
 CREATE INDEX IF NOT EXISTS idx_pad_wake ON pad_items(wake_at);
+
+-- Saying something back about a line on the pad.
+--
+-- WHY THE PAD GROWS A CONVERSATION RATHER THAN SENDING YOU ELSEWHERE. Handing
+-- somebody a line starts one whether the product wants it or not: "book the
+-- car" is answered with "for what time?", then "eight", then "done, he is
+-- picking you up at the Marina gate". Four sentences, and then it is over.
+--
+-- That is not a thread in a space. threads.space_id is NOT NULL, so routing
+-- this through the existing conversation system would mean choosing a space in
+-- order to ask a one-line question — the same ceremony the pad exists to
+-- avoid, reintroduced at the exact moment somebody is trying to be quick. And
+-- it is not email either: a reply in an inbox leaves Kairos and takes half the
+-- exchange with it.
+--
+-- So the answer lives on the line it is about, in order, where both people
+-- already are.
+--
+-- WHO MAY SPEAK is not decided here. It is exactly who may see the line, which
+-- lib/pad.js already answers in one place — author, whoever it was handed to,
+-- and the office if it was put there. A reply cannot widen an audience,
+-- because it cannot reach anybody the line could not.
+CREATE TABLE IF NOT EXISTS pad_replies (
+  id          TEXT PRIMARY KEY,
+  pad_item_id TEXT NOT NULL REFERENCES pad_items(id) ON DELETE CASCADE,
+  author_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body        TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pad_replies ON pad_replies(pad_item_id, created_at);

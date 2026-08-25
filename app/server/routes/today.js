@@ -223,9 +223,18 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   // need"; a note you asked to be reminded of is yours, and it should follow
   // you between the principals you support rather than hiding on whichever
   // account you happened to write it under.
-  const padWaking = (await pad.list(req.user.id, { state: 'open' }))
-    .filter((p) => p.awake)
-    .slice(0, 10);
+  const padOpen = await pad.list(req.user.id, { state: 'open' });
+  const padWaking = padOpen.filter((p) => p.awake).slice(0, 10);
+
+  // Lines where somebody is waiting on YOU — handed to you and not yet
+  // answered, or answered by the other person since you last spoke.
+  //
+  // This is what keeps a handed note from dying quietly. Without it the whole
+  // conversation depended on email being read: you would hand somebody a line,
+  // they would ask a question on it, and unless one of you happened to open
+  // the pad the exchange stopped there with each side assuming the other had
+  // it. A thing somebody is held up by belongs where you look every morning.
+  const padYourTurn = padOpen.filter((p) => p.yoursToAnswer).slice(0, 10);
 
   // Somebody has asked you to work for them and is waiting on an answer.
   //
@@ -243,7 +252,8 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
 
   const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
-    + unconfirmedInstructions.length + padWaking.length + invitesWaiting.length;
+    + unconfirmedInstructions.length + padWaking.length + padYourTurn.length
+    + invitesWaiting.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
 
@@ -266,7 +276,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       // Kept under the old name so an older client still shows something
       // sensible rather than an empty section during a rolling deploy.
       overdueTasks: dueTasks.filter((t) => t.band === 'overdue'),
-      expiring, unconfirmedInstructions, padWaking,
+      expiring, unconfirmedInstructions, padWaking, padYourTurn,
       invitesWaiting: invitesWaiting.map((i) => ({
         token: i.token,
         ownerName: i.owner_name,

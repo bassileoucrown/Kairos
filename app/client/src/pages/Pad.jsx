@@ -97,8 +97,11 @@ export default function Pad() {
   }
 
   const list = items || [];
-  const waking = list.filter((i) => i.awake);
-  const resting = list.filter((i) => !i.awake);
+  // Three bands, in the order somebody would work through them: what another
+  // person is held up by, then what you asked to see again, then the rest.
+  const answering = list.filter((i) => i.yoursToAnswer);
+  const waking = list.filter((i) => !i.yoursToAnswer && i.awake);
+  const resting = list.filter((i) => !i.yoursToAnswer && !i.awake);
 
   return (
     <AppShell
@@ -146,6 +149,17 @@ export default function Pad() {
         </div>
       )}
 
+      {answering.length > 0 && (
+        <>
+          <h2 className="section-head">Waiting on your answer</h2>
+          {answering.map((i) => (
+            <PadLine key={i.id} item={i} ownerId={ownerId} me={user}
+              open={openMenu === i.id} onOpen={setOpenMenu}
+              onChange={change} onRemove={remove} onDone={() => load()} />
+          ))}
+        </>
+      )}
+
       {waking.length > 0 && (
         <>
           <h2 className="section-head">You asked to come back to these</h2>
@@ -157,7 +171,9 @@ export default function Pad() {
         </>
       )}
 
-      {resting.length > 0 && waking.length > 0 && <h2 className="section-head">The rest</h2>}
+      {resting.length > 0 && (waking.length > 0 || answering.length > 0) && (
+        <h2 className="section-head">The rest</h2>
+      )}
       {resting.map((i) => (
         <PadLine key={i.id} item={i} ownerId={ownerId} me={user}
           open={openMenu === i.id} onOpen={setOpenMenu}
@@ -167,12 +183,84 @@ export default function Pad() {
   );
 }
 
+/**
+ * The conversation a handed line grows.
+ *
+ * Deliberately plain — a list of what was said and a box to say the next
+ * thing. No registers, no records, no formatting: this is "for what time?"
+ * and "eight", and dressing that up as a thread would be dressing up.
+ *
+ * When it outgrows this, the line becomes a task in a space and the
+ * conversation continues there, where it can involve more than two people and
+ * be cited later.
+ */
+function PadReplies({ item, me, onReplied }) {
+  const [replies, setReplies] = useState(null);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function load() {
+    api.get(`/pad/${item.id}/replies`)
+      .then((d) => setReplies(d.replies || []))
+      .catch((err) => setError(err.message));
+  }
+  useEffect(load, [item.id]);
+
+  async function send(e) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.post(`/pad/${item.id}/replies`, { body });
+      setBody('');
+      load();
+      onReplied?.();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="pad-thread">
+      {error && <div className="alert alert-error">{error}</div>}
+      {replies === null && <p className="hint">Loading…</p>}
+      {replies?.map((r) => (
+        <div className={'pad-reply' + (r.authorId === me?.id ? ' is-mine' : '')} key={r.id}>
+          <span className="pad-reply-who">{r.authorId === me?.id ? 'You' : r.authorName}</span>
+          <span className="pad-reply-body">{r.body}</span>
+        </div>
+      ))}
+      <form className="pad-reply-form" onSubmit={send}>
+        <input
+          type="text"
+          aria-label={`Reply about: ${item.body}`}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder={item.yoursToAnswer ? 'Answer them…' : 'Say something…'}
+        />
+        <button className="btn btn-secondary btn-sm" type="submit" disabled={busy || !body.trim()}>
+          {busy ? 'Sending…' : 'Reply'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }) {
   const mine = item.authorId === me?.id;
   const settled = item.state === 'done';
+  // Open on its own when the ball is in your court, closed otherwise. The one
+  // line you are holding somebody up on should not need a click to be read.
+  const [showThread, setShowThread] = useState(item.yoursToAnswer);
+
+  // Only lines with two people on them have a conversation to have.
+  const shared = !!item.assigneeId;
 
   return (
-    <div className={'card pad-line' + (item.awake ? ' is-awake' : '') + (settled ? ' is-done' : '')}>
+    <div className={'card pad-line'
+      + (item.awake ? ' is-awake' : '')
+      + (item.yoursToAnswer ? ' is-yours' : '')
+      + (settled ? ' is-done' : '')}>
       <div className="pad-line-main">
         <button
           className="pad-tick"
@@ -185,6 +273,9 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
         <div className="pad-body">
           <MentionText body={item.body} />
           <div className="pad-meta">
+            {/* First, because it is the only thing on the line that somebody
+                else is actually held up by. */}
+            {item.yoursToAnswer && <span className="pad-tag is-turn">Your answer</span>}
             {item.visibility === 'office'
               ? <span className="pad-tag">Office</span>
               : <span className="pad-tag is-private">Only me</span>}
@@ -200,13 +291,28 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
             {item.itineraryItemId && <> · <Link to="/itinerary">on the diary</Link></>}
           </div>
         </div>
-        {mine && !settled && (
-          <button className="btn btn-secondary btn-sm" type="button"
-            onClick={() => onOpen(open ? null : item.id)}>
-            {open ? 'Close' : 'Do something'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {shared && (
+            <button className="btn btn-secondary btn-sm" type="button"
+              onClick={() => setShowThread((s) => !s)}>
+              {showThread ? 'Hide' : (item.replyCount > 0 ? `Replies (${item.replyCount})` : 'Reply')}
+            </button>
+          )}
+          {mine && !settled && (
+            <button className="btn btn-secondary btn-sm" type="button"
+              onClick={() => onOpen(open ? null : item.id)}>
+              {open ? 'Close' : 'Do something'}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Once a line has been handed over it can be talked about, settled or
+          not — "it turned out the car was cancelled" is worth saying after
+          the fact as much as before it. */}
+      {shared && showThread && (
+        <PadReplies item={item} me={me} onReplied={onDone} />
+      )}
 
       {open && (
         <PadActions item={item} ownerId={ownerId} onChange={onChange}

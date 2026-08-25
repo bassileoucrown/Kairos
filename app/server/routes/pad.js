@@ -168,9 +168,60 @@ router.post('/:id/hand', loadItem, async (req, res) => {
 
   await db.prepare('UPDATE pad_items SET assignee_id = ? WHERE id = ?').run(toUserId, req.item.id);
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  const item = pad.serialize(row);
+  const item = pad.serialize(row, req.user.id);
+
+  // Two different things, and it used to only do the second. Being handed work
+  // is not a mention of you — mentions.notify only reaches @handles written in
+  // the text, so handing somebody "Book the car" with no "@kit" in it told
+  // them nothing at all, and the line sat on a screen they had no reason to
+  // open. The knock is the fix; the mention still fires for anybody named.
+  await pad.knock({
+    toUserId,
+    ownerId: item.ownerId,
+    author: req.user,
+    subject: `${req.user.name} handed you something`,
+    line: 'has passed you a note on the pad.',
+  });
   await pad.tell({ item, author: req.user, ownerId: item.ownerId });
   res.json({ item });
+});
+
+// --- Saying something back ------------------------------------------------
+//
+// A handed line starts a conversation whether the product wants one or not:
+// "book the car" is answered with "for what time?". See the pad_replies
+// comment in schema.sql for why that lives here rather than in a thread.
+
+router.get('/:id/replies', loadItem, async (req, res) => {
+  const rows = await pad.replies(req.item.id);
+  res.json({ replies: rows.map(pad.serializeReply) });
+});
+
+router.post('/:id/replies', loadItem, async (req, res) => {
+  // No permission of its own: loadItem already refused anybody who cannot see
+  // the line, and being able to read it is exactly the right to answer it.
+  const result = await pad.addReply({
+    padItemId: req.item.id,
+    authorId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  // Whoever is now waiting. Worked out after the reply is in, so it names the
+  // person the ball has just moved to rather than the one who had it before.
+  const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
+  await pad.knock({
+    toUserId: pad.turnBelongsTo(row),
+    ownerId: row.owner_id,
+    author: req.user,
+    subject: `${req.user.name} replied on the pad`,
+    line: 'has answered on a note you are part of.',
+  });
+
+  res.status(201).json({
+    reply: result.reply,
+    item: pad.serialize(row, req.user.id),
+  });
 });
 
 // --- Becoming a task ------------------------------------------------------
@@ -238,7 +289,7 @@ router.post('/:id/task', loadItem, async (req, res) => {
   });
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  res.status(201).json({ item: pad.serialize(row), taskId });
+  res.status(201).json({ item: pad.serialize(row, req.user.id), taskId });
 });
 
 // --- Becoming something on the diary --------------------------------------
@@ -291,7 +342,7 @@ router.post('/:id/itinerary', requirePaAccessForBody, async (req, res) => {
     .run(itemId, 'done', new Date().toISOString(), item.id);
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(item.id);
-  res.status(201).json({ item: pad.serialize(row), itineraryItemId: itemId, status });
+  res.status(201).json({ item: pad.serialize(row, req.user.id), itineraryItemId: itemId, status });
 });
 
 /**

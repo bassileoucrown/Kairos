@@ -2718,3 +2718,20 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 
 /* Printing a day sheet should not print a button. */
 @media print { .pad-dock-btn, .pad-dock-open, .pad-dock-scrim { display: none; } }
+
+/* The conversation a handed line grows. Plain on purpose: this is "for what
+   time?" and "eight", and dressing it up as a thread would be dressing up.
+   See the pad_replies comment in schema.sql for why it lives on the line. */
+.pad-line.is-yours { border-left: 3px solid var(--warn); }
+.pad-tag.is-turn { background: var(--warn-soft); color: var(--warn); }
+
+.pad-thread { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.pad-reply { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 0.86rem; }
+.pad-reply-who {
+  flex: none; font-weight: 600; color: var(--text-muted);
+  font-size: 0.76rem; min-width: 64px;
+}
+.pad-reply.is-mine .pad-reply-who { color: var(--accent); }
+.pad-reply-body { min-width: 0; overflow-wrap: anywhere; }
+.pad-reply-form { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.pad-reply-form input { flex: 1; min-width: 0; }

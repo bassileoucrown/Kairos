@@ -208,6 +208,12 @@ async function onboard(p, name, email, roleLabel) {
     // assuming: a page that does not scroll would pass every assertion below
     // for the wrong reason.
     await page.goto(`${BASE}/appointments/${made.ownerId}/${made.bookingId}`);
+    // Wait for the APPOINTMENT, not the dock. The dock comes from AppShell and
+    // is in the DOM immediately; the booking arrives from a request afterwards.
+    // Measuring on the dock meant measuring a page still showing "Loading…",
+    // which is short — it passed alone and failed under a loaded board, which
+    // is the signature of waiting on the wrong element.
+    await page.waitForSelector('.trail-line', { timeout: 20000 });
     await page.waitForSelector('.pad-dock-btn', { timeout: 20000 });
     const tall = await page.evaluate(() => document.body.scrollHeight > window.innerHeight + 300);
     ok('the page is long enough for scrolling to mean something', tall);

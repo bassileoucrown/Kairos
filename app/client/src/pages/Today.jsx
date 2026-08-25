@@ -511,6 +511,27 @@ export default function Today() {
             </div>
           ))}
 
+          {/* Somebody is held up waiting for you to answer. Above your own
+              reminders, because a note you asked to see again can slip a day
+              and a colleague who cannot proceed cannot. */}
+          {(needsYou.padYourTurn || []).map((p) => (
+            <Link className="needs-card" key={p.id} to="/pad">
+              <div className="needs-kind">
+                {/* Whoever is not you is the one waiting. A line only reaches
+                    this list when the answer owed is yours. */}
+                {p.replyCount > 0
+                  ? `${(p.authorId === user?.id ? p.assigneeName : p.authorName) || 'Somebody'} is waiting on you`
+                  : `${p.authorName} handed you this`}
+              </div>
+              <div className="needs-title">{p.body}</div>
+              <div className="needs-meta">
+                {p.replyCount > 0
+                  ? `${p.replyCount} ${p.replyCount === 1 ? 'reply' : 'replies'} — answer on the pad`
+                  : 'Answer or tick it off on the pad'}
+              </div>
+            </Link>
+          ))}
+
           {/* Lines you asked to be reminded of. First in the column because
               they are the only thing here you put there yourself — everything
               below arrived from somebody else. */}
