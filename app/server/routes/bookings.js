@@ -5,6 +5,7 @@ const { requireAuth } = require('../lib/auth');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
+const { openingsFor } = require('../lib/dayOpenings');
 const notes = require('../lib/bookingNotes');
 
 // A principal's own bookings. The delegated equivalent is in routes/pa.js and
@@ -51,6 +52,26 @@ router.post('/:id/reschedule', async (req, res) => {
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ booking: { id: result.booking.id, startAt: result.booking.start_at, endAt: result.booking.end_at } });
+});
+
+// Where there is room on a given day, for somebody about to move this. See
+// lib/dayOpenings.js — it is deliberately not the public slot grid.
+router.get('/:id/openings', async (req, res) => {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Booking not found.' });
+
+  const result = await openingsFor({
+    owner: req.user,
+    date: req.query.date,
+    // Defaults to however long this meeting already runs, since moving it is
+    // not meant to change that.
+    minutes: req.query.minutes
+      || Math.round((Date.parse(row.end_at) - Date.parse(row.start_at)) / 60000),
+    excludeBookingId: row.id,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.json(result);
 });
 
 // --- What is said about an appointment ---------------------------------

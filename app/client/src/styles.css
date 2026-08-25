@@ -662,6 +662,28 @@ textarea { resize: vertical; min-height: 70px; }
 .slot-btn:hover { border-color: var(--accent); color: var(--accent); }
 .slot-btn.is-selected { background: var(--accent); border-color: var(--accent); color: white; }
 
+/* Choosing where to move an appointment. A time outside the published hours is
+   dimmed rather than withheld — the office may use it, and a picker that hid it
+   would be telling somebody they cannot. Back-to-back is flagged the same way:
+   said, never enforced. See components/MoveAppointment.jsx. */
+.slot-btn.is-offhours { border-style: dashed; color: var(--text-muted); }
+.slot-btn.is-offhours:hover { color: var(--accent); }
+.slot-btn.is-tight { border-color: var(--warn); }
+.slot-btn.is-tight.is-selected { border-color: var(--warn); }
+
+.move-picker { margin-top: 4px; }
+.move-day { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.move-day input[type="date"] { width: auto; }
+.move-busy {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin-bottom: 12px; padding: 10px 12px;
+  background: var(--surface-alt, var(--bg)); border-radius: var(--radius);
+}
+.move-busy-head { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-right: 4px; }
+.move-busy-item { font-size: 0.78rem; padding: 2px 8px; border-radius: 999px; background: var(--border); }
+.move-busy-item.is-booking { background: var(--accent-soft); color: var(--accent); }
+.hint.is-warn { color: var(--warn); }
+
 .tz-note { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px; }
 
 .confirmation { text-align: center; padding: 20px 0; }

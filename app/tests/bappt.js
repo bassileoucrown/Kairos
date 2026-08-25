@@ -139,6 +139,55 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     r = await boss('GET', `/bookings/${booking.id}`);
     ok('the refused change left the meeting alone', mins(r.d.booking) === 60, String(mins(r.d.booking)));
 
+    // --- Where there is room ------------------------------------------------
+    //
+    // The move form used to be two bare boxes: you typed a time, pressed Move,
+    // and found out from a red banner whether anything was already there.
+    head('The day says where there is room:');
+    const dayKey = booking.startAt.slice(0, 10);
+    r = await boss('GET', `/bookings/${booking.id}/openings?date=${dayKey}`);
+    ok('the day comes back', r.s === 200, JSON.stringify(r.d).slice(0, 200));
+    ok('with times to choose from', (r.d.openings || []).length > 0, String((r.d.openings || []).length));
+    ok('and what is already on it', (r.d.busy || []).some((b) => /Ngozi/.test(b.label)),
+      JSON.stringify((r.d.busy || []).map((b) => b.label)));
+    ok('measured for this meeting\'s own length', r.d.minutes === 60, String(r.d.minutes));
+
+    // THE PROPERTY THIS WHOLE FEATURE RESTS ON. A picker that offers a time
+    // the verb then refuses is worse than no picker: it invites the mistake it
+    // was built to prevent. So no opening may overlap a live booking.
+    const busyBookings = (r.d.busy || []).filter((b) => b.kind === 'booking');
+    const bad = (r.d.openings || []).filter((o) => busyBookings.some(
+      (b) => Date.parse(o.startAt) < Date.parse(b.endAt) && Date.parse(o.endAt) > Date.parse(b.startAt),
+    ));
+    ok('and not one of them collides with what is already there',
+      bad.length === 0, JSON.stringify(bad.slice(0, 2)));
+
+    // The appointment's own slot must be offered — it is not in its own way.
+    ok('its own current time is not treated as taken',
+      !(r.d.busy || []).some((b) => b.id === booking.id),
+      JSON.stringify((r.d.busy || []).map((b) => b.id)));
+
+    // AND THE OTHER HALF. The office is not confined to the published hours —
+    // lib/rescheduleBooking.js is explicit about it — so a picker that only
+    // ever offered bookable slots would quietly take that away. Availability
+    // above is 00:00–23:30, so the office day's edges are what to look at.
+    head('And it is not the public slot grid:');
+    ok('the day runs earlier than anyone could book',
+      new Date(r.d.dayStartsAt).getUTCHours() === 6, r.d.dayStartsAt);
+    ok('and later', new Date(r.d.dayEndsAt).getUTCHours() === 22, r.d.dayEndsAt);
+    ok('every offered time says whether a stranger could have taken it',
+      (r.d.openings || []).every((o) => typeof o.withinHours === 'boolean'));
+    // Quarter-hours, not the meeting's own length: the office is fitting
+    // something into a gap, and a gap rarely begins on the half hour.
+    ok('and they step by the quarter hour',
+      (r.d.openings || []).every((o) => new Date(o.startAt).getUTCMinutes() % 15 === 0),
+      JSON.stringify((r.d.openings || []).slice(0, 3).map((o) => o.startAt)));
+
+    head('A day nobody could use says so rather than coming back empty:');
+    r = await boss('GET', `/bookings/${booking.id}/openings?date=not-a-day`);
+    ok('a date that is not a date is refused', r.s === 400, String(r.s));
+    ok('and says so plainly', /not a date/i.test(r.d?.error || ''), r.d?.error);
+
     // --- The assistant's copy of the same page -----------------------------
     head('An assistant reaches the same page and the same verbs:');
     const inv = await boss('POST', '/members', { email: `pa${ID}@x.com`, role: 'chief_of_staff' });
@@ -151,6 +200,9 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     r = await pa('GET', `/pa/${me.id}/bookings/${booking.id}`);
     ok('they get the whole appointment too', r.s === 200 && r.d.booking?.id === booking.id, String(r.s));
     ok('in the principal\'s zone, not their own', r.d.timezone === 'UTC', r.d.timezone);
+    r = await pa('GET', `/pa/${me.id}/bookings/${booking.id}/openings?date=${dayKey}`);
+    ok('and the same read of where there is room', r.s === 200 && (r.d.openings || []).length > 0,
+      JSON.stringify(r.d).slice(0, 160));
     r = await pa('POST', `/pa/${me.id}/bookings/${booking.id}/duration`, { minutes: 45 });
     ok('and can change the length in their principal\'s name', r.s === 200, JSON.stringify(r.d).slice(0, 160));
     ok('which lands', mins(r.d.booking) === 45, String(mins(r.d.booking)));
@@ -161,6 +213,10 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     ok('somebody with no business here gets nothing', r.s === 403, String(r.s));
     r = await outsider('POST', `/pa/${me.id}/bookings/${booking.id}/duration`, { minutes: 15 });
     ok('and cannot stretch a stranger\'s meeting', r.s === 403, String(r.s));
+    // A day's openings are a read of somebody's diary — who is busy when is
+    // exactly what an outsider must not be able to ask for.
+    r = await outsider('GET', `/pa/${me.id}/bookings/${booking.id}/openings?date=${dayKey}`);
+    ok('nor read their day', r.s === 403, String(r.s));
 
     // --- The click ----------------------------------------------------------
     // The whole complaint was that clicking an appointment did nothing. The
@@ -221,6 +277,25 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
 
     r = await boss('GET', `/bookings/${booking.id}`);
     ok('and the diary agrees with the screen', mins(r.d.booking) === 90, String(mins(r.d.booking)));
+
+    head('Moving it shows the day rather than asking you to guess:');
+    await page.click('button:has-text("Move it")');
+    // The picker reads the day before it can draw anything.
+    await page.waitForSelector('.move-picker .slot-grid .slot-btn', { timeout: 20000 });
+    const offered = await page.locator('.move-picker .slot-btn').count();
+    ok('free times are on screen to pick from', offered > 0, String(offered));
+    ok('and the typed time is still there for anything else',
+      (await page.locator('#mv-time').count()) === 1);
+
+    const before = (await boss('GET', `/bookings/${booking.id}`)).d.booking.startAt;
+    await page.click('.move-picker .slot-btn');
+    // The primary Move it inside the picker, not the toggle that opened it.
+    await page.click('.move-picker button.btn-primary:has-text("Move it")');
+    await page.waitForSelector('button:has-text("Change the length")', { timeout: 20000 });
+    r = await boss('GET', `/bookings/${booking.id}`);
+    ok('clicking one moves the appointment there', r.d.booking.startAt !== before,
+      `${before} -> ${r.d.booking.startAt}`);
+    ok('and it keeps the length it had', mins(r.d.booking) === 90, String(mins(r.d.booking)));
 
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
   } finally {

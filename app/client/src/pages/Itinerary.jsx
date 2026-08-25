@@ -9,6 +9,7 @@ import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
 import { useAsk } from '../components/Ask.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
+import MoveAppointment from '../components/MoveAppointment.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -268,7 +269,6 @@ export default function Itinerary() {
   // Which appointment has its notes open. One at a time: the panel is a
   // conversation, not a field, and two of them side by side is noise.
   const [noting, setNoting] = useState(null);
-  const [moveTo, setMoveTo] = useState({ date: '', time: '' });
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -324,16 +324,6 @@ export default function Itinerary() {
   // the sheet merges two kinds of thing. The API wants the booking's own id.
   const bookingIdOf = (e) => String(e.id).replace(/^booking:/, '');
 
-  async function moveBooking(e) {
-    setError('');
-    try {
-      await api.post(`/pa/${ownerId}/bookings/${bookingIdOf(e)}/reschedule`, {
-        startAt: zonedToUtc(moveTo.date, moveTo.time, data?.timezone || 'UTC'),
-      });
-      setMoving(null);
-      load();
-    } catch (err) { setError(err.message); }
-  }
 
   async function cancelBooking(e) {
     setError('');
@@ -583,35 +573,27 @@ export default function Itinerary() {
                   <>
                     <button className="itin-tool" type="button"
                       aria-label={`Move ${e.title}`}
-                      onClick={() => {
-                        setMoving(e.id);
-                        setMoveTo({ date, time: e.startLabel ? '' : '' });
-                      }}>Move</button>
+                      onClick={() => setMoving(e.id)}>Move</button>
                     <button className="itin-tool is-danger" type="button"
                       aria-label={`Cancel ${e.title}`}
                       onClick={() => cancelBooking(e)}>Cancel</button>
                   </>
                 )}
+                {/* The same picker the appointment's own page uses, rather
+                    than a second one that could disagree with it about what
+                    is free. It used to be two bare boxes here: you typed a
+                    time, pressed Move, and learned from a red banner whether
+                    anything was already there. */}
                 {e.source === 'booking' && moving === e.id && (
-                  <span className="itin-move">
-                    <input
-                      type="date"
-                      aria-label="New date"
-                      value={moveTo.date}
-                      onChange={(ev) => setMoveTo((m) => ({ ...m, date: ev.target.value }))}
-                    />
-                    <input
-                      type="time"
-                      aria-label="New time"
-                      value={moveTo.time}
-                      onChange={(ev) => setMoveTo((m) => ({ ...m, time: ev.target.value }))}
-                    />
-                    <button className="itin-tool" type="button"
-                      disabled={!moveTo.date || !moveTo.time}
-                      onClick={() => moveBooking(e)}>Move it</button>
-                    <button className="itin-tool" type="button"
-                      onClick={() => setMoving(null)}>Keep</button>
-                  </span>
+                  <MoveAppointment
+                    ownerId={ownerId}
+                    bookingId={bookingIdOf(e)}
+                    timezone={data?.timezone || 'UTC'}
+                    startAt={e.startAt}
+                    minutes={Math.round((Date.parse(e.endAt) - Date.parse(e.startAt)) / 60000) || 30}
+                    onMoved={() => { setMoving(null); load(); }}
+                    onCancel={() => setMoving(null)}
+                  />
                 )}
                 {e.source === 'booking' && (
                   <button className="itin-tool" type="button"

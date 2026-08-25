@@ -39,14 +39,34 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
  * an authentication failure" — technically true, wholly misleading, and
  * indistinguishable from a real regression at a glance.
  */
-async function postgresIsUp() {
+/**
+ * Is the control database actually there?
+ *
+ * RETRIED, like every other readiness check in this directory. It used to be a
+ * single connect with a four-second timeout, and it went red twice inside an
+ * hour on a box where Postgres was demonstrably up the moment afterwards. Run
+ * on its own it always passed; run after thirty other suites — one of which
+ * has just closed a browser — a single attempt loses its race with the load
+ * and the suite announces that the database is down.
+ *
+ * A precondition that cries wolf is worse than no precondition. It was written
+ * to stop somebody reading a database outage as a product bug, and a flaky one
+ * spends that credibility teaching the reader to ignore it.
+ */
+async function postgresIsUp(attempts = 5) {
   const { Client } = require(`${ROOT}/app/server/node_modules/pg`);
-  const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
-  try {
-    await client.connect();
-    await client.end();
-    return true;
-  } catch { return false; }
+  for (let i = 0; i < attempts; i++) {
+    const client = new Client({ connectionString: GOOD, connectionTimeoutMillis: 4000 });
+    try {
+      await client.connect();
+      await client.end();
+      return true;
+    } catch {
+      await client.end().catch(() => {});
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  return false;
 }
 
 /**

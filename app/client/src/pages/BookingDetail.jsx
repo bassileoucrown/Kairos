@@ -4,7 +4,8 @@ import { api } from '../lib/api.js';
 import AppShell from '../components/AppShell.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
-import { dateKeyInZone, dayLabelInZone, timeLabelInZone, zonedToUtc } from '../lib/timezones.js';
+import MoveAppointment from '../components/MoveAppointment.jsx';
+import { dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 
 /**
  * One appointment, and everything you can do about it.
@@ -36,17 +37,6 @@ function minutesBetween(startAt, endAt) {
   return Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60000);
 }
 
-// What an <input type="time"> wants, read in the principal's zone rather than
-// the browser's. Its own helper because timeLabelInZone is for reading — it
-// returns "9:30 AM", which the field silently refuses.
-function timeValueInZone(iso, timeZone) {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone, hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date(iso));
-  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-  return `${map.hour}:${map.minute}`;
-}
-
 function spanLabel(mins) {
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
@@ -64,7 +54,6 @@ export default function BookingDetail() {
   // Which of the three arrangements is being changed. One at a time: two
   // half-filled forms on screen is a way to send the wrong one.
   const [open, setOpen] = useState(null); // move | length | cancel
-  const [moveTo, setMoveTo] = useState({ date: '', time: '' });
   const [minutes, setMinutes] = useState('');
   const [note, setNote] = useState('');
 
@@ -82,12 +71,6 @@ export default function BookingDetail() {
   function begin(which) {
     setError('');
     setNote('');
-    if (which === 'move' && booking) {
-      setMoveTo({
-        date: dateKeyInZone(booking.startAt, zone),
-        time: timeValueInZone(booking.startAt, zone),
-      });
-    }
     if (which === 'length') setMinutes(String(runs));
     setOpen((o) => (o === which ? null : which));
   }
@@ -170,34 +153,15 @@ export default function BookingDetail() {
 
               {open === 'move' && (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <div className="field" style={{ maxWidth: 200 }}>
-                      <label htmlFor="bd-date">New day</label>
-                      <input id="bd-date" type="date" value={moveTo.date}
-                        onChange={(e) => setMoveTo((m) => ({ ...m, date: e.target.value }))} />
-                    </div>
-                    <div className="field" style={{ maxWidth: 160 }}>
-                      <label htmlFor="bd-time">New time</label>
-                      <input id="bd-time" type="time" value={moveTo.time}
-                        onChange={(e) => setMoveTo((m) => ({ ...m, time: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="bd-move-why">Why (optional)</label>
-                    <input id="bd-move-why" type="text" maxLength={280} value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="The board ran over" />
-                    <p className="hint">
-                      It runs {spanLabel(runs)} either way. They will be emailed the new time.
-                    </p>
-                  </div>
-                  <button className="btn btn-primary btn-sm" type="button"
-                    disabled={busy || !moveTo.date || !moveTo.time}
-                    onClick={() => act('reschedule', {
-                      startAt: zonedToUtc(moveTo.date, moveTo.time, zone), note,
-                    })}>
-                    {busy ? 'Moving…' : 'Move it'}
-                  </button>
+                  <MoveAppointment
+                    ownerId={ownerId}
+                    bookingId={bookingId}
+                    timezone={zone}
+                    startAt={booking.startAt}
+                    minutes={runs}
+                    onMoved={() => { setOpen(null); load(); }}
+                    onCancel={() => setOpen(null)}
+                  />
                 </div>
               )}
 

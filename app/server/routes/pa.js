@@ -18,6 +18,7 @@ const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
+const { openingsFor } = require('../lib/dayOpenings');
 const bookingNotes = require('../lib/bookingNotes');
 const events = require('../lib/bookingEvents');
 
@@ -461,6 +462,20 @@ async function loadPrincipalBooking(req, res, next) {
   req.booking = row;
   next();
 }
+
+// Where there is room in the principal's day. Same answer as the owner's own
+// route, reached differently — see lib/dayOpenings.js.
+router.get('/:ownerId/bookings/:bookingId/openings', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const result = await openingsFor({
+    owner: req.principal,
+    date: req.query.date,
+    minutes: req.query.minutes
+      || Math.round((Date.parse(req.booking.end_at) - Date.parse(req.booking.start_at)) / 60000),
+    excludeBookingId: req.booking.id,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.json(result);
+});
 
 router.get('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipalBooking, async (req, res) => {
   const rows = await bookingNotes.forOffice(req.principal.id, req.booking.id);
