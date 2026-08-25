@@ -17,7 +17,7 @@ const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
-const { rescheduleBooking } = require('../lib/rescheduleBooking');
+const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
 const bookingNotes = require('../lib/bookingNotes');
 const events = require('../lib/bookingEvents');
 
@@ -488,6 +488,34 @@ router.post('/:ownerId/bookings/:bookingId/follow-up', requirePaAccess, loadPrin
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.status(201).json({ note: result.note });
+});
+
+router.post('/:ownerId/bookings/:bookingId/duration', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const result = await setDuration({
+    booking: req.booking,
+    owner: req.principal,
+    minutes: req.body?.minutes,
+    movedByUserId: req.user.id,
+    note: String(req.body?.note || '').trim().slice(0, 280),
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.json({ booking: await history.get(req.principal.id, req.booking.id) });
+});
+
+// The one page an assistant needs for an appointment, same as the owner's.
+//
+// The principal's timezone travels with it. Everything on that page is a time,
+// and the assistant reading it is frequently not in the same country as the
+// diary they are keeping — a page that quietly rendered in the browser's zone
+// would move every appointment on screen by the offset between them.
+router.get('/:ownerId/bookings/:bookingId', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  res.json({
+    booking: await history.get(req.principal.id, req.booking.id),
+    notes: (await bookingNotes.forOffice(req.principal.id, req.booking.id)).map(bookingNotes.serialize),
+    trail: await history.trail(req.principal.id, req.booking.id),
+    timezone: req.principal.timezone || 'UTC',
+    principal: { id: req.principal.id, name: req.principal.name },
+  });
 });
 
 function emptySections() {

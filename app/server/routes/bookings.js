@@ -4,7 +4,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
-const { rescheduleBooking } = require('../lib/rescheduleBooking');
+const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
 const notes = require('../lib/bookingNotes');
 
 // A principal's own bookings. The delegated equivalent is in routes/pa.js and
@@ -96,6 +96,38 @@ router.post('/:id/follow-up', loadOwn, async (req, res) => {
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.status(201).json({ note: result.note });
+});
+
+router.post('/:id/duration', loadOwn, async (req, res) => {
+  const result = await setDuration({
+    booking: req.booking,
+    owner: req.user,
+    minutes: req.body?.minutes,
+    movedByUserId: req.user.id,
+    note: String(req.body?.note || '').trim().slice(0, 280),
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.json({ booking: { id: result.booking.id, startAt: result.booking.start_at, endAt: result.booking.end_at } });
+});
+
+/**
+ * One appointment, everything about it.
+ *
+ * The office had no such place. Cancelling lived in the Bookings tab, moving
+ * on the day sheet, notes in a panel on two other screens — so "edit this
+ * appointment" meant knowing which screen happened to carry the verb you
+ * wanted. One request, one page, one answer to "what is this meeting and what
+ * can I do about it".
+ */
+router.get('/:id', loadOwn, async (req, res) => {
+  const booking = await history.get(req.user.id, req.booking.id);
+  res.json({
+    booking,
+    notes: (await notes.forOffice(req.user.id, req.booking.id)).map(notes.serialize),
+    trail: await history.trail(req.user.id, req.booking.id),
+    timezone: req.user.timezone || 'UTC',
+    principal: { id: req.user.id, name: req.user.name },
+  });
 });
 
 module.exports = router;

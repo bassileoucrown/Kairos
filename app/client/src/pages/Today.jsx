@@ -128,7 +128,15 @@ function untilLabel(startAt) {
 // assistant who did the asking. The Itinerary used to render its own second
 // pill for the assistant's side, so a row could carry both at once and tell
 // one reader two opposite things about the same item.
-export function ScheduleEntry({ e, viewerIsPrincipal = true }) {
+/**
+ * `href` makes the title the way in to whatever this entry is.
+ *
+ * The title rather than the whole row, because the row already carries a Join
+ * button and a link with a button inside it is a coin toss about which one you
+ * hit. Only appointments have somewhere to go today; an itinerary item is
+ * edited where it lives, so it is passed nothing and reads as plain text.
+ */
+export function ScheduleEntry({ e, viewerIsPrincipal = true, href = null }) {
   return (
     <div className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
       <div className="sched-time">
@@ -138,7 +146,7 @@ export function ScheduleEntry({ e, viewerIsPrincipal = true }) {
       <span className="sched-icon" aria-hidden="true">{KIND_ICON[e.kind] || '•'}</span>
       <div className="sched-main">
         <div className="sched-title">
-          {e.title}
+          {href ? <Link className="sched-title-link" to={href}>{e.title}</Link> : e.title}
           {e.status === 'proposed' && (
             <span className="pill is-warn sched-pill">
               {viewerIsPrincipal ? 'Awaiting you' : 'Waiting on them'}
@@ -404,7 +412,12 @@ export default function Today() {
                     {row.live && !row.running && (
                       <span className="day-next-flag">Next {untilLabel(e.startAt)}</span>
                     )}
-                    <ScheduleEntry e={e} />
+                    <ScheduleEntry
+                      e={e}
+                      href={e.source === 'booking'
+                        ? `/appointments/${data.principal.id}/${String(e.id).replace(/^booking:/, '')}`
+                        : null}
+                    />
                     {e.source === 'itinerary' && row.live && (
                       <button
                         className="today-late"

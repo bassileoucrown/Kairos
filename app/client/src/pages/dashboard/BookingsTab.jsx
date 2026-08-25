@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
@@ -165,7 +166,15 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
                 )}
                 {dayLabelInZone(b.startAt, zone)} · {timeLabelInZone(b.startAt, zone)}
               </div>
-              <div className="meta">{b.meetingTypeName} with {b.bookerName} ({b.bookerEmail})</div>
+              <div className="meta">
+                {/* The list answers "what have we got"; the page behind this
+                    answers "and what do I do about it". Everything below is a
+                    summary, so the way in is on the meeting's own name. */}
+                <Link className="sched-title-link" to={`/appointments/${subjectId}/${b.id}`}>
+                  {b.meetingTypeName}
+                </Link>
+                {' with '}{b.bookerName} ({b.bookerEmail})
+              </div>
               <div className="meta">
                 {b.formatLabel}
                 {/* The office is regularly asked whether somebody was given an

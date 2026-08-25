@@ -488,7 +488,11 @@ export default function Itinerary() {
                 + (e.status === 'proposed' ? ' is-proposed' : '')}
               key={e.id}
             >
-              <ScheduleEntry e={e} viewerIsPrincipal={viewerIsPrincipal} />
+              <ScheduleEntry
+                e={e}
+                viewerIsPrincipal={viewerIsPrincipal}
+                href={e.source === 'booking' ? `/appointments/${ownerId}/${bookingIdOf(e)}` : null}
+              />
               {e.source === 'booking' && noting === e.id && (
                 <BookingNotes ownerId={ownerId} bookingId={bookingIdOf(e)} onChanged={load} />
               )}

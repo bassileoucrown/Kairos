@@ -113,4 +113,90 @@ async function rescheduleBooking({ booking, owner, startAt, movedByUserId = null
   return { ok: true, booking: updated };
 }
 
-module.exports = { rescheduleBooking, clashingBooking };
+/**
+ * Same meeting, same start, different length.
+ *
+ * ITS OWN ACT, not a parameter on the move. Moving a meeting and re-lengthening
+ * it are different decisions with different consequences, and folding the
+ * second into the first means somebody picking a new time can turn a
+ * half-hour into an hour without noticing they did. They stay apart, and each
+ * says what it is in the trail.
+ *
+ * The same rule about the published hours applies — an office may run a
+ * meeting long — and the same rule about clashes: growing into whatever sits
+ * after it is exactly the mistake worth refusing, and the commonest one, since
+ * the extra time lands on the very slot most likely to be taken.
+ */
+const MIN_MINUTES = 5;
+const MAX_MINUTES = 480;
+
+async function setDuration({ booking, owner, minutes, movedByUserId = null, note = '' }) {
+  if (booking.status === 'cancelled' || booking.status === 'declined') {
+    return { ok: false, status: 400, error: 'This appointment is closed.' };
+  }
+  const mins = Number(minutes);
+  if (!Number.isInteger(mins) || mins < MIN_MINUTES || mins > MAX_MINUTES) {
+    return {
+      ok: false,
+      status: 400,
+      error: `A meeting runs between ${MIN_MINUTES} and ${MAX_MINUTES} minutes.`,
+    };
+  }
+
+  const start = new Date(booking.start_at);
+  const wasMinutes = Math.round((new Date(booking.end_at) - start) / 60000);
+  if (wasMinutes === mins) {
+    return { ok: false, status: 400, error: `It already runs ${mins} minutes.` };
+  }
+  const end = new Date(start.getTime() + mins * 60000);
+
+  const clash = await clashingBooking({
+    ownerId: owner.id,
+    bookingId: booking.id,
+    startAt: booking.start_at,
+    endAt: end.toISOString(),
+  });
+  if (clash) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Running that long would overlap ${clash.meeting_type_name} with ${clash.booker_name}.`,
+    };
+  }
+
+  await events.record({
+    bookingId: booking.id,
+    ownerId: owner.id,
+    kind: events.KINDS.relengthened,
+    actorUserId: movedByUserId,
+    fromValue: String(wasMinutes),
+    toValue: String(mins),
+    note,
+  });
+  await db.prepare('UPDATE bookings SET end_at = ? WHERE id = ?').run(end.toISOString(), booking.id);
+
+  // The booker is told. A meeting that quietly runs an extra half hour is a
+  // change to their diary that they find out about by overrunning.
+  const meetingType = await db.prepare('SELECT name FROM meeting_types WHERE id = ?')
+    .get(booking.meeting_type_id);
+  const when = rangeForEmail(booking.start_at, end.toISOString(), booking.booker_timezone || owner.timezone);
+  await sendEmail({
+    ownerId: owner.id,
+    sentByUserId: movedByUserId,
+    toEmail: booking.booker_email,
+    relatedBookingId: booking.id,
+    category: 'transactional',
+    subject: `Now ${mins} minutes: ${meetingType?.name || 'your meeting'} with ${owner.name}`,
+    body: `Hi ${booking.booker_name},\n\n${owner.name}'s office has changed the length of your meeting.`
+      + `\n\nIt now runs ${when} (${booking.booker_timezone || owner.timezone}).`
+      + (note ? `\n\n"${note}"` : '')
+      + `\n\nIf that does not work: /book/manage/${booking.id}`,
+  });
+
+  const updated = await db.prepare('SELECT * FROM bookings WHERE id = ?').get(booking.id);
+  return { ok: true, booking: updated };
+}
+
+module.exports = {
+  rescheduleBooking, setDuration, clashingBooking, MIN_MINUTES, MAX_MINUTES,
+};

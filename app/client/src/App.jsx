@@ -21,6 +21,7 @@ import ThreadView from './pages/spaces/ThreadView.jsx';
 import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
+import BookingDetail from './pages/BookingDetail.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
 import Workspace from './pages/Workspace.jsx';
@@ -145,6 +146,10 @@ export default function App() {
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
+      {/* Whose diary it is travels in the path rather than in stored state:
+          an assistant who mails this link to a colleague, or opens it in a
+          second tab, must land on the same appointment either way. */}
+      <Route path="/appointments/:ownerId/:bookingId" element={<RequireAuth><BookingDetail /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />
       <Route path="/concierge" element={<RequireAuth><Concierge /></RequireAuth>} />

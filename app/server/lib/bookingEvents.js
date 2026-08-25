@@ -35,6 +35,10 @@ const KINDS = {
   declined: 'declined',
   cancelled: 'cancelled',
   rescheduled: 'rescheduled',
+  // Same meeting, same start, different length. Kept apart from a reschedule
+  // because they answer different questions later: "when did this move" and
+  // "when did this become an hour" are not the same audit.
+  relengthened: 'relengthened',
 };
 
 /**
@@ -100,6 +104,10 @@ function headline(event, { formatLabel, whenLabel }) {
       return 'Declined';
     case KINDS.cancelled:
       return 'Cancelled';
+    case KINDS.relengthened:
+      // Both lengths, for the same reason a reschedule carries both times: the
+      // old one exists nowhere else once the row is updated.
+      return `Length changed from ${from} to ${to} minutes`;
     case KINDS.rescheduled:
       // The whole reason for the table. Both times, spelled out, because
       // "moved" without the old time is the loss this was built to stop.
