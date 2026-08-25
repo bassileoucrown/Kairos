@@ -85,6 +85,40 @@ CREATE TABLE IF NOT EXISTS bookings (
   created_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_owner_time ON bookings(owner_id, start_at);
+
+-- Notes on an appointment, in two registers.
+--
+-- THE MANAGE LINK IS A BEARER TOKEN. /book/manage/<id> asks for no password;
+-- holding the URL is what makes you the booker. That is fine for what it was
+-- built for — moving or cancelling your own meeting — and it decides
+-- everything about notes: anything a booker can read is readable by anyone
+-- they forward the link to, deliberately or not.
+--
+-- So a note is one of two things and never both:
+--
+--   office  — the office's own preparation. What the principal needs before
+--             they walk in, which car, what was agreed internally. The booker
+--             never sees it and no endpoint they can reach returns it.
+--   shared  — said TO the booker. Directions, a follow-up after the meeting,
+--             their reply. Written knowing a stranger may read it.
+--
+-- Kept as one table with a column rather than two tables, because the office
+-- reads them together as one conversation about one appointment, and two
+-- tables would mean two queries and a merge that could drift out of order.
+CREATE TABLE IF NOT EXISTS booking_notes (
+  id           TEXT PRIMARY KEY,
+  booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- office | shared
+  visibility   TEXT NOT NULL DEFAULT 'office',
+  -- Who wrote it. author_user_id for anyone in the office; NULL when the
+  -- booker wrote it, since they have no account and are identified by the
+  -- booking itself.
+  author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  body         TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_booking_notes ON booking_notes(booking_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_meeting_type ON bookings(meeting_type_id);
 
 -- ============================================================

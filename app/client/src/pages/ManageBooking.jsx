@@ -55,17 +55,31 @@ function RescheduleForm({ booking, onDone, onError }) {
 export default function ManageBooking() {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);
+  const [notes, setNotes] = useState([]);
+  const [saying, setSaying] = useState('');
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('view'); // view | reschedule
   const [justUpdated, setJustUpdated] = useState(false);
 
   function load() {
     api.get(`/public/bookings/${id}`)
-      .then((data) => setBooking(data.booking))
+      .then((data) => { setBooking(data.booking); setNotes(data.notes || []); })
       .catch((err) => setError(err.message));
   }
 
   useEffect(load, [id]);
+
+  async function say(e) {
+    e.preventDefault();
+    setError('');
+    setSending(true);
+    try {
+      await api.post(`/public/bookings/${id}/notes`, { body: saying });
+      setSaying('');
+      load();
+    } catch (err) { setError(err.message); } finally { setSending(false); }
+  }
 
   async function handleCancel() {
     if (!window.confirm('Cancel this booking?')) return;
@@ -202,6 +216,40 @@ export default function ManageBooking() {
                 Cancel reschedule
               </button>
             </>
+          )}
+
+          {/* A line to the office, open for as long as the appointment is.
+              Shown once there is something to read or something to say — a
+              booking nobody has written on should not carry an empty box. */}
+          {booking.status !== 'cancelled' && booking.status !== 'declined' && (
+            <div className="booking-line">
+              <h3>Messages</h3>
+              {notes.length === 0 && (
+                <p className="hint">
+                  Anything you need {booking.ownerName}'s office to know before the meeting —
+                  or afterwards — can go here.
+                </p>
+              )}
+              {notes.map((n) => (
+                <div key={n.id} className={'note-line' + (n.fromBooker ? ' is-mine' : '')}>
+                  <div className="note-who">
+                    {n.fromBooker ? 'You' : (n.authorName || `${booking.ownerName}'s office`)}
+                  </div>
+                  <div className="note-body">{n.body}</div>
+                </div>
+              ))}
+              <form onSubmit={say}>
+                <textarea
+                  aria-label="A note to the office"
+                  value={saying}
+                  onChange={(e) => setSaying(e.target.value)}
+                  placeholder="Anything they should know…"
+                />
+                <button className="btn btn-secondary btn-sm" type="submit" disabled={sending || !saying.trim()}>
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              </form>
+            </div>
           )}
         </div>
       </div>

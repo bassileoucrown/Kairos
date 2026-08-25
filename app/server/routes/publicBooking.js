@@ -8,9 +8,20 @@ const { getOpenSlots, windowDaysFor } = require('../lib/availability');
 const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
 const { formatForEmail, rangeForEmail } = require('../lib/format');
+const notes = require('../lib/bookingNotes');
+const { limit, clientIp } = require('../lib/rateLimit');
 
 const router = asyncRouter();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Anyone holding a manage link can write here, without an account, and every
+// note mails the office. That is a small open door and it gets a limit.
+const bookerNoteLimiter = limit({
+  limit: 20,
+  windowMs: 60 * 60 * 1000,
+  keys: (req) => [`booking-note:${req.params.id}`, `booking-note-ip:${clientIp(req)}`],
+  message: 'Too many notes for one hour. Try again later.',
+});
 
 async function getOwnerBySlug(slug) {
   return await db.prepare('SELECT * FROM users WHERE slug = ?').get(slug);
@@ -281,7 +292,54 @@ function serializeBookingDetail(b) {
 router.get('/bookings/:id', async (req, res) => {
   const booking = await getBookingDetail(req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-  res.json({ booking: serializeBookingDetail(booking) });
+  res.json({
+    booking: serializeBookingDetail(booking),
+    // Shared notes only, and enforced in lib/bookingNotes rather than here:
+    // this endpoint needs no password, so an office note reaching it would be
+    // readable by anyone the link was ever forwarded to.
+    notes: (await notes.forBooker(booking.id)).map(notes.serialize),
+  });
+});
+
+/**
+ * The booker's half of the line.
+ *
+ * OPEN FOR AS LONG AS THE APPOINTMENT IS. A meeting that has been cancelled is
+ * over as a conversation too — anything after that is a new arrangement, not a
+ * message about this one — so the line closes with it rather than staying open
+ * on a dead booking for anybody still holding the link.
+ *
+ * The office is emailed, because a message nobody sees is worse than no
+ * message: the booker has said something and is now waiting.
+ */
+router.post('/bookings/:id/notes', bookerNoteLimiter, async (req, res) => {
+  const booking = await getBookingDetail(req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+  if (booking.status === 'cancelled' || booking.status === 'declined') {
+    return res.status(400).json({ error: 'This appointment is closed. Book a new time to get in touch.' });
+  }
+
+  const owner = await db.prepare('SELECT * FROM users WHERE slug = ?').get(booking.owner_slug);
+  const result = await notes.add({
+    bookingId: booking.id,
+    ownerId: owner.id,
+    visibility: 'shared',
+    // No account, so no author id — the booking says who they are.
+    authorUserId: null,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  await sendEmail({
+    ownerId: owner.id,
+    toEmail: owner.email,
+    relatedBookingId: booking.id,
+    category: 'transactional',
+    subject: `${booking.booker_name} left a note about ${booking.meeting_type_name}`,
+    body: `${booking.booker_name} (${booking.booker_email}) wrote:`
+      + `\n\n${result.note.body}`,
+  });
+  res.status(201).json({ note: result.note });
 });
 
 // The booker's half of the negotiation.

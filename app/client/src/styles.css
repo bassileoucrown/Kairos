@@ -2562,3 +2562,23 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    somebody needs to choose a new time. */
 .itin-move { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .itin-move input { width: auto; padding: 4px 6px; font-size: 0.8rem; }
+
+/* ---- What is said about an appointment ----
+   Two registers, and the eye has to tell them apart without reading the
+   label. An office note is the quiet one: it is preparation. A shared note
+   carries the accent, because it left the building. */
+.booking-notes { margin: 10px 0 4px; padding: 10px 12px; border-left: 2px solid var(--border); }
+.booking-notes textarea { min-height: 60px; font-size: 0.85rem; }
+.note-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.note-line { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.note-line:last-of-type { border-bottom: 0; }
+.note-who { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+.note-tag { font-weight: 500; }
+.note-line.is-shared .note-tag { color: var(--accent); }
+.note-body { font-size: 0.86rem; white-space: pre-wrap; }
+
+/* The booker's side of the same line. Theirs sit apart from the office's so a
+   conversation reads as one. */
+.booking-line { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
+.booking-line h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.booking-line .note-line.is-mine { padding-left: 12px; border-left: 2px solid var(--accent); }

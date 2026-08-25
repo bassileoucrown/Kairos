@@ -5,6 +5,7 @@ const { requireAuth } = require('../lib/auth');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking } = require('../lib/rescheduleBooking');
+const notes = require('../lib/bookingNotes');
 
 // A principal's own bookings. The delegated equivalent is in routes/pa.js and
 // both go through lib/bookingHistory.js, so the two lists cannot disagree
@@ -50,6 +51,51 @@ router.post('/:id/reschedule', async (req, res) => {
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ booking: { id: result.booking.id, startAt: result.booking.start_at, endAt: result.booking.end_at } });
+});
+
+// --- What is said about an appointment ---------------------------------
+//
+// The office sees both registers; see lib/bookingNotes.js for why that
+// distinction is load-bearing rather than cosmetic.
+
+async function loadOwn(req, res, next) {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Booking not found.' });
+  req.booking = row;
+  next();
+}
+
+router.get('/:id/notes', loadOwn, async (req, res) => {
+  const rows = await notes.forOffice(req.user.id, req.booking.id);
+  res.json({ notes: rows.map(notes.serialize) });
+});
+
+router.post('/:id/notes', loadOwn, async (req, res) => {
+  const result = await notes.add({
+    bookingId: req.booking.id,
+    ownerId: req.user.id,
+    // Defaults to the office's own register. Somebody adding a note about a
+    // meeting is preparing for it far more often than they are writing to the
+    // person they are meeting, and the safer of the two is the right default:
+    // a private note shown by mistake is recoverable, one sent is not.
+    visibility: req.body?.visibility || 'office',
+    authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
+});
+
+router.post('/:id/follow-up', loadOwn, async (req, res) => {
+  const result = await notes.followUp({
+    booking: req.booking,
+    owner: req.user,
+    authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
 });
 
 module.exports = router;

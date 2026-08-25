@@ -8,6 +8,7 @@ import { ScheduleEntry, KIND_ICON, shapeOf, span } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
 import { zonedToUtc } from '../lib/timezones.js';
 import { useAsk } from '../components/Ask.jsx';
+import BookingNotes from '../components/BookingNotes.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -264,6 +265,9 @@ export default function Itinerary() {
   // Which appointment is mid-move, and to when. A booking is somebody else's
   // diary too, so moving one is done deliberately rather than by dragging.
   const [moving, setMoving] = useState(null);
+  // Which appointment has its notes open. One at a time: the panel is a
+  // conversation, not a field, and two of them side by side is noise.
+  const [noting, setNoting] = useState(null);
   const [moveTo, setMoveTo] = useState({ date: '', time: '' });
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
@@ -485,6 +489,9 @@ export default function Itinerary() {
               key={e.id}
             >
               <ScheduleEntry e={e} viewerIsPrincipal={viewerIsPrincipal} />
+              {e.source === 'booking' && noting === e.id && (
+                <BookingNotes ownerId={ownerId} bookingId={bookingIdOf(e)} onChanged={load} />
+              )}
 
               <div className="itin-actions no-print">
                 {mine && !viewerIsPrincipal && e.status === 'draft' && (
@@ -601,6 +608,13 @@ export default function Itinerary() {
                     <button className="itin-tool" type="button"
                       onClick={() => setMoving(null)}>Keep</button>
                   </span>
+                )}
+                {e.source === 'booking' && (
+                  <button className="itin-tool" type="button"
+                    aria-label={`Notes on ${e.title}`}
+                    onClick={() => setNoting((n) => (n === e.id ? null : e.id))}>
+                    {noting === e.id ? 'Hide notes' : 'Notes'}
+                  </button>
                 )}
                 {e.source === 'booking' && <span className="pill">From a booking</span>}
               </div>

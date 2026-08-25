@@ -18,6 +18,7 @@ const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking } = require('../lib/rescheduleBooking');
+const bookingNotes = require('../lib/bookingNotes');
 const events = require('../lib/bookingEvents');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -448,6 +449,45 @@ router.post('/:ownerId/bookings/:bookingId/reschedule', requirePaAccess, async (
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ booking: await history.get(req.principal.id, row.id) });
+});
+
+// The same three, delegated. An assistant preparing a principal for a meeting
+// is the ordinary case rather than the exception, so this is not a narrower
+// version of the owner's — it is the same one, reached differently.
+async function loadPrincipalBooking(req, res, next) {
+  const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.bookingId, req.principal.id);
+  if (!row) return res.status(404).json({ error: 'Booking not found.' });
+  req.booking = row;
+  next();
+}
+
+router.get('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const rows = await bookingNotes.forOffice(req.principal.id, req.booking.id);
+  res.json({ notes: rows.map(bookingNotes.serialize) });
+});
+
+router.post('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const result = await bookingNotes.add({
+    bookingId: req.booking.id,
+    ownerId: req.principal.id,
+    visibility: req.body?.visibility || 'office',
+    authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
+});
+
+router.post('/:ownerId/bookings/:bookingId/follow-up', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const result = await bookingNotes.followUp({
+    booking: req.booking,
+    owner: req.principal,
+    authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
 });
 
 function emptySections() {

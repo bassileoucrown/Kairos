@@ -90,7 +90,11 @@ async function onboard(p, name, email, roleLabel) {
 
     // --- The reader gets it, with a badge ---
     await reader.goto(`${BASE}/today`);
-    await reader.waitForSelector('.nav-item', { timeout: 15000 });
+    // Waited for the item this assertion is ABOUT, not for the first item to
+    // appear. The rail paints in order, so waiting on '.nav-item' returns as
+    // soon as "The day" exists and the text read a moment later was just that
+    // — a race that only showed up on the slower Postgres board.
+    await reader.waitForSelector('.app-nav a:has-text("Notices")', { timeout: 15000 });
     const nav = await reader.locator('.app-nav nav').innerText();
     ok('the rail carries Notices with an unread badge',
       nav.includes('Notices') && /Notices\s*\n?1/.test(nav), nav);
