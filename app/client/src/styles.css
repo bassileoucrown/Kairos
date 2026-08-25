@@ -787,7 +787,7 @@ textarea { resize: vertical; min-height: 70px; }
 .app-header h1 { font-size: 1.25rem; margin: 0; }
 .app-header-sub { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted); }
 .app-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.app-body { padding: 22px 28px 60px; max-width: 1100px; width: 100%; }
+.app-body { padding: 22px 28px 96px; max-width: 1100px; width: 100%; }
 
 /* --- Declared, but not open yet ---------------------------------------- */
 /* Marked in the rail as well as on the page: somebody deciding whether to
@@ -836,7 +836,7 @@ textarea { resize: vertical; min-height: 70px; }
   .nav-close { display: block; }
   .nav-toggle { display: block; }
   .nav-scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 30; }
-  .app-body { padding: 18px 16px 60px; }
+  .app-body { padding: 18px 16px 104px; }
   .app-header { padding: 14px 16px; }
 }
 
@@ -2648,3 +2648,73 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 /* The quick-add wherever you happen to be when the thought arrives. */
 .pad-jot { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 .pad-jot textarea { flex: 1; min-width: 200px; }
+
+/* ── The pad, within reach ──────────────────────────────────────────────
+   Bottom-right, because that is the thumb arc on a phone and because nothing
+   else is there — Kairos has no bottom bar, the rail is a drawer on the left.
+   .app-body reserves more bottom padding than the dock is tall, so the last
+   row of any list clears it and the button never covers something you need to
+   read or tap. See components/PadDock.jsx for the rest of the reasoning. */
+
+.pad-dock-btn {
+  position: fixed;
+  right: 20px;
+  /* Above the home indicator on a phone, not under it. */
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 17px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text);
+  font-size: 0.86rem; font-weight: 600;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: padding 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+.pad-dock-btn:hover,
+.pad-dock-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+/* Reading, not writing: shrink to a quiet dot on the way down the page and
+   come back on the way up. The label is hidden rather than the whole control,
+   so it never disappears from under a thumb already reaching for it. */
+.pad-dock-btn.is-shrunk { padding: 11px 13px; }
+.pad-dock-btn.is-shrunk .pad-dock-label { display: none; }
+.pad-dock-btn.is-saved { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+/* Motion is a nicety; the dock working is not. Anybody who has asked for less
+   of it gets a control that simply sits still. */
+@media (prefers-reduced-motion: reduce) {
+  .pad-dock-btn { transition: none; }
+}
+
+.pad-dock-open {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  width: min(380px, calc(100vw - 40px));
+  background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+.pad-dock-open textarea { margin-bottom: 8px; }
+.pad-dock-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pad-dock-row select { width: auto; }
+
+/* Only on a phone, where the composer covers enough of the screen that the
+   way out has to be obvious. On a desktop it is a small card in a corner and
+   dimming the whole page for it would be theatre. */
+.pad-dock-scrim { display: none; }
+@media (max-width: 560px) {
+  .pad-dock-scrim {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.35); z-index: 50;
+  }
+  /* Full width along the bottom edge: the keyboard is about to take the lower
+     half of the screen, so the composer sits as high and as wide as it can. */
+  .pad-dock-open { right: 12px; left: 12px; width: auto; bottom: 12px; }
+}
+
+/* Printing a day sheet should not print a button. */
+@media print { .pad-dock-btn, .pad-dock-open, .pad-dock-scrim { display: none; } }

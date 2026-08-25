@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
 import TimeUp from './TimeUp.jsx';
+import PadDock from './PadDock.jsx';
 
 // One navigation for the whole app.
 //
@@ -400,6 +401,14 @@ export default function AppShell({ children, title, actions, active }) {
         </header>
         <div className="app-body">{children}</div>
       </main>
+
+      {/* On every screen inside the app, and — because it lives here rather
+          than in each page — on none of the ones outside it: signing in, a
+          stranger's booking page, and the driver's card do not render an
+          AppShell, so they cannot accidentally sprout a pad.
+          Not on the pad's own screen, which already has a composer at the top;
+          two on one page would be a choice nobody asked for. */}
+      {location.pathname !== '/pad' && <PadDock ownerId={activeId} />}
     </div>
   );
 }
