@@ -83,10 +83,19 @@ async function add({ bookingId, ownerId, visibility, authorUserId = null, body }
  *
  * Deliberately its own function rather than "a shared note that happens to be
  * sent". A follow-up is the one note somebody is waiting on — what was agreed,
- * what is owed, who does what next — and if it only appeared on a page the
- * booker has no reason to revisit, it would not arrive. So it is written to
- * the record AND emailed, and the email carries the text rather than telling
- * them to go and look: this one was composed for them.
+ * what is owed, who does what next — so it must actually reach them, which is
+ * why it mails at all.
+ *
+ * THE WORDS STAY IN THE LINE; THE EMAIL IS THE KNOCK. An earlier version put
+ * the text in the email, on the reasoning that the booker has no cause to
+ * revisit a page. That was wrong twice over. It contradicts how the rest of
+ * Kairos treats a conversation — a mention never quotes a thread into an
+ * inbox — and, worse, an email carrying the message invites an email REPLY,
+ * which lands in the owner's mailbox and leaves the product entirely. The
+ * office then has half a conversation in Kairos and half in Outlook.
+ *
+ * A link keeps it in one place, in order, beside the appointment it is about,
+ * and the booker's answer arrives where somebody will see it.
  */
 async function followUp({ booking, owner, authorUserId, body }) {
   const added = await add({
@@ -108,8 +117,8 @@ async function followUp({ booking, owner, authorUserId, body }) {
     relatedBookingId: booking.id,
     category: 'transactional',
     subject: `Following up: ${meetingType?.name || 'your meeting'} with ${owner.name}`,
-    body: `Hi ${booking.booker_name},\n\nFollowing up on ${when}.\n\n${added.note.body}`
-      + `\n\nYou can reply here: /book/manage/${booking.id}`,
+    body: `Hi ${booking.booker_name},\n\n${owner.name}'s office has followed up on ${when}.`
+      + `\n\nRead it and reply here: /book/manage/${booking.id}`,
   });
   return added;
 }

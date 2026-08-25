@@ -336,8 +336,11 @@ router.post('/bookings/:id/notes', bookerNoteLimiter, async (req, res) => {
     relatedBookingId: booking.id,
     category: 'transactional',
     subject: `${booking.booker_name} left a note about ${booking.meeting_type_name}`,
-    body: `${booking.booker_name} (${booking.booker_email}) wrote:`
-      + `\n\n${result.note.body}`,
+    // Same rule in this direction: the note lives on the appointment, and the
+    // mail says to go and read it. Quoting it here would invite a reply by
+    // email, which is precisely the half-a-conversation this avoids.
+    body: `${booking.booker_name} (${booking.booker_email}) left a note on their `
+      + `${booking.meeting_type_name}.\n\nRead it with the appointment in Kairos.`,
   });
   res.status(201).json({ note: result.note });
 });

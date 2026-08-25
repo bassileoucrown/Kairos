@@ -217,6 +217,9 @@ export default function Today() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [lateItem, setLateItem] = useState(null);
+  // Today is where the office actually stands each morning, so the line to a
+  // booker belongs here too rather than only on the planner.
+  const [noting, setNoting] = useState(null);
 
   async function load() {
     const id = await resolveActivePrincipal(user);
@@ -411,6 +414,22 @@ export default function Today() {
                       >
                         Running late
                       </button>
+                    )}
+                    {e.source === 'booking' && (
+                      <button
+                        className="today-late"
+                        type="button"
+                        aria-label={`Notes on ${e.title}`}
+                        onClick={() => setNoting((n) => (n === e.id ? null : e.id))}
+                      >
+                        {noting === e.id ? 'Hide notes' : 'Notes'}
+                      </button>
+                    )}
+                    {e.source === 'booking' && noting === e.id && (
+                      <BookingNotes
+                        ownerId={data.principal.id}
+                        bookingId={String(e.id).replace(/^booking:/, '')}
+                      />
                     )}
                   </li>
                 );

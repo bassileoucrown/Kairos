@@ -114,9 +114,11 @@ const SECRET = 'He always runs late — tell the driver 20 minutes early.';
     ok('their note is accepted', r.s === 201, JSON.stringify(r.d).slice(0, 140));
     ok('and is marked as theirs, not the office\'s', r.d.note.fromBooker === true);
     r = await boss('GET', '/emails');
-    ok('the office is emailed, because somebody is now waiting',
-      (r.d.emails || []).some((e) => /left a note/i.test(e.subject || '')),
+    const knock = (r.d.emails || []).find((e) => /left a note/i.test(e.subject || ''));
+    ok('the office is emailed, because somebody is now waiting', !!knock,
       JSON.stringify((r.d.emails || []).map((e) => e.subject)).slice(0, 200));
+    ok('and that mail does not carry the note either',
+      !/Understood, thank you/.test(knock?.body || ''), (knock?.body || '').slice(0, 160));
 
     r = await boss('GET', `/bookings/${bookingId}/notes`);
     ok('the office reads both registers as one conversation',
@@ -136,10 +138,17 @@ const SECRET = 'He always runs late — tell the driver 20 minutes early.';
     const followUp = (r.d.emails || []).find((e) => /^Following up:/.test(e.subject || ''));
     ok('it is emailed rather than left on a page they may never revisit', !!followUp,
       JSON.stringify((r.d.emails || []).map((e) => e.subject)).slice(0, 240));
-    // A follow-up is the one note somebody is waiting on, so the email carries
-    // the words rather than a link to go and find them.
-    ok('and the email carries what was said',
-      /draft by Friday/.test(followUp?.body || ''), (followUp?.body || '').slice(0, 120));
+    // The email is the knock, not the message. Quoting it would put half the
+    // conversation in an inbox and invite a reply that never reaches Kairos.
+    ok('and the email does NOT carry the words',
+      !/draft by Friday/.test(followUp?.body || ''), (followUp?.body || '').slice(0, 160));
+    ok('it points at the line instead',
+      /book\/manage\//.test(followUp?.body || ''), (followUp?.body || '').slice(0, 160));
+    // Which means the words have to actually be in the line.
+    r = await anon('GET', `/public/bookings/${bookingId}`);
+    ok('and the booker finds them there',
+      (r.d.notes || []).some((n) => /draft by Friday/.test(n.body)),
+      JSON.stringify(r.d.notes).slice(0, 200));
 
     // --- An assistant does all of it ---------------------------------------
     head('An assistant can do all of this for their principal:');
