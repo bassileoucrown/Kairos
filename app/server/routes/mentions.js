@@ -7,6 +7,7 @@ const mentions = require('../lib/mentions');
 const { sendEmail } = require('../lib/email');
 const { limit, clientIp } = require('../lib/rateLimit');
 const { resolveAccess, spaceAudience } = require('../lib/spaceAccess');
+const reachable = require('../lib/reachable');
 
 const router = asyncRouter();
 
@@ -121,20 +122,21 @@ router.get('/:ownerId/lookup', requireAuth, requirePaAccess, async (req, res) =>
 
   // Everyone the caller may address: their principals and the people who
   // support them, plus accepted peer connections.
+  //
+  // The set comes from lib/reachable.js rather than being spelled out here,
+  // because it also decides whether handing somebody a note is allowed. When
+  // those were two queries they drifted: this list offered peer connections
+  // and the check refused them, so choosing a name the product had just
+  // suggested produced "You do not share an office with them".
   const people = await db.prepare(`
     SELECT DISTINCT u.id, u.name, u.slug, u.email
       FROM users u
-     WHERE u.id IN (
-       SELECT owner_id FROM memberships WHERE member_user_id = ? AND status = 'active'
-       UNION SELECT member_user_id FROM memberships WHERE owner_id = ? AND status = 'active'
-       UNION SELECT addressee_id FROM connections WHERE requester_id = ? AND status = 'accepted'
-       UNION SELECT requester_id FROM connections WHERE addressee_id = ? AND status = 'accepted'
-     )
+     WHERE u.id IN (${reachable.REACHABLE_IDS})
        AND u.id != ?
        AND (? = '' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.slug) LIKE ? ESCAPE '\\')
      ORDER BY u.name
      LIMIT 10
-  `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, q, like, like);
+  `).all(...reachable.idsParams(req.user.id), req.user.id, q, like, like);
 
   // A contact can only be offered after an @ if there is a username to type,
   // and a username exists only where the person holds an account. The join is
@@ -155,12 +157,27 @@ router.get('/:ownerId/lookup', requireAuth, requirePaAccess, async (req, res) =>
   // offered to invite somebody already reachable.
   const addressable = new Set(people.map((p) => String(p.email || '').toLowerCase()));
 
+  // Who has been asked and has not answered. NOT addressable — an invitation
+  // is not a relationship — but returned so a picker can say so. "Nobody
+  // shares an office with you yet" is a lie when somebody is sitting on an
+  // invitation, and it is the lie that sends people hunting for a bug in the
+  // wrong place.
+  const pending = await reachable.pendingWith(req.user.id, req.user.email);
+
   res.json({
     // The address is used above and deliberately not returned: the picker has
     // no use for it, and a list of addresses is not something to hand out.
+    //
+    // The id IS returned, because a picker that offers a person has to be able
+    // to name which person was chosen. Leaving it out is what made the pad's
+    // "hand it to somebody" list unusable — it rendered every name with an
+    // empty value, so choosing one selected nobody and the button stayed
+    // dead. An id for somebody you can already reach discloses nothing; the
+    // address, which identifies them off Kairos, still does not travel.
     people: people.map((p) => ({
-      handle: p.slug, name: p.name, kind: 'person', notified: true,
+      id: p.id, handle: p.slug, name: p.name, kind: 'person', notified: true,
     })),
+    pending,
     contacts: contacts.map((c) => ({
       handle: c.handle,
       name: c.name || c.email,

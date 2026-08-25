@@ -137,6 +137,42 @@ function client() {
       r.d.members.some((m) => m.status === 'active' && m.memberName === 'Kit Staff'),
       JSON.stringify(r.d.members.map((m) => [m.memberName, m.status])));
 
+
+    head('The picker and the check agree about who you can reach:');
+    // THE BUG BEHIND THE BUG. "Who may I address" and "who may I hand to" were
+    // two different queries, and they disagreed — the picker offered accepted
+    // peer connections and the hand check, which looked only at memberships,
+    // refused them. Choosing a name the product had just suggested produced a
+    // flat denial. Both now come through lib/reachable.js, so this asserts the
+    // two sets are the same rather than that either is right on its own.
+    r = await boss('GET', `/mentions/${me.id}/lookup?q=`);
+    const offered = r.d.people || [];
+    ok('somebody is offered', offered.length > 0, JSON.stringify(offered));
+    // Every name offered must carry an id, or a picker cannot say who was
+    // chosen. Leaving it out is exactly what made the pad's list unusable:
+    // every option rendered with an empty value.
+    ok('and every one of them carries an id to choose by',
+      offered.every((p) => !!p.id), JSON.stringify(offered));
+    for (const p of offered) {
+      const j = await boss('POST', '/pad', { body: `For ${p.name}.` });
+      const h = await boss('POST', `/pad/${j.d.item.id}/hand`, { toUserId: p.id });
+      ok(`${p.name} is offered AND can be handed to`, h.s === 200,
+        `${h.s} ${JSON.stringify(h.d).slice(0, 120)}`);
+    }
+
+    head('And somebody merely invited is named rather than hidden:');
+    r = await boss('POST', '/members', { email: `waiting${ID}@x.com`, role: 'pa' });
+    r = await boss('GET', `/mentions/${me.id}/lookup?q=`);
+    ok('the invitation is reported alongside the list',
+      (r.d.pending || []).some((p) => /waiting/.test(p.name)),
+      JSON.stringify(r.d.pending));
+    // So the screen can say "X has not accepted" instead of "nobody shares an
+    // office with you", which is the sentence that sent somebody hunting for
+    // a bug that was not there.
+    ok('and is not offered as reachable',
+      !(r.d.people || []).some((p) => /waiting/.test(p.name || '')),
+      JSON.stringify(r.d.people));
+
     head('And the obvious refusals:');
     r = await boss('POST', `/members/${memberId}/resend`);
     ok('resending to somebody who already accepted is refused', r.s === 400, String(r.s));

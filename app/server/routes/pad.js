@@ -6,6 +6,7 @@ const { requirePaAccess } = require('../lib/paAccess');
 const { resolveAccess, spaceAudience } = require('../lib/spaceAccess');
 const pad = require('../lib/pad');
 const mentions = require('../lib/mentions');
+const reachable = require('../lib/reachable');
 
 /**
  * The pad, and the four things a line on it can become.
@@ -142,16 +143,11 @@ router.post('/:id/hand', loadItem, async (req, res) => {
   const toUserId = req.body?.toUserId;
   if (!toUserId) return res.status(400).json({ error: 'Say who it is for.' });
 
-  const shared = await db.prepare(`
-    SELECT 1 AS ok FROM memberships
-     WHERE status = 'active' AND (
-       (owner_id = ? AND member_user_id = ?) OR (owner_id = ? AND member_user_id = ?)
-       OR (member_user_id = ? AND owner_id IN (
-             SELECT owner_id FROM memberships WHERE member_user_id = ? AND status = 'active'))
-     )
-     LIMIT 1
-  `).get(req.user.id, toUserId, toUserId, req.user.id, toUserId, req.user.id);
-  if (!shared) {
+  // Through lib/reachable.js, which is also what fills the picker this choice
+  // was made from. They used to be two queries: the picker offered accepted
+  // peer connections and this refused them, so choosing a name the product
+  // had just suggested produced a flat denial.
+  if (!await reachable.canReach(req.user.id, toUserId)) {
     // "You do not share an office with them" was true and useless. By far the
     // commonest cause is an invite nobody has accepted — the principal added
     // them on the Team screen, which reads as putting them on your team, and

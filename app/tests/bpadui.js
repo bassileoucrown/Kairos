@@ -107,6 +107,50 @@ async function onboard(p, name, email, roleLabel) {
     await page.waitForSelector('.pad-line:has-text("mandate")', { timeout: 20000 });
     ok('and is found under what is settled', true);
 
+
+    head('Handing a line over actually works from the dropdown:');
+    // TESTED THROUGH THE PICKER, NOT THE API. The API was right and the screen
+    // was broken: the lookup returned no id, so every name in this list
+    // rendered with an empty value — you could choose somebody and nothing was
+    // selected, leaving the button dead. An API-only suite passed throughout.
+    const mate = await (await browser.newContext()).newPage();
+    await onboard(mate, 'Kit Staff', `pa${ID}@x.com`, 'Personal Assistant');
+
+    // Principal invites them, and they accept, so they are genuinely reachable.
+    await page.goto(`${BASE}/dashboard?tab=members`);
+    await page.waitForSelector('#invite-email', { timeout: 20000 });
+    await page.fill('#invite-email', `pa${ID}@x.com`);
+    await page.click('button:has-text("Send invite")');
+    await page.waitForSelector('.card:has-text("Hasn\'t accepted yet")', { timeout: 20000 });
+    ok('the team screen says plainly that nothing is connected yet', true);
+
+    await mate.goto(`${BASE}/today`);
+    await mate.waitForSelector('.needs-card:has-text("You have been invited")', { timeout: 20000 });
+    ok('and the invitation finds them in the app, not just by email', true);
+    await mate.click('.needs-card:has-text("You have been invited") a:has-text("Look at it")');
+    await mate.waitForSelector('button:has-text("Accept")', { timeout: 20000 });
+    await mate.click('button:has-text("Accept")');
+    // Confirms in place rather than navigating, so wait for the words.
+    await mate.waitForSelector('h1:has-text("You\'re in")', { timeout: 20000 });
+
+    await page.goto(`${BASE}/pad`);
+    await page.waitForSelector('.pad-line', { timeout: 20000 });
+    await page.click('.pad-line button:has-text("Do something")');
+    await page.waitForSelector('.pad-actions', { timeout: 20000 });
+    await page.click('.pad-actions button:has-text("Somebody else\'s")');
+    await page.waitForSelector('.pad-action-form select[aria-label="Who it is for"]', { timeout: 20000 });
+
+    const opts = await page.locator('.pad-action-form select[aria-label="Who it is for"] option').count();
+    ok('the person is offered in the list', opts === 2, String(opts));
+    // The assertion that would have caught it: the option must carry a value.
+    const val = await page.locator('.pad-action-form select[aria-label="Who it is for"] option').nth(1).getAttribute('value');
+    ok('and the option carries a real value, not an empty one', !!val, String(val));
+
+    await page.selectOption('.pad-action-form select[aria-label="Who it is for"]', val);
+    await page.click('.pad-action-form button:has-text("Hand it over")');
+    await page.waitForSelector('.pad-line:has-text("handed to Kit Staff")', { timeout: 20000 });
+    ok('and handing it over works end to end from the screen', true);
+
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
   } finally {
     if (browser) await browser.close();

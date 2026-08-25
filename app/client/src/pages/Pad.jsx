@@ -225,7 +225,8 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
  */
 function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
   const [spaces, setSpaces] = useState(null);
-  const [people, setPeople] = useState([]);
+  const [people, setPeople] = useState(null);
+  const [pending, setPending] = useState([]);
   const [mode, setMode] = useState(null); // task | diary | hand
   const [spaceId, setSpaceId] = useState('');
   const [toUserId, setToUserId] = useState('');
@@ -238,7 +239,12 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
       setSpaces(d.spaces || []);
       setSpaceId((d.spaces || [])[0]?.id || '');
     }).catch(() => setSpaces([]));
-    api.get(`/mentions/${ownerId}/lookup?q=`).then((d) => setPeople(d.people || [])).catch(() => {});
+    // Not swallowed. A dropped error here left the list empty, which the
+    // screen then explained as "nobody shares an office with you" — a
+    // confident, wrong answer built out of a failure nobody was shown.
+    api.get(`/mentions/${ownerId}/lookup?q=`)
+      .then((d) => { setPeople(d.people || []); setPending(d.pending || []); })
+      .catch((err) => { setPeople([]); setError(err.message); });
   }, [ownerId]);
 
   async function run(path, payload) {
@@ -317,8 +323,30 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
 
       {mode === 'hand' && (
         <div className="pad-action-form">
-          {people.length === 0 && <p className="hint">Nobody shares an office with you yet.</p>}
-          {people.length > 0 && (
+          {people === null && <p className="hint">Loading…</p>}
+
+          {/* THE EMPTY STATE HAS TO SAY WHICH EMPTY IT IS. It used to read
+              "Nobody shares an office with you yet" whatever the reason — so
+              somebody who had added their whole team the day before was told,
+              flatly, that they had nobody, with no hint that the people they
+              were thinking of were sitting on an unaccepted invitation. That
+              sends you looking for a bug in the wrong place. */}
+          {people?.length === 0 && pending.length === 0 && (
+            <p className="hint">
+              Nobody works with you on Kairos yet. Add them under{' '}
+              <Link to="/dashboard?tab=members">Team</Link>.
+            </p>
+          )}
+          {people?.length === 0 && pending.length > 0 && (
+            <p className="hint">
+              {pending.length === 1
+                ? `${pending[0].name} has not accepted yet, so there is nothing linking your accounts.`
+                : `${pending.length} people have been invited but have not accepted yet.`}
+              {' '}You can chase it under <Link to="/dashboard?tab=members">Team</Link>.
+            </p>
+          )}
+
+          {people?.length > 0 && (
             <>
               <select aria-label="Who it is for" value={toUserId}
                 onChange={(e) => setToUserId(e.target.value)} style={{ width: 'auto' }}>
@@ -328,6 +356,12 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
               {/* Said plainly, because this is the one action that widens who
                   can read a private line. */}
               <p className="hint">They will see this note and be told about it.</p>
+              {pending.length > 0 && (
+                <p className="hint">
+                  {pending.length === 1 ? `${pending[0].name} is` : `${pending.length} others are`}
+                  {' '}invited but not on this list until they accept.
+                </p>
+              )}
               <button className="btn btn-primary btn-sm" type="button" disabled={busy || !toUserId}
                 onClick={() => run('hand', { toUserId })}>
                 {busy ? 'Handing…' : 'Hand it over'}
