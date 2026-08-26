@@ -35,7 +35,10 @@ function blobToBase64(blob) {
   });
 }
 
-export default function VoiceRecorder({ threadId, maxSeconds = 120, retentionDays = 30, onSent }) {
+// replyToId pins the recording to the message it answers, the same way the
+// typed composer does. A spoken "which Thursday?" is at least as likely as a
+// typed one, and a reply that only half the composers can make is not a reply.
+export default function VoiceRecorder({ threadId, maxSeconds = 120, retentionDays = 30, onSent, replyToId = null }) {
   const [state, setState] = useState('idle');      // idle | recording | ready | sending
   const [elapsed, setElapsed] = useState(0);
   const [clip, setClip] = useState(null);          // { blob, url, mimeType, durationMs }
@@ -136,6 +139,7 @@ export default function VoiceRecorder({ threadId, maxSeconds = 120, retentionDay
         audio,
         mimeType: clip.mimeType,
         durationMs: clip.durationMs,
+        replyToId: replyToId || undefined,
       });
       discard();
       onSent?.();

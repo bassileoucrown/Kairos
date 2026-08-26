@@ -2765,3 +2765,77 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    the two taps are written out rather than guessed at. */
 .install-steps { margin: 10px 0 0; padding-left: 20px; font-size: 0.86rem; }
 .install-steps li { margin-bottom: 4px; }
+
+/* --- Answering one thing in particular ---------------------------------- */
+/* A thread was a flat run of lines, which is right for "car's outside" and
+   wrong for everything that gets frozen: a record locks on acknowledgement, a
+   recording cannot be amended, and a task moves the work to a list with a
+   status dropdown and nowhere to speak. A quoted anchor lets an ordinary note
+   answer any of them without unfreezing any of them. */
+
+/* What a reply is answering, above the reply. A stub, drawn quieter than a
+   message so it reads as a pointer rather than as a second copy. */
+.msg-quote {
+  display: flex; gap: 8px; align-items: baseline;
+  margin: 2px 0 4px; padding: 4px 10px;
+  border-left: 3px solid var(--border);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.78rem; color: var(--text-muted);
+  max-width: 60ch; text-decoration: none;
+}
+.msg-quote:hover { border-left-color: var(--accent); text-decoration: none; }
+.msg-quote-who { font-weight: 600; color: var(--text); flex-shrink: 0; }
+.msg-quote-body {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Pinned above the composer, so nobody sends a reply to a line they have
+   forgotten they were replying to. */
+.msg-replying {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  width: 100%; padding: 6px 10px; margin-bottom: 6px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft); border-radius: 0 6px 6px 0;
+  font-size: 0.8rem;
+}
+.msg-replying-body {
+  flex: 1; min-width: 0; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-replying .msg-promote { margin-top: 0; }
+
+/* The work a line turned into, shown on the line. A task used to vanish into a
+   list at the foot of the screen, leaving the message it came from looking
+   like every other message. */
+.msg-task {
+  display: inline-flex; gap: 7px; align-items: baseline; flex-wrap: wrap;
+  margin-top: 6px; padding: 4px 10px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font-size: 0.78rem; color: var(--text);
+  max-width: 60ch;
+}
+
+.msg-task-mark { color: var(--accent); }
+.msg-task-title { font-weight: 600; overflow-wrap: anywhere; }
+.msg-task-state {
+  padding: 0 7px; border-radius: 999px;
+  background: var(--bg); color: var(--text-muted);
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.msg-task.is-done { opacity: 0.65; }
+.msg-task.is-done .msg-task-title { text-decoration: line-through; }
+.msg-task.is-blocked .msg-task-state { background: var(--danger-soft); color: var(--danger); }
+.msg-task.is-doing .msg-task-state { background: var(--warn-soft); color: var(--warn); }
+
+/* Arriving at one line out of a hundred. Fades rather than latches, because it
+   marks where you were sent, not a state the message is in. */
+.is-pointed-at {
+  animation: point-at 2s ease-out;
+  border-radius: var(--radius);
+}
+@keyframes point-at {
+  0%, 55% { background: var(--accent-soft); }
+  100% { background: transparent; }
+}

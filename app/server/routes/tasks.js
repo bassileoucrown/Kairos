@@ -16,7 +16,8 @@ const SELECT_TASK = `
   SELECT t.*, u.name AS assignee_name, c.name AS creator_name,
          s.name AS space_name, s.context AS space_context,
          p.name AS project_name, st.name AS stage_name,
-         th.id AS source_thread_id
+         th.id AS source_thread_id,
+         pi.id AS source_pad_item_id
   FROM tasks t
   LEFT JOIN users u ON u.id = t.assignee_id
   JOIN users c ON c.id = t.created_by
@@ -25,6 +26,12 @@ const SELECT_TASK = `
   LEFT JOIN project_stages st ON st.id = t.stage_id
   LEFT JOIN messages msg ON msg.id = t.source_message_id
   LEFT JOIN threads th ON th.id = msg.thread_id
+  -- The other door in. A task promoted from the pad carries no source message
+  -- — that is the whole point of the pad, a thought captured before it knows
+  -- which room it belongs to — so the link back lives on the pad line, which
+  -- points forward at the task. Followed backwards here so the task can lead
+  -- to the conversation it came out of instead of being where one stopped.
+  LEFT JOIN pad_items pi ON pi.task_id = t.id
 `;
 
 function serialize(t, found) {
@@ -46,8 +53,13 @@ function serialize(t, found) {
     projectName: t.project_name,
     stageId: t.stage_id,
     stageName: t.stage_name,
+    // Where the talking about this happens. A task is not a conversation and
+    // should never try to be one — it is a title, an owner and a date — but it
+    // must always be able to say where the conversation is, or assigning work
+    // becomes the moment the discussion of it stops.
     sourceMessageId: t.source_message_id,
     sourceThreadId: t.source_thread_id,
+    sourcePadItemId: t.source_pad_item_id || null,
     completedAt: t.completed_at,
     createdAt: t.created_at,
   };

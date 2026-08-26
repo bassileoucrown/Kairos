@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const mentions = require('./mentions');
-const { sendEmail } = require('./email');
+const { knock: knockOn } = require('./knock');
 const { officeAudience } = require('./paAccess');
 
 /**
@@ -301,21 +301,14 @@ async function tell({ item, author, ownerId }) {
  * A knock, not a transcript: the words stay in Kairos, where the answer can
  * land beside them, rather than starting a conversation in an inbox that never
  * comes back. Same rule as a booking follow-up.
+ *
+ * The knocking itself lives in lib/knock.js, which reaches both an inbox and a
+ * phone. It used to be an email and only an email, written out here — and when
+ * push arrived, this was one of three places that would each have needed their
+ * own copy of it.
  */
 async function knock({ toUserId, ownerId, author, subject, line }) {
-  try {
-    if (!toUserId || toUserId === author.id) return;
-    const to = await db.prepare('SELECT email FROM users WHERE id = ?').get(toUserId);
-    if (!to?.email) return;
-    await sendEmail({
-      ownerId,
-      sentByUserId: author.id,
-      toEmail: to.email,
-      category: 'mention',
-      subject,
-      body: `${author.name} ${line}\n\nOpen the pad in Kairos to read it and reply.`,
-    });
-  } catch { /* Something already saved does not fail over its mail. */ }
+  return knockOn({ toUserId, ownerId, author, subject, line, url: '/pad' });
 }
 
 /** Everything said about a line, oldest first, for somebody who may see it. */

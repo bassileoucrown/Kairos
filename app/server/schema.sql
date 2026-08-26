@@ -407,6 +407,23 @@ CREATE TABLE IF NOT EXISTS messages (
   -- so an acknowledged decision can never silently change under the people who
   -- acknowledged it.
   locked_at     TEXT,
+  -- The message this one is answering, if it is answering one in particular.
+  --
+  -- WHY A CONVERSATION NEEDED THIS. A thread was a flat run of messages, and
+  -- for most of what passes down a direct line that is right — "car's outside"
+  -- needs no anchor. But three of the four things a message can BE are frozen
+  -- the moment they become it: a record's body locks on first acknowledgement,
+  -- a voice note is a recording nobody can amend, and a task moves the work off
+  -- to a list with a status dropdown and nowhere to speak. Ask "which Thursday?"
+  -- about any of them and the question went into the flat run, ten lines below
+  -- the thing it was about, attached to nothing. The answer is not to unfreeze
+  -- them — the freezing is the point — but to let an ordinary note be pinned to
+  -- the thing it answers. So every format can be replied to, and none of them
+  -- has to become editable to be discussable.
+  --
+  -- Always an ordinary message, and always in the same thread: this is a
+  -- pointer within one conversation, not a way to quote across rooms.
+  reply_to_id   TEXT REFERENCES messages(id) ON DELETE SET NULL,
   created_at    TEXT NOT NULL,
   edited_at     TEXT
 );
@@ -1086,3 +1103,38 @@ CREATE TABLE IF NOT EXISTS pad_replies (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pad_replies ON pad_replies(pad_item_id, created_at);
+
+-- One browser, on one device, that has said yes to being interrupted.
+--
+-- NOT ONE PER PERSON. Somebody with a phone and a laptop grants permission
+-- twice and has two rows, and both should ring — an assistant who left their
+-- desk is exactly the person a push is for. So the table is keyed on the
+-- endpoint rather than the user.
+--
+-- WHAT IS IN HERE IS NOT A SECRET OF KAIROS'S. The endpoint is a URL at
+-- Google's or Apple's push service, and p256dh and auth are values that
+-- BROWSER generated so that only it can open what is sent. Kairos cannot read
+-- a push it has sent any more than the push service can, which is the point:
+-- see lib/webPush.js.
+--
+-- The endpoint is unique because a browser hands back the same one every time
+-- it is asked, so re-granting permission — which people do, after clearing
+-- data or reinstalling — must update the row rather than accumulate copies.
+--
+-- last_error is kept because the failure that matters most here is silent. A
+-- push service refusing every message looks, from inside Kairos, exactly like
+-- a quiet afternoon.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint    TEXT NOT NULL UNIQUE,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  -- Which device this is, in the person's own terms, so a list of them can be
+  -- read and one of them revoked. Same reasoning as the sessions list.
+  user_agent  TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL,
+  last_ok_at  TEXT,
+  last_error  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);

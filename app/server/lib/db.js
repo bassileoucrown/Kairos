@@ -370,6 +370,10 @@ function ready() {
       await ensureColumn('itinerary_items', 'decided_by', 'TEXT');
       // Where a pad line went when it outgrew two people. See routes/pad.js.
       await ensureColumn('pad_items', 'thread_id', 'TEXT');
+      // What a message is answering. Lets a record, a voice note or the message
+      // a task came from be replied to without any of them being unfrozen. See
+      // the comment on the column in schema.sql.
+      await ensureColumn('messages', 'reply_to_id', 'TEXT');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

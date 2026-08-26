@@ -1526,6 +1526,119 @@ gap. One press, whoever did it, with their name and the time against it.
 - **Needs nothing written.** The screen says so, where it used to offer only
   the two heavy paths.
 
+## Answering one thing in particular
+
+*"Once a task is assigned, the conversation cannot be continued."* That was
+true, and the shape of it was wider than tasks. A thread was a flat run of
+messages — right for *"car's outside"*, wrong for every one of the things a
+line can turn into, because all of them are frozen the moment they do:
+
+- a **record** locks its body on first acknowledgement, deliberately, so what
+  people agreed to cannot change under them;
+- a **voice note** is a recording nobody can amend;
+- a **task** moves the work off to a list with a status dropdown and no words.
+
+Ask *"which Thursday?"* about any of those and the question went into the flat
+run, ten lines below the thing it was about, attached to nothing. Worse for a
+task: the message it came from carried no sign that anything had happened to
+it, and the task carried no way back.
+
+The fix is not to unfreeze any of them — the freezing is the point.
+`messages.reply_to_id` lets an **ordinary note be pinned to the thing it
+answers**, so every format is answerable and none had to become editable to be
+discussable.
+
+- **Reply is offered on everything** — notes, records (locked or superseded),
+  recordings, and the line a task came out of. It survives *Mark done*, which
+  is where it was most missing: a line that is finished is exactly the one
+  somebody needs to ask about.
+- **A recording can be the reply**, not just the thing replied to. Half a reply
+  mechanism is no mechanism at all for somebody who speaks rather than types.
+- **The quotation is a stub**, not a second copy of the message — enough to
+  recognise the line, and a link to the original. Two copies of one message
+  travelling in one response is the shape of every drift bug in this codebase.
+- **It cannot reach into another room.** A `replyToId` naming a message in a
+  different thread is **refused with an explanation**, not silently dropped:
+  quoting across the boundary would render a line inside a room the reader can
+  see, and a reply that quietly loses its anchor reads to the sender as one
+  that landed.
+- **The task is shown on the line it came from**, with its live status and who
+  it fell to, and **the task links back to the exact message** (`#m-<id>`) —
+  landing on the line, not at the foot of a room with a hundred messages in it.
+  A task promoted from the **pad** has no source message by construction, so
+  the link is followed the other way, from the pad line that points forward at
+  it, and lands on the Settled tab where that conversation still is.
+
+## Alerts — reaching a phone that is in a pocket
+
+Push notifications are **Kairos's**, built into it (`lib/webPush.js`,
+`routes/push.js`, `lib/push.js`, the `push` handler in `public/sw.js`). The
+host — Render or anywhere else — supplies nothing but a place to keep the
+signing keys, the same way it keeps the database URL.
+
+A push never travels from Kairos to a phone. It goes to that browser's push
+service — Google's, Apple's, Mozilla's — which carries the last mile. Two
+things follow:
+
+- The service carries nothing from a sender it cannot identify. **VAPID** is
+  that identity: one keypair for the whole deployment, generated in the browser
+  under **Security** and pasted into the environment as `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`.
+- The service is a third party every push passes through, so the payload is
+  **encrypted to a key only that browser holds** (RFC 8291, `aes128gcm`).
+  Google can carry *"Ngozi replied on the pad"* without reading a word of it —
+  and neither can Kairos, once sent: the agreement key is ephemeral per message.
+
+Written out with Node's own primitives rather than installed. This server has
+two dependencies, and that is a deliberate posture for a product holding
+passport numbers.
+
+**What travels is who and where, never the words.** A notification is read by
+whoever is holding the phone, and in this product the message is quite likely
+to be where a principal will be at three o'clock. The body is read inside
+Kairos, behind a session.
+
+**What rings, and what does not.** Every message on the **direct line** reaches
+everyone else in it: that room exists because the traffic was going to WhatsApp,
+and a room that has to be opened to be read has replaced nothing. Everywhere
+else, being told is what an **@** is for — a project space with four threads and
+a working afternoon would otherwise produce a notification a minute, and the
+reliable end of that is somebody turning notifications off, after which the
+direct line stops buzzing too.
+
+- **One knock, two channels.** `lib/knock.js` is the single place that tells
+  somebody something happened; mentions and handed-over pad notes both go
+  through it. They fail in opposite directions — email always arrives and is
+  often read tomorrow, a push arrives in seconds and only for somebody who has
+  granted permission — so both are attempted and the cost is one duplicate.
+  Direct-line chatter is the exception: push only, because a message a minute
+  in an inbox is how somebody comes to filter Kairos out of their mail.
+- **The browser's permission is the setting.** There is no notifications flag in
+  the database. A second copy would be free to disagree with the browser, and
+  the disagreement people actually hit is revoking in browser settings and
+  finding the app still claiming to be on.
+- **Per device, and both ring.** A phone and a laptop are two subscriptions. The
+  same browser granting twice **updates** rather than duplicates, since a
+  browser hands back the same endpoint every time it is asked.
+- **Dead subscriptions are swept, not retried.** 404 and 410 from a push service
+  mean the app was uninstalled or permission withdrawn; the row is deleted.
+- **Bounded, because it is on the path of saving a message.** Five seconds per
+  push, and all of a room's devices in parallel — so a push service that has
+  stopped answering costs one timeout for the room rather than one per phone.
+  The notification is the least important thing in that request and must never
+  be the slowest.
+- **A test alert**, under Settings, because this is the one feature whose
+  failure is completely silent: nothing arriving looks exactly like nothing
+  happening.
+- **On iPhone and iPad, only once installed.** Safari grants nothing to a page
+  in a tab, so the offer explains that rather than failing quietly.
+
+`bpush.js` plays the browser: it generates the keypair a browser would, hands
+Kairos the public half as a subscription does, and **opens the sealed record
+with the private half**. One wrong byte in the key agreement, the HKDF chain or
+the record framing and it goes red — which is what a real device would do,
+silently.
+
 ## Every unbuilt feature is in the app, by name
 
 Not a footnote at the bottom of a screen — that tells somebody a thing is

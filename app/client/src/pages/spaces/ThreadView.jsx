@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import SoonButton from '../../components/SoonButton.jsx';
 import AppShell from '../../components/AppShell.jsx';
@@ -70,6 +70,54 @@ function TaskMaker({ message, members, viewerId, onCreate, onCancel }) {
   );
 }
 
+const TASK_STATE_LABEL = { open: 'Open', doing: 'Doing', blocked: 'Blocked', done: 'Done' };
+
+/**
+ * What this line became, shown on the line itself.
+ *
+ * A task used to be the end of a conversation. You said "book the car", somebody
+ * turned it into a task, and from that moment the work lived in a list with a
+ * status dropdown and nowhere to speak — while the message it came from sat in
+ * the thread looking exactly like every other message, giving no sign that
+ * anything had happened to it. Both halves of that were wrong. The task belongs
+ * on the line so the room can see the work exists, and Reply below it means the
+ * conversation carries on where it started rather than needing somewhere new.
+ *
+ * NOT A LINK, deliberately. The obvious destination is /tasks, and /tasks is
+ * MY tasks — so a chip for work handed to somebody else would lead to a list
+ * that does not contain it, which is worse than no link at all. The task's own
+ * controls are already on this screen, under "Tasks from this thread".
+ */
+function TaskChip({ t }) {
+  return (
+    <span className={`msg-task is-${t.status}`}>
+      <span className="msg-task-mark" aria-hidden="true">☑</span>
+      <span className="msg-task-title">{t.title}</span>
+      <span className="msg-task-state">{TASK_STATE_LABEL[t.status] || t.status}</span>
+      {t.assigneeName && <span className="hint"> · {t.assigneeName}</span>}
+    </span>
+  );
+}
+
+/**
+ * The line being answered, quoted above the answer.
+ *
+ * A stub, and deliberately not a second rendering of the message: it carries
+ * no actions, no acknowledgements and no recording, because it is a pointer,
+ * not a copy. Clicking it goes to the original, which is the only place any of
+ * that is true.
+ */
+function QuotedLine({ q }) {
+  return (
+    <a className="msg-quote" href={`#m-${q.id}`}>
+      <span className="msg-quote-who">{q.authorName}</span>
+      <span className="msg-quote-body">
+        {q.body || (q.register === 'record' ? 'a record' : 'a voice note')}
+      </span>
+    </a>
+  );
+}
+
 function clipLength(ms) {
   const s = Math.max(1, Math.round(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -93,19 +141,21 @@ function VoiceBubble({ threadId, m }) {
   );
 }
 
-function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone }) {
+function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone, onReply }) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
   const hasText = !!String(m.body || '').trim();
   return (
-    <div className={'msg-note' + (m.doneAt ? ' is-done' : '')}>
+    <div className={'msg-note' + (m.doneAt ? ' is-done' : '')} id={`m-${m.id}`}>
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
+        {m.replyTo && <QuotedLine q={m.replyTo} />}
         {hasText && (
           <div className="msg-bubble"><MentionText body={m.body} mentions={m.mentions} /></div>
         )}
         {m.voice && <VoiceBubble threadId={threadId} m={m} />}
+        {m.tasks?.map((t) => <TaskChip key={t.id} t={t} />)}
         {/* Both actions turn a message into text somebody else will act on —
             a frozen record, or a task with a title. A recording has neither
             until it is transcribed, so they are not offered rather than
@@ -126,19 +176,32 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
           </div>
         )}
 
-        {canWrite && !m.doneAt && !picking && !tasking && (
+        {/* Reply survives everything else on this row. A line that is done, or
+            that has already been turned into a task, is exactly the line
+            somebody needs to ask a question about — "which Thursday?", "it
+            turned out the car was cancelled" — and hiding the answer button
+            behind the message's state is what made a task the end of a
+            conversation. */}
+        {canWrite && !picking && !tasking && (
           <div className="msg-actions-row">
-            <button className="msg-promote" type="button" onClick={() => onDone(m.id, true)}>
-              Mark done
+            <button className="msg-promote" type="button" onClick={() => onReply(m)}>
+              Reply
             </button>
-            {hasText && (
+            {!m.doneAt && (
               <>
-                <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
-                  Promote to record
+                <button className="msg-promote" type="button" onClick={() => onDone(m.id, true)}>
+                  Mark done
                 </button>
-                <button className="msg-promote" type="button" onClick={() => setTasking(true)}>
-                  Make a task
-                </button>
+                {hasText && (
+                  <>
+                    <button className="msg-promote" type="button" onClick={() => setPicking(true)}>
+                      Promote to record
+                    </button>
+                    <button className="msg-promote" type="button" onClick={() => setTasking(true)}>
+                      Make a task
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -179,7 +242,7 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
   );
 }
 
-function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
+function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply }) {
   const [superseding, setSuperseding] = useState(false);
   const [replacement, setReplacement] = useState('');
   const [replacementType, setReplacementType] = useState(m.recordType);
@@ -188,7 +251,7 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
   const isBlocker = m.recordType === 'blocker';
 
   return (
-    <div className={'msg-record' + (isSuperseded ? ' is-superseded' : '')}>
+    <div className={'msg-record' + (isSuperseded ? ' is-superseded' : '')} id={`m-${m.id}`}>
       <div className="msg-record-head">
         <span className="msg-badge">{TYPE_LABEL[m.recordType] || m.recordType}</span>
         <span className={'msg-badge status-' + m.recordStatus}>{STATUS_LABEL[m.recordStatus]}</span>
@@ -196,7 +259,9 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
         {m.locked && <span className="msg-seq" title="Acknowledged — body is frozen">🔒 locked</span>}
       </div>
 
+      {m.replyTo && <QuotedLine q={m.replyTo} />}
       <div className="msg-record-body"><MentionText body={m.body} mentions={m.mentions} /></div>
+      {m.tasks?.map((t) => <TaskChip key={t.id} t={t} />)}
 
       <div className="msg-record-foot">
         {m.promotedFromId && (
@@ -208,9 +273,18 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
         {m.acks.length > 0 && <> · acknowledged by {m.acks.map((a) => a.name).join(', ')}</>}
       </div>
 
-      {canWrite && !isSuperseded && (
+      {/* THE FROZEN THING STILL HAS TO BE ANSWERABLE. A record's body locks on
+          first acknowledgement and that is the point — but "which Thursday?"
+          is not an amendment, and making somebody supersede a decision in
+          order to ask a question about it would be absurd. So Reply sits
+          outside every gate on this row, including the superseded one: why a
+          record was replaced is worth saying underneath it. */}
+      {canWrite && (
         <div className="msg-record-actions">
-          {!hasAcked && (
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => onReply(m)}>
+            Reply
+          </button>
+          {!isSuperseded && !hasAcked && (
             <button className="btn btn-secondary btn-sm" type="button" onClick={() => onAck(m.id)}>
               Acknowledge
             </button>
@@ -225,9 +299,11 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => onStatus(m.id, 'declined')}>Decline</button>
             </>
           ))}
-          <button className="btn btn-secondary btn-sm" type="button" onClick={() => setSuperseding((s) => !s)}>
-            Supersede
-          </button>
+          {!isSuperseded && (
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => setSuperseding((s) => !s)}>
+              Supersede
+            </button>
+          )}
         </div>
       )}
 
@@ -276,6 +352,7 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede }) {
 export default function ThreadView() {
   const { threadId } = useParams();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [body, setBody] = useState('');
@@ -285,6 +362,10 @@ export default function ThreadView() {
   const [sending, setSending] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [members, setMembers] = useState([]);
+  // The message the next thing said will be pinned to, if any. Held here
+  // rather than on the message, because there is one composer and it can only
+  // be answering one thing at a time.
+  const [replyTo, setReplyTo] = useState(null);
   const endRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -350,10 +431,34 @@ export default function ThreadView() {
     return () => window.removeEventListener('scroll', check);
   }, []);
 
+  /**
+   * Arriving at one particular line, from somewhere else.
+   *
+   * A task links back to the message it came from, and a reply quotes the line
+   * it answers — both land here with #m-<id> on the URL. The element does not
+   * exist at mount, so the browser's own hash handling finds nothing and the
+   * reader is dropped at the foot of the conversation instead. Handled once the
+   * messages are in, and remembered in a ref so the follow-along effect below
+   * does not immediately pull them back down to the end.
+   */
+  const wantedAnchor = useRef(false);
+  useEffect(() => {
+    const id = hash?.startsWith('#m-') ? hash.slice(1) : null;
+    if (!id || !data) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    wantedAnchor.current = true;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('is-pointed-at');
+    const t = setTimeout(() => el.classList.remove('is-pointed-at'), 2000);
+    return () => clearTimeout(t);
+  }, [hash, data?.messages.length]);
+
   useEffect(() => {
     const grew = count - lastCount.current;
     lastCount.current = count;
     if (grew <= 0) return;
+    if (wantedAnchor.current) { wantedAnchor.current = false; return; }
     if (atBottom.current) {
       endRef.current?.scrollIntoView({ block: 'nearest' });
     } else {
@@ -372,9 +477,13 @@ export default function ThreadView() {
     setSending(true);
     try {
       await api.post(`/threads/${threadId}/messages`, {
-        body, register, recordType: register === 'record' ? recordType : undefined,
+        body,
+        register,
+        recordType: register === 'record' ? recordType : undefined,
+        replyToId: replyTo?.id,
       });
       setBody('');
+      setReplyTo(null);
       load();
     } catch (err) { setError(err.message); } finally { setSending(false); }
   }
@@ -390,6 +499,25 @@ export default function ThreadView() {
   const supersede = (id, replacementBody, replacementType) => act(() =>
     api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
   const makeTask = (payload) => act(() => api.post('/tasks', payload));
+
+  /**
+   * Answer this one.
+   *
+   * Drops the register back to Note, deliberately. A reply to a record is
+   * almost never itself a record — "which Thursday?" is a question, not a
+   * decision — and leaving the composer set to Record would file the question
+   * as R-08 in the formal history of the project.
+   */
+  function startReply(m) {
+    setReplyTo({
+      id: m.id,
+      authorName: m.authorName,
+      register: m.register,
+      body: String(m.body || '').trim() || null,
+    });
+    setRegister('note');
+    composerRef.current?.focus();
+  }
   // Carried out, or not after all. Deliberately lighter than a task: an
   // instruction worth thirty seconds should cost about that to close.
   const markDone = (id, done) => act(() => (done
@@ -445,10 +573,10 @@ export default function ThreadView() {
           {shown.map((m) => (
             m.register === 'record'
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
-                  onAck={ack} onStatus={setStatus} onSupersede={supersede} />
+                  onAck={ack} onStatus={setStatus} onSupersede={supersede} onReply={startReply} />
               : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
                   viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask}
-                  onDone={markDone} />
+                  onDone={markDone} onReply={startReply} />
           ))}
           <div ref={endRef} />
           {/* Said rather than done. Somebody reading back through last Tuesday
@@ -469,6 +597,21 @@ export default function ThreadView() {
 
         {data.canWrite && (
           <form className="msg-compose" onSubmit={send}>
+            {/* What the next thing said will be pinned to, and a way out of
+                it. Shown rather than implied: a reply that silently attaches
+                itself to something the writer has forgotten about is worse
+                than no anchor at all. */}
+            {replyTo && (
+              <div className="msg-replying">
+                <span className="hint">Replying to <strong>{replyTo.authorName}</strong></span>
+                <span className="msg-replying-body">
+                  {replyTo.body || (replyTo.register === 'record' ? 'a record' : 'a voice note')}
+                </span>
+                <button className="msg-promote" type="button" onClick={() => setReplyTo(null)}>
+                  Not a reply
+                </button>
+              </div>
+            )}
             <div className="register-toggle" role="group" aria-label="Message register">
               <button type="button" className={register === 'note' ? 'is-on' : ''} onClick={() => setRegister('note')}>
                 Note
@@ -525,7 +668,8 @@ export default function ThreadView() {
                 threadId={threadId}
                 maxSeconds={data.voice.maxSeconds}
                 retentionDays={data.voice.retentionDays}
-                onSent={load}
+                replyToId={replyTo?.id || null}
+                onSent={() => { setReplyTo(null); load(); }}
               />
             )
             : <p className="hint voice-unavailable">{data.voice?.unavailableReason}</p>

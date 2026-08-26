@@ -128,3 +128,59 @@ self.addEventListener('fetch', (event) => {
     })());
   }
 });
+
+/* --- Reaching a phone that is not open ------------------------------------
+ *
+ * Everything above is about not keeping things. This is the opposite job and
+ * obeys the same rule: the notification is DISPLAYED and nothing is stored.
+ *
+ * WHAT ARRIVES IS ALREADY DECIDED. The server sends a title, a line, and a
+ * URL — never the message. See lib/webPush.js for why: a notification is read
+ * by whoever is holding the phone, and in this product the message is quite
+ * likely to be where a principal will be at three o'clock. So this worker does
+ * not need to be careful about what it shows, because there is nothing careless
+ * in what it is given.
+ *
+ * A push with no readable payload still has to show SOMETHING. Every browser
+ * that grants permission does so on the promise that a push is user-visible,
+ * and one that displays nothing gets the permission revoked wholesale — so the
+ * fallback is a real notification, not a silent return.
+ */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
+  const title = data.title || 'Kairos';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || 'Something is waiting for you.',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/badge-72.png',
+    // One line per conversation rather than a stack of twenty. A phone that has
+    // been in a pocket should light up saying the latest, not the backlog.
+    tag: data.tag || undefined,
+    renotify: !!data.tag,
+    data: { url: data.url || '/' },
+  }));
+});
+
+/**
+ * Tapping it goes to the thing, not to the front door.
+ *
+ * An already-open Kairos is focused and navigated rather than a second window
+ * being opened beside it — somebody who taps a notification means "show me
+ * that", and being given a duplicate tab is a small daily annoyance that adds
+ * up on a phone.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || '/';
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of all) {
+      if (new URL(client.url).origin !== self.location.origin) continue;
+      await client.focus();
+      if ('navigate' in client) await client.navigate(target);
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
+});

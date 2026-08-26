@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import DeleteAccount from '../../components/DeleteAccount.jsx';
 import ConnectorsPanel from './ConnectorsPanel.jsx';
 import HandleCard from './HandleCard.jsx';
+import PushSetup from '../../components/PushSetup.jsx';
 import InstallApp from '../../components/InstallApp.jsx';
 import { api } from '../../lib/api.js';
 import { BRAND_SHORT } from '../../lib/brand.js';
@@ -75,6 +76,11 @@ export default function SettingsTab({ ownerId }) {
       <HandleCard />
 
       <InstallApp />
+
+      {/* After the install card, and that order is load-bearing on iOS: a page
+          in a Safari tab is not allowed notifications at all, so the offer only
+          makes sense once the app is on the home screen. */}
+      <PushSetup />
 
       <ConnectorsPanel ownerId={ownerId} />
 

@@ -163,15 +163,29 @@ export default function VapidKeySetup() {
               person has to grant permission again. Generate once and keep them.
             </div>
 
+            {/* NOT NAMED AFTER ONE HOST. This used to begin "open your Render
+                dashboard", which was both wrong for anyone hosting Kairos
+                elsewhere and misleading about where the feature lives: the
+                notifications themselves are Kairos's, built into it, and are
+                turned on for a person under Settings. All that belongs to the
+                host is the same thing that belongs to it for the database
+                password — somewhere to keep a secret out of the code. */}
+            <p className="hint" style={{ marginTop: 12 }}>
+              These are environment variables, set wherever Kairos runs — the same place
+              its database URL and encryption key are set. On Render that is the service's
+              Environment tab; elsewhere it is whatever your host calls the same thing.
+            </p>
             <ol className="install-steps">
-              <li>Open your Render dashboard and pick the Kairos service.</li>
-              <li>Go to <strong>Environment</strong>.</li>
               <li>Add <code>VAPID_PUBLIC_KEY</code> and <code>VAPID_PRIVATE_KEY</code> with the values above.</li>
               <li>
                 Add <code>VAPID_SUBJECT</code> — an address the push services can complain
                 to, written as <code>mailto:you@yourdomain.com</code>.
               </li>
-              <li>Save. The service restarts on the same database, and this card disappears.</li>
+              <li>Restart Kairos. The database is untouched, and this card disappears.</li>
+              <li>
+                Then, under <strong>Settings</strong>, turn alerts on for each device that
+                should ring. That part is per person, not per deployment.
+              </li>
             </ol>
           </>
         )}

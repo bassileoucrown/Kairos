@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { MentionText, MentionPicker } from '../components/Mention.jsx';
@@ -61,8 +61,14 @@ function AboutLink({ about }) {
 
 export default function Pad() {
   const { user } = useAuth();
+  const [params] = useSearchParams();
   const [items, setItems] = useState(null);
-  const [showDone, setShowDone] = useState(false);
+  // A line that became a task or went to the team is settled, and settled lines
+  // live behind a tab. Anything linking here BECAUSE of what a line became — a
+  // task pointing back at the conversation it came out of — has to land on that
+  // tab, or it lands on a screen that appears not to contain the thing it
+  // promised. The link says which; the tab is still a tab.
+  const [showDone, setShowDone] = useState(params.get('show') === 'settled');
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState('private');
   const [error, setError] = useState('');

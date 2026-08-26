@@ -90,8 +90,19 @@ export default function TaskList({ tasks, onChanged, showContext = false, emptyT
                     {' · '}{due === 'overdue' ? 'Overdue ' : 'Due '}{dueLabel(t.dueAt)}
                   </span>
                 )}
+                {/* THE WAY BACK TO THE TALKING. A task is a title, an owner and
+                    a date, and it should stay that — but assigning work must
+                    not be the moment the discussion of it stops. Whichever door
+                    the task came in by, the conversation is one click away, and
+                    the thread link lands on the exact line rather than at the
+                    foot of a room with a hundred messages in it. */}
                 {t.sourceThreadId && (
-                  <> · <Link to={`/threads/${t.sourceThreadId}`}>from the conversation</Link></>
+                  <> · <Link to={`/threads/${t.sourceThreadId}${t.sourceMessageId ? `#m-${t.sourceMessageId}` : ''}`}>
+                    carry on the conversation
+                  </Link></>
+                )}
+                {!t.sourceThreadId && t.sourcePadItemId && (
+                  <> · <Link to="/pad?show=settled">carry on the conversation</Link></>
                 )}
               </div>
             </div>

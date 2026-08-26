@@ -1,6 +1,6 @@
 const db = require('./db');
 const { normalizeHandle, resolveVisibleHandle } = require('./handles');
-const { sendEmail } = require('./email');
+const { knock } = require('./knock');
 
 /**
  * @ as two things, and the difference must survive all the way to the screen.
@@ -180,20 +180,22 @@ async function forBodies(bodies, { viewerId, ownerId, audience = null }) {
  *     mail provider having a bad afternoon is not a reason to reject a
  *     sentence somebody has written.
  */
-async function notify({ found, author, ownerId, subject, where }) {
+async function notify({ found, author, ownerId, subject, where, url = '/today' }) {
   try {
     const addressed = (found || []).filter(
       (m) => m.kind === 'person' && m.notified && m.id !== author.id,
     );
     for (const person of addressed) {
-      const user = await db.prepare('SELECT email FROM users WHERE id = ?').get(person.id);
-      if (!user?.email) continue;
-      await sendEmail({
+      // Through lib/knock.js, which reaches an inbox AND a phone. This was an
+      // email and only an email; being named in a thread is exactly the thing
+      // somebody needs to hear about before tomorrow morning.
+      await knock({
+        toUserId: person.id,
         ownerId,
-        toEmail: user.email,
-        category: 'mention',
+        author,
         subject,
-        body: `${author.name} wrote to you in ${where}.\n\nOpen Kairos to read it.`,
+        line: `wrote to you in ${where}.`,
+        url,
       });
     }
   } catch { /* Said above: something already saved does not fail over its mail. */ }

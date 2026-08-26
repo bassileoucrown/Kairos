@@ -7,6 +7,7 @@ const { resolveAccess, spaceAudience, markThreadRead } = require('../lib/spaceAc
 const { syncStageFromRecords } = require('../lib/stageStatus');
 const voice = require('../lib/voiceNotes');
 const mentions = require('../lib/mentions');
+const webPush = require('../lib/webPush');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -34,10 +35,44 @@ async function loadThread(req, res, next) {
   next();
 }
 
-function serializeMessage(m, acks, voiceByMessage, mentionsForMessage) {
+/**
+ * What a reply is answering, as a stub rather than the whole message.
+ *
+ * Enough to recognise the line without loading it twice — the full message is
+ * already somewhere in the same response, and shipping a second copy of it
+ * would mean two versions of one message travelling together, which is the
+ * shape every drift bug in this codebase has had. A stub cannot disagree with
+ * the original because it is obviously not the original.
+ *
+ * Null when the answered message has been deleted. The reply keeps its words
+ * and loses its anchor, which is the honest state of affairs.
+ */
+function replyStub(m) {
+  if (!m) return null;
+  return {
+    id: m.id,
+    authorName: m.author_name,
+    register: m.register,
+    recordType: m.record_type,
+    // A voice note has no body. Say so, rather than quoting an empty line.
+    body: String(m.body || '').trim() || null,
+  };
+}
+
+function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tasksByMessage) {
   return {
     id: m.id,
     body: m.body,
+    // The line this one is answering. Present on any format — a note, a
+    // record, a recording — because the point of replies is that none of them
+    // is a dead end.
+    replyTo: replyStub(byId?.get(m.reply_to_id)),
+    // What this message became, if somebody turned it into work. Carried on
+    // the message rather than only in a list at the foot of the screen: a task
+    // assigned off the back of a line is part of that line's story, and the
+    // conversation about it belongs beside it rather than in a place with a
+    // status dropdown and nowhere to speak.
+    tasks: tasksByMessage?.get(m.id) || [],
     // What each @ in the body turned out to be, resolved once on the way out.
     // The screen must not re-derive this: it cannot see who is in the space,
     // and guessing would be exactly the mistake — a contact drawn like a
@@ -103,6 +138,28 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
 
   const voiceByMessage = await voice.forThread(req.thread.id);
 
+  // Every message in the thread, by id, so a reply can name what it answers
+  // without a query per reply. The answered message is always in the same
+  // thread, which is what makes one map enough.
+  const byId = new Map(rows.map((m) => [m.id, m]));
+
+  // The work this conversation produced, hung back on the lines that produced
+  // it. One query for the thread; the alternative — a list at the foot of the
+  // screen and nothing on the message — is exactly how a task came to be a
+  // place a conversation stopped.
+  const tasksByMessage = new Map();
+  for (const t of await db.prepare(`
+    SELECT t.id, t.title, t.status, t.source_message_id, u.name AS assignee_name
+      FROM tasks t
+      LEFT JOIN users u ON u.id = t.assignee_id
+     WHERE t.source_message_id IN (SELECT id FROM messages WHERE thread_id = ?)
+     ORDER BY t.created_at ASC
+  `).all(req.thread.id)) {
+    const list = tasksByMessage.get(t.source_message_id) || [];
+    list.push({ id: t.id, title: t.title, status: t.status, assigneeName: t.assignee_name });
+    tasksByMessage.set(t.source_message_id, list);
+  }
+
   // One resolution pass for the whole thread rather than one per message: the
   // same handles repeat heavily down a conversation, and a screen should not
   // cost a query per @.
@@ -128,7 +185,9 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
       maxSeconds: voice.MAX_SECONDS,
       retentionDays: voice.RETENTION_DAYS,
     },
-    messages: rows.map((m, i) => serializeMessage(m, acks, voiceByMessage, mentionsPerMessage[i])),
+    messages: rows.map((m, i) => serializeMessage(
+      m, acks, voiceByMessage, mentionsPerMessage[i], byId, tasksByMessage,
+    )),
   });
 });
 
@@ -144,7 +203,81 @@ async function tellAddressed({ body, thread, space, author }) {
     ownerId: space.owner_id,
     subject: `${author.name} mentioned you in ${thread.name}`,
     where: `"${thread.name}" (${space.name})`,
+    url: `/threads/${thread.id}`,
   });
+  return found;
+}
+
+/**
+ * The direct line rings; a project thread does not.
+ *
+ * ONLY THE ROOM THAT REPLACED WHATSAPP. The direct line exists because the
+ * traffic between a principal and whoever runs their diary — "car's outside",
+ * "he's running late" — was going somewhere Kairos could not see, and it went
+ * there because that place buzzes. A room that has to be opened to be read has
+ * not replaced anything. So every message here reaches everyone else in it.
+ *
+ * Everywhere else, being told is what an @ is for. A project space with four
+ * threads and a working afternoon in it would otherwise produce a notification
+ * a minute, and the reliable end of that is somebody turning notifications off
+ * — after which the direct line stops buzzing too, and the thing this is for
+ * is lost to the thing it is not.
+ *
+ * Whoever was already told by name is skipped, so being @-ed in the direct line
+ * is one buzz rather than two.
+ */
+async function ringTheRoom({ thread, space, author, alreadyTold, preview }) {
+  if (thread.kind !== 'dm') return;
+  const audience = await spaceAudience(space);
+  const named = new Set((alreadyTold || [])
+    .filter((m) => m.kind === 'person' && m.notified).map((m) => m.id));
+
+  // Everybody at once. Sending is on the path of saving the message, and a push
+  // service that has stopped answering must cost one timeout for the room
+  // rather than one per person in it.
+  await Promise.all([...audience]
+    .filter((id) => id !== author.id && !named.has(id))
+    // No email. This is a chat room, and a message a minute in an inbox is how
+    // somebody comes to filter Kairos out of their mail entirely — which would
+    // also lose them the notices that genuinely need an inbox. The push is the
+    // buzz; the words are in Kairos.
+    .map((id) => webPush.notify(id, {
+      title: `${author.name} · ${thread.name}`,
+      body: preview,
+      url: `/threads/${thread.id}`,
+      // One line per room. A phone that has been in a pocket through twenty
+      // messages should light up saying the latest, not stack twenty cards.
+      tag: `thread-${thread.id}`,
+    })));
+}
+
+/**
+ * What a notification is allowed to say about a message.
+ *
+ * NOT THE MESSAGE. A notification is read by whoever is holding the phone, on a
+ * lock screen, in a car or across a table — and in this product the message is
+ * quite likely to be where the principal will be at three o'clock. So the buzz
+ * carries who and where, and the words stay behind a session.
+ */
+function previewOf(body) {
+  return String(body || '').trim() ? 'Sent you a message.' : 'Sent you a voice note.';
+}
+
+/**
+ * Whether a reply may be pinned to that message.
+ *
+ * One function because there are two composers — typed and spoken — and a
+ * reply is a reply whichever one it came out of. Two copies of this check
+ * would be the third time in this codebase that two queries answering one
+ * question drifted apart.
+ *
+ * Returns the id to store, or false if it names something outside this thread.
+ */
+async function resolveReplyTo(replyToId, threadId) {
+  if (replyToId === undefined || replyToId === null || replyToId === '') return null;
+  const target = await db.prepare('SELECT id FROM messages WHERE id = ? AND thread_id = ?')
+    .get(replyToId, threadId);
+  return target ? target.id : false;
 }
 
 async function nextRecordSeq(threadId) {
@@ -156,7 +289,7 @@ async function nextRecordSeq(threadId) {
 router.post('/:threadId/messages', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 
-  const { body, register, recordType } = req.body || {};
+  const { body, register, recordType, replyToId } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write something first.' });
 
   const isRecord = register === 'record';
@@ -164,24 +297,40 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
     return res.status(400).json({ error: 'Choose what kind of record this is.' });
   }
 
+  // Answering something in particular. Checked to be in THIS thread rather
+  // than trusted: an id from another room would render as a quotation of a
+  // conversation the reader has no right to see, which is a leak dressed up
+  // as a convenience. Refused plainly rather than silently dropped, because a
+  // reply that quietly loses its anchor reads to the sender as one that landed.
+  const answers = await resolveReplyTo(replyToId, req.thread.id);
+  if (answers === false) return res.status(400).json({ error: 'That message is not in this conversation.' });
+
   const id = crypto.randomUUID();
   await db.prepare(`
-    INSERT INTO messages (id, thread_id, author_id, body, register, record_type, record_status, record_seq, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO messages (id, thread_id, author_id, body, register, record_type, record_status, record_seq, reply_to_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.thread.id, req.user.id, String(body).trim(),
     isRecord ? 'record' : 'note',
     isRecord ? recordType : null,
     isRecord ? OPEN_STATUS_BY_TYPE[recordType] : null,
     isRecord ? await nextRecordSeq(req.thread.id) : null,
+    answers,
     new Date().toISOString(),
   );
 
-  await tellAddressed({
+  const told = await tellAddressed({
     body: String(body).trim(),
     thread: req.thread,
     space: req.access.space,
     author: req.user,
+  });
+  await ringTheRoom({
+    thread: req.thread,
+    space: req.access.space,
+    author: req.user,
+    alreadyTold: told,
+    preview: previewOf(body),
   });
 
   const stage = isRecord ? await syncStageFromRecords(req.thread.stage_id) : null;
@@ -201,8 +350,13 @@ router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   if (!voice.isAvailable()) return res.status(503).json({ error: voice.UNAVAILABLE });
 
-  const { audio, mimeType, durationMs, body } = req.body || {};
+  const { audio, mimeType, durationMs, body, replyToId } = req.body || {};
   if (!audio) return res.status(400).json({ error: 'Record something first.' });
+
+  // Spoken answers get to answer something too. "Which Thursday?" is a
+  // question somebody is at least as likely to ask out loud as to type.
+  const answers = await resolveReplyTo(replyToId, req.thread.id);
+  if (answers === false) return res.status(400).json({ error: 'That message is not in this conversation.' });
 
   // A voice note is an ordinary message that happens to carry a recording, so
   // everything already built on messages — the direct line, unanswered counts,
@@ -211,9 +365,9 @@ router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
   // recording with no transcript honestly looks like until one arrives.
   const messageId = crypto.randomUUID();
   await db.prepare(`
-    INSERT INTO messages (id, thread_id, author_id, body, register, created_at)
-    VALUES (?, ?, ?, ?, 'note', ?)
-  `).run(messageId, req.thread.id, req.user.id, String(body || '').trim(), new Date().toISOString());
+    INSERT INTO messages (id, thread_id, author_id, body, register, reply_to_id, created_at)
+    VALUES (?, ?, ?, ?, 'note', ?, ?)
+  `).run(messageId, req.thread.id, req.user.id, String(body || '').trim(), answers, new Date().toISOString());
 
   const result = await voice.attach({
     messageId,
@@ -231,6 +385,15 @@ router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
     await db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
     return res.status(result.status || 400).json({ error: result.error });
   }
+
+  // A recording is the case that most needs the buzz: nobody types "the car is
+  // downstairs" while walking to it.
+  await ringTheRoom({
+    thread: req.thread,
+    space: req.access.space,
+    author: req.user,
+    preview: previewOf(''),
+  });
 
   res.status(201).json({ id: messageId, voice: result.voice });
 });
