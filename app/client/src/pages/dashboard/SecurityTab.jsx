@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import EncryptionKeySetup from '../../components/EncryptionKeySetup.jsx';
+import VapidKeySetup from '../../components/VapidKeySetup.jsx';
 import TwoFactorSetup from '../../components/TwoFactorSetup.jsx';
 import SignedInDevices from '../../components/SignedInDevices.jsx';
 import SecurityQuestionSetup from '../../components/SecurityQuestionSetup.jsx';
@@ -216,6 +217,18 @@ export default function SecurityTab() {
           </div>
         ))}
       </section>
+
+      {/* LAST, and that placement is the point. The encryption key is first
+          because everything below it is switched off without one. Nothing
+          depends on these: without them Kairos still shows what has arrived
+          while it is open, it just cannot reach a phone in a pocket. Putting
+          them above two-factor would have said they matter more than they do.
+
+          Same reasoning as the key above for why the app makes them at all —
+          the documented way is an npm command, which assumes a developer and a
+          machine with npm, and the person standing up a deployment is often
+          neither. */}
+      {!state.pushConfigured && <VapidKeySetup />}
     </div>
   );
 }

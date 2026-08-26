@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth, verifyPassword } = require('../lib/auth');
 const { encrypt, decrypt, isConfigured } = require('../lib/secretBox');
+const { isConfigured: pushIsConfigured, problem: pushProblem } = require('../lib/webPush');
 const { SCOPES, verifyStepUp } = require('../lib/stepUp');
 const totp = require('../lib/totp');
 const { BRAND_FULL } = require('../lib/brand');
@@ -53,6 +54,11 @@ router.get('/', async (req, res) => {
     // A deployment with no key cannot hold sensitive fields at all, and says
     // so rather than accepting them and storing them in the clear.
     encryptionConfigured: isConfigured(),
+    // Whether this deployment can reach a phone that is not open. Answered
+    // from the same environment the sender will read, so the card offering to
+    // make the keys and the feature using them cannot disagree.
+    pushConfigured: pushIsConfigured(),
+    pushProblem: pushProblem(),
   });
 });
 
