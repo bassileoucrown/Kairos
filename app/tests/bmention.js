@@ -376,9 +376,31 @@ function client() {
     seenM = Object.fromEntries((r.d.task.mentions || []).map((m) => [m.handle, m]));
     ok('a member of the space is an address', seenM[`adaeze-${ID}`]?.kind === 'person');
     ok('and a contact is still only a mention', seenM[`femi-${ID}`]?.notified === false);
+    // NAMING SOMEBODY IN A TASK HANDS IT TO THEM. The project screen's box
+    // says "@ to name someone" and opened a picker to help — and then filed
+    // the task unassigned, which is worse than not offering the @ at all: the
+    // work looks handed over and nobody has it.
+    ok('and the person named is the person it is for',
+      r.d.task.assigneeId === me.id, JSON.stringify(r.d.task.assigneeId));
+    // Femi is a contact, not an account in this space. Work cannot be handed
+    // to somebody who cannot open it, so the second @ stays a mention.
+    ok('while a contact named alongside them stays a mention',
+      r.d.task.assigneeName !== `Femi Adeyemi`, r.d.task.assigneeName);
+
+    // The other two thirds of the rule, which is what stops this being a
+    // surprise: an explicit answer always wins, in both directions.
+    r = await pa('POST', '/tasks', { spaceId, title: `Chase @adaeze-${ID}`, assigneeId: null });
+    ok('but "nobody" sent deliberately is still nobody',
+      r.s === 201 && r.d.task.assigneeId === null, JSON.stringify(r.d.task.assigneeId));
+    const kitId = (await pa('GET', '/auth/me')).d.user.id;
+    r = await pa('POST', '/tasks', { spaceId, title: `Chase @adaeze-${ID}`, assigneeId: kitId });
+    ok('and somebody named outright beats the @ in the words',
+      r.s === 201 && r.d.task.assigneeId === kitId, JSON.stringify(r.d.task.assigneeId));
+
     r = await pa('GET', `/tasks?spaceId=${spaceId}`);
-    ok('the list carries them', (r.d.tasks[0].mentions || []).length === 2,
-      JSON.stringify(r.d.tasks[0]?.mentions));
+    ok('the list carries them',
+      (r.d.tasks.find((t) => /Confirm cars/.test(t.title))?.mentions || []).length === 2,
+      JSON.stringify(r.d.tasks.find((t) => /Confirm cars/.test(t.title))?.mentions));
 
     // A member who is not the owner's assistant is not handed the address book
     // merely for being added to a thread.

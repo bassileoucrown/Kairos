@@ -157,7 +157,20 @@ self.addEventListener('push', (event) => {
     // One line per conversation rather than a stack of twenty. A phone that has
     // been in a pocket should light up saying the latest, not the backlog.
     tag: data.tag || undefined,
+    // Buzz again when a replacement lands, rather than swapping the card in
+    // silence. Without this, the second message of a conversation updates a
+    // notification nobody is looking at and the phone never moves.
     renotify: !!data.tag,
+    // ANNOUNCED, NOT JUST DISPLAYED. Both of these are the difference between
+    // a notification that reaches somebody and one that is merely waiting to
+    // be found. `silent: false` is nominally the default, but a service worker
+    // that never says so has been left to the browser's mood, and some default
+    // to quiet for pushes with no sound named. The pattern is short and twice
+    // rather than one long buzz — long enough to feel through a pocket, short
+    // enough not to read as an alarm, and this product's alarms mean a
+    // principal is late.
+    silent: false,
+    vibrate: [180, 90, 180],
     data: { url: data.url || '/' },
   }));
 });

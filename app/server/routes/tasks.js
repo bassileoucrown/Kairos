@@ -182,8 +182,43 @@ router.post('/', async (req, res) => {
   if (priority !== undefined && !PRIORITIES.has(priority)) {
     return res.status(400).json({ error: 'Priority must be low, normal, or high.' });
   }
+  /**
+   * NAMING SOMEBODY IN A TASK IS HANDING IT TO THEM.
+   *
+   * The project screen's box says "New task — @ to name someone", opens a
+   * mention picker to help you type it, and then posted the title alone. The
+   * task arrived unassigned, having invited you to assign it — which is worse
+   * than not offering the @ at all, because the work looks handed over and
+   * nobody has it.
+   *
+   * Fixed on the server rather than in that one form, so the thread's task
+   * composer, the project box and anything added later cannot disagree about
+   * what an @ means.
+   *
+   * THE THREE-WAY DISTINCTION MATTERS. A caller that sends no assigneeId is
+   * not deciding, so the @ decides. A caller that sends null has decided:
+   * nobody. A caller that sends an id has decided: them. Only the first of
+   * those reads the title, so picking "Unassigned" from a dropdown is never
+   * quietly overruled by an @ left in the text.
+   */
+  const audience = await spaceAudience(access.space);
+  const found = await mentions.of(String(title).trim(), {
+    viewerId: req.user.id, ownerId: access.space.owner_id, audience,
+  });
+  // The first person named who can actually see this space. Not a contact —
+  // `notified` is already the app's word for "a real account inside the
+  // audience", and work cannot be handed to somebody who cannot open it.
+  // A second @ in the same sentence stays a mention: "confirm cars with @femi"
+  // names one owner and one bystander, and guessing between them would be
+  // worse than the sentence's own order.
+  const named = found.find((m) => m.kind === 'person' && m.notified && m.id !== req.user.id)
+    || found.find((m) => m.kind === 'person' && m.notified);
+  const wanted = assigneeId === undefined ? (named?.id || null) : (assigneeId || null);
+
   // Only someone who can already see the space may be assigned work in it.
-  if (assigneeId && !await resolveAccess(resolvedSpaceId, assigneeId)) {
+  // Applied to the derived answer as well as the given one, so the rule lives
+  // in one place rather than being trusted to whoever resolved the mention.
+  if (wanted && !await resolveAccess(resolvedSpaceId, wanted)) {
     return res.status(400).json({ error: "That person doesn't have access to this space." });
   }
 
@@ -193,13 +228,9 @@ router.post('/', async (req, res) => {
                        assignee_id, created_by, due_at, priority, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
   `).run(id, resolvedSpaceId, resolvedProjectId, resolvedStageId, sourceMessageId || null,
-    String(title).trim().slice(0, 300), assigneeId || null, req.user.id,
+    String(title).trim().slice(0, 300), wanted, req.user.id,
     dueAt || null, priority || 'normal', new Date().toISOString());
 
-  const audience = await spaceAudience(access.space);
-  const found = await mentions.of(String(title).trim(), {
-    viewerId: req.user.id, ownerId: access.space.owner_id, audience,
-  });
   await mentions.notify({
     found,
     author: req.user,

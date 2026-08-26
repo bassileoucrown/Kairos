@@ -82,7 +82,11 @@ function TaskMaker({ message, members, viewerId, onCreate, onCancel }) {
       className="msg-task-form"
       onSubmit={(e) => {
         e.preventDefault();
-        onCreate({ sourceMessageId: message.id, title, assigneeId: assigneeId || undefined, dueAt: dueAt || undefined });
+        // null, not undefined. This dropdown IS the decision, so "Unassigned"
+        // has to arrive as a decision — the server reads a missing assignee as
+        // "nobody said", and would hand the task to whoever an @ left in the
+        // title happens to name.
+        onCreate({ sourceMessageId: message.id, title, assigneeId: assigneeId || null, dueAt: dueAt || undefined });
       }}
     >
       <input
