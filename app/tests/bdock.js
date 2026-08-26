@@ -217,18 +217,39 @@ async function onboard(p, name, email, roleLabel) {
     // is the signature of waiting on the wrong element.
     await page.waitForSelector('.trail-line', { timeout: 20000 });
     await page.waitForSelector('.pad-dock-btn', { timeout: 20000 });
+    // LET THE PAGE STOP GROWING BEFORE SCROLLING IT. The dock shrinks on
+    // downward movement and restores on upward, and it reads direction from
+    // consecutive scrollY values — so a page still laying itself out is a trap.
+    // Content arriving after the scroll changes the document height, the
+    // browser corrects the position, and that correction is an UPWARD movement
+    // which restores the label a moment after the test asked for it to be
+    // gone. It passed alone every time and failed on a loaded board, which is
+    // the tell: not a flaky product, a measurement taken mid-layout.
+    await page.waitForFunction(() => {
+      const h = document.body.scrollHeight;
+      if (window.__lastH === h) return true;
+      window.__lastH = h;
+      return false;
+    }, null, { timeout: 20000, polling: 250 });
     const tall = await page.evaluate(() => document.body.scrollHeight > window.innerHeight + 300);
     ok('the page is long enough for scrolling to mean something', tall);
     // The label goes on the way down; the control itself never does, so a
     // thumb already reaching for it does not find nothing.
     await page.evaluate(() => window.scrollTo(0, 600));
-    await page.waitForTimeout(400);
+    // Waited for rather than slept on, and the position is confirmed as well
+    // as the class: a scroll that silently clamped short would otherwise look
+    // exactly like a dock that refused to shrink.
+    await page.waitForFunction(() => window.scrollY > 120, null, { timeout: 10000 });
+    await page.locator('.pad-dock-btn.is-shrunk')
+      .waitFor({ timeout: 10000 }).catch(() => {});
     ok('scrolling down shrinks it to a dot',
-      (await page.locator('.pad-dock-btn.is-shrunk').count()) === 1);
+      (await page.locator('.pad-dock-btn.is-shrunk').count()) === 1,
+      `scrollY ${await page.evaluate(() => window.scrollY)}`);
     ok('but it is still there to be tapped',
       await page.locator('.pad-dock-btn').isVisible());
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(400);
+    await page.locator('.pad-dock-btn.is-shrunk')
+      .waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
     ok('and coming back up restores the label',
       (await page.locator('.pad-dock-btn.is-shrunk').count()) === 0);
 
