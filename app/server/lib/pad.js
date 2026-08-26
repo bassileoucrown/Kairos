@@ -101,7 +101,7 @@ function turnBelongsTo(p) {
   return p.assignee_id;
 }
 
-function serialize(p, viewerId = null) {
+function serialize(p, viewerId = null, aboutOwnerId = null) {
   const turn = turnBelongsTo(p);
   return {
     id: p.id,
@@ -119,7 +119,13 @@ function serialize(p, viewerId = null) {
     // them, because a line you asked to be reminded of is the one line on the
     // pad that is actively asking for you.
     awake: !!p.wake_at && Date.parse(p.wake_at) <= Date.now() && p.state === 'open',
-    about: p.about_kind ? { kind: p.about_kind, id: p.about_id } : null,
+    // WHOSE appointment, not just which one. The note's own owner is the
+    // wrong answer and was the bug: a private line sits on its AUTHOR's pad,
+    // so an assistant jotting against their principal's meeting produced a
+    // link to /appointments/<their own id>/<booking>, which finds nothing and
+    // reads as a note that opens no page. Resolved from the booking itself in
+    // present() below, so it is right by construction rather than by guess.
+    about: p.about_kind ? { kind: p.about_kind, id: p.about_id, ownerId: aboutOwnerId } : null,
     taskId: p.task_id || null,
     itineraryItemId: p.itinerary_item_id || null,
     createdAt: p.created_at,
@@ -130,6 +136,42 @@ function serialize(p, viewerId = null) {
     turnBelongsTo: turn,
     yoursToAnswer: !!viewerId && turn === viewerId,
   };
+}
+
+/**
+ * Rows, ready to be sent.
+ *
+ * THE ONLY WAY a pad row should reach a response. serialize() cannot do this
+ * on its own — it is synchronous and holds no database — and the six routes
+ * that each called it separately are exactly the shape of drift this codebase
+ * has already been bitten by twice: one of them forgets, and a link somewhere
+ * quietly points at nothing.
+ *
+ * Takes one row or many, and answers in kind.
+ */
+async function present(rows, viewerId = null) {
+  const many = Array.isArray(rows);
+  const all = (many ? rows : [rows]).filter(Boolean);
+  if (all.length === 0) return many ? [] : null;
+
+  // One query for every appointment mentioned, however many lines mention it.
+  const bookingIds = [...new Set(
+    all.filter((r) => r.about_kind === 'booking' && r.about_id).map((r) => r.about_id),
+  )];
+  const owners = new Map();
+  if (bookingIds.length > 0) {
+    const holes = bookingIds.map(() => '?').join(',');
+    for (const b of await db.prepare(
+      `SELECT id, owner_id FROM bookings WHERE id IN (${holes})`,
+    ).all(...bookingIds)) {
+      owners.set(b.id, b.owner_id);
+    }
+  }
+
+  // A missing owner means the appointment is gone. The line keeps its words
+  // and loses its link, rather than offering one that leads to a refusal.
+  const out = all.map((r) => serialize(r, viewerId, owners.get(r.about_id) || null));
+  return many ? out : out[0];
 }
 
 /** Everything this person may see, waking lines first, then newest. */
@@ -151,7 +193,7 @@ async function list(userId, { state = 'open', about = null } = {}) {
     ${SELECT} WHERE ${where.join(' AND ')} ORDER BY p.created_at DESC
   `).all(...params);
 
-  const items = rows.map((r) => serialize(r, userId));
+  const items = await present(rows, userId);
   // Sorted here rather than in SQL: "awake" depends on the clock, and the two
   // backends disagree about how to compare a timestamp to now in a way that is
   // not worth writing twice.
@@ -215,7 +257,9 @@ async function add({
     aboutKind || null, aboutKind ? aboutId : null, new Date().toISOString());
 
   const row = await db.prepare(`${SELECT} WHERE p.id = ?`).get(id);
-  return { ok: true, item: serialize(row) };
+  // Through present() like every other path, so the freshly-made line
+  // carries the same resolved about-owner the list would give it.
+  return { ok: true, item: await present(row) };
 }
 
 /**
@@ -318,7 +362,7 @@ async function addReply({ padItemId, authorId, body }) {
 }
 
 module.exports = {
-  list, get, add, serialize, canEdit, canSettle, tell, visibleTo, knock,
+  list, get, add, serialize, present, canEdit, canSettle, tell, visibleTo, knock,
   replies, addReply, serializeReply, turnBelongsTo,
   VISIBILITIES, STATES, ABOUT_KINDS, SELECT,
 };

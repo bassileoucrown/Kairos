@@ -114,7 +114,7 @@ router.patch('/:id', loadItem, async (req, res) => {
   await db.prepare(`UPDATE pad_items SET ${fields.join(', ')} WHERE id = ?`)
     .run(...values, req.item.id);
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  res.json({ item: pad.serialize(row) });
+  res.json({ item: await pad.present(row, req.user.id) });
 });
 
 router.delete('/:id', loadItem, async (req, res) => {
@@ -168,7 +168,7 @@ router.post('/:id/hand', loadItem, async (req, res) => {
 
   await db.prepare('UPDATE pad_items SET assignee_id = ? WHERE id = ?').run(toUserId, req.item.id);
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  const item = pad.serialize(row, req.user.id);
+  const item = await pad.present(row, req.user.id);
 
   // Two different things, and it used to only do the second. Being handed work
   // is not a mention of you — mentions.notify only reaches @handles written in
@@ -220,7 +220,7 @@ router.post('/:id/replies', loadItem, async (req, res) => {
 
   res.status(201).json({
     reply: result.reply,
-    item: pad.serialize(row, req.user.id),
+    item: await pad.present(row, req.user.id),
   });
 });
 
@@ -289,7 +289,7 @@ router.post('/:id/task', loadItem, async (req, res) => {
   });
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  res.status(201).json({ item: pad.serialize(row, req.user.id), taskId });
+  res.status(201).json({ item: await pad.present(row, req.user.id), taskId });
 });
 
 // --- Becoming something on the diary --------------------------------------
@@ -342,7 +342,7 @@ router.post('/:id/itinerary', requirePaAccessForBody, async (req, res) => {
     .run(itemId, 'done', new Date().toISOString(), item.id);
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(item.id);
-  res.status(201).json({ item: pad.serialize(row, req.user.id), itineraryItemId: itemId, status });
+  res.status(201).json({ item: await pad.present(row, req.user.id), itineraryItemId: itemId, status });
 });
 
 /**

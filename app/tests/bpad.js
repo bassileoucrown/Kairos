@@ -225,6 +225,57 @@ const SECRET = 'Call the lawyer about the estate before Friday.';
     r = await boss('POST', '/pad', { body: 'x', aboutKind: 'nonsense', aboutId: 'y' });
     ok('a kind nobody defined is refused', r.s === 400, String(r.s));
 
+
+    head('A note written on somebody else\'s appointment leads back to it:');
+    // THE BUG. A private line sits on its AUTHOR's pad, so when an assistant
+    // jots against their principal's meeting the note's owner is the assistant
+    // and the appointment's owner is the principal. Building the link from the
+    // note produced /appointments/<the assistant>/<booking>, which finds
+    // nothing — a note that opens no page, which reads as broken rather than
+    // as plain text.
+    await boss('PUT', '/availability', {
+      rules: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: '00:00', endTime: '23:30' })),
+    });
+    const mt = (await boss('POST', '/meeting-types', {
+      name: 'Intro', durationMinutes: 30, locationType: 'video', accessTier: 1,
+    })).d.meetingType;
+    const anon = client();
+    const slots = (await anon('GET', `/public/adaeze-${ID}/${mt.slug}/slots`)).d.slots || [];
+    await anon('POST', `/public/adaeze-${ID}/${mt.slug}/book`, {
+      timezone: 'UTC', startAt: slots[0].startAt, name: 'Chidi Eze', email: `chidi2${ID}@x.com`,
+    });
+    const appointment = (await boss('GET', '/bookings')).d.bookings[0];
+
+    r = await pa('POST', '/pad', {
+      body: 'Chase them for the draft.', aboutKind: 'booking', aboutId: appointment.id,
+    });
+    ok('the assistant can jot against it', r.s === 201, JSON.stringify(r.d).slice(0, 140));
+    const jotted = r.d.item;
+    ok('the note sits on the assistant\'s own pad, being private',
+      jotted.ownerId === paMe.id, `${jotted.ownerId} vs ${paMe.id}`);
+    // The whole fix: the pointer names the APPOINTMENT's owner, not the note's.
+    ok('but the appointment it points at is the principal\'s',
+      jotted.about?.ownerId === me.id, JSON.stringify(jotted.about));
+
+    // The link the screen builds, followed for real.
+    r = await pa('GET', `/pa/${jotted.about.ownerId}/bookings/${jotted.about.id}`);
+    ok('so the link actually opens the appointment', r.s === 200, String(r.s));
+    // And the same holds when the pad is listed, not just at the moment of
+    // writing — six routes used to serialize these separately.
+    r = await pa('GET', '/pad');
+    const listed = (r.d.items || []).find((i) => i.id === jotted.id);
+    ok('and still does when the pad is read back',
+      listed?.about?.ownerId === me.id, JSON.stringify(listed?.about));
+
+    head('And a note about an appointment that has since gone says so:');
+    await boss('POST', `/bookings/${appointment.id}/cancel`, {});
+    r = await pa('GET', '/pad');
+    const afterCancel = (r.d.items || []).find((i) => i.id === jotted.id);
+    // Cancelled is not deleted — the row is still there, so the link still
+    // works and shows a cancelled appointment, which is the truth.
+    ok('a cancelled appointment still leads somewhere',
+      afterCancel?.about?.ownerId === me.id, JSON.stringify(afterCancel?.about));
+
     head('And the pad can be cleared:');
     r = await boss('DELETE', `/pad/${officeId}`);
     ok('your own line goes when you say so', r.s === 204, String(r.s));

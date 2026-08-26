@@ -33,10 +33,27 @@ function atHour(daysAhead, hour) {
   return d.toISOString();
 }
 
-function AboutLink({ about, ownerId }) {
+/**
+ * Back to whatever the line was written against.
+ *
+ * The owner comes from the APPOINTMENT, resolved server-side, not from the
+ * note. Those are different people whenever an assistant writes it — a private
+ * line sits on its author's pad — and using the note's owner built a link to
+ * /appointments/<the assistant>/<booking>, which finds nothing. A note that
+ * opens no page is worse than a note with no link, because it looks broken
+ * rather than plain.
+ */
+function AboutLink({ about }) {
   if (!about) return null;
   if (about.kind === 'booking') {
-    return <Link className="pad-about" to={`/appointments/${ownerId}/${about.id}`}>on an appointment</Link>;
+    // No owner means the appointment is gone. Say what the line was about and
+    // offer nothing to click, rather than a link that leads to a refusal.
+    if (!about.ownerId) return <span className="pad-about">on an appointment since removed</span>;
+    return (
+      <Link className="pad-about" to={`/appointments/${about.ownerId}/${about.id}`}>
+        on an appointment
+      </Link>
+    );
   }
   if (about.kind === 'itinerary') return <span className="pad-about">on the itinerary</span>;
   return <span className="pad-about">about a contact</span>;
@@ -284,7 +301,7 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
             {item.wakeAt && !settled && (
               <> · back {dayLabelInZone(item.wakeAt, me?.timezone || 'UTC')}</>
             )}
-            {item.about && <> · <AboutLink about={item.about} ownerId={item.ownerId || ownerId} /></>}
+            {item.about && <> · <AboutLink about={item.about} /></>}
             {/* A promoted line is kept rather than deleted, so it can say what
                 it became instead of just vanishing from the pad. */}
             {item.taskId && <> · <Link to="/tasks">now a task</Link></>}
