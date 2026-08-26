@@ -94,7 +94,13 @@ async function onboard(p, name, email, roleLabel) {
     // appear. The rail paints in order, so waiting on '.nav-item' returns as
     // soon as "The day" exists and the text read a moment later was just that
     // — a race that only showed up on the slower Postgres board.
-    await reader.waitForSelector('.app-nav a:has-text("Notices")', { timeout: 15000 });
+    // Waited for the BADGE, not for the link. The previous fix waited for the
+    // Notices entry, which was closer but still one step short: the rail paints
+    // from the route, and the counts arrive afterwards from /attention. So the
+    // link exists a beat before any number does, and reading the nav in that
+    // beat gets a rail with no badges in it — which on the slower Postgres
+    // board is where this landed. Wait for the thing being asserted on.
+    await reader.waitForSelector('.app-nav a:has-text("Notices") .nav-badge', { timeout: 15000 });
     const nav = await reader.locator('.app-nav nav').innerText();
     ok('the rail carries Notices with an unread badge',
       nav.includes('Notices') && /Notices\s*\n?1/.test(nav), nav);

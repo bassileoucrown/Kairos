@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import SoonButton from '../../components/SoonButton.jsx';
@@ -6,6 +6,7 @@ import AppShell from '../../components/AppShell.jsx';
 import VoiceRecorder from '../../components/VoiceRecorder.jsx';
 import { MentionText, MentionPicker } from '../../components/Mention.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
+import { useVisiblePoll } from '../../lib/useVisiblePoll.js';
 import TaskList from './TaskList.jsx';
 
 const RECORD_TYPES = [
@@ -300,8 +301,70 @@ export default function ThreadView() {
         .catch(() => {});
     }).catch((err) => setError(err.message));
   }
+
+  /**
+   * Just the messages, for asking again while somebody sits here reading.
+   *
+   * Separate from load() deliberately: that also refetches the space's members
+   * and the thread's tasks, which is three requests to answer a question that
+   * only needs one. Polling the heavy one every few seconds would be three
+   * times the traffic for no more truth.
+   *
+   * Errors are swallowed here and nowhere else. A refresh that fails is a
+   * refresh — the next one is seconds away — and turning a dropped packet into
+   * a red banner across a conversation somebody is reading would be worse than
+   * the momentary staleness it reports.
+   */
+  const refresh = useCallback(() => {
+    api.get(`/threads/${threadId}/messages`)
+      .then((d) => setData((was) => (was ? { ...was, messages: d.messages } : d)))
+      .catch(() => {});
+  }, [threadId]);
+
   useEffect(() => { load(); }, [threadId]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }); }, [data?.messages.length]);
+  useVisiblePoll(refresh, 12000);
+
+  /**
+   * Arriving without stealing the reader's place.
+   *
+   * The old rule was: scroll to the end whenever the message count changes.
+   * That is right while you are at the foot of a conversation and wrong the
+   * moment you are not — somebody reading back through last Tuesday gets
+   * yanked to the bottom because a colleague said "ok" — and the more traffic
+   * a room has, the more often it happens. So: at the bottom, follow along.
+   * Away from it, stay exactly where you are and say what arrived.
+   */
+  const atBottom = useRef(true);
+  const [behind, setBehind] = useState(0);
+  const count = data?.messages.length || 0;
+  const lastCount = useRef(0);
+
+  useEffect(() => {
+    const el = document.scrollingElement || document.documentElement;
+    const check = () => {
+      atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+      if (atBottom.current) setBehind(0);
+    };
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, []);
+
+  useEffect(() => {
+    const grew = count - lastCount.current;
+    lastCount.current = count;
+    if (grew <= 0) return;
+    if (atBottom.current) {
+      endRef.current?.scrollIntoView({ block: 'nearest' });
+    } else {
+      setBehind((b) => b + grew);
+    }
+  }, [count]);
+
+  function catchUp() {
+    setBehind(0);
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   async function send(e) {
     e.preventDefault();
@@ -388,6 +451,13 @@ export default function ThreadView() {
                   onDone={markDone} />
           ))}
           <div ref={endRef} />
+          {/* Said rather than done. Somebody reading back through last Tuesday
+              keeps their place, and finds out what landed when they look up. */}
+          {behind > 0 && (
+            <button className="thread-behind" type="button" onClick={catchUp}>
+              {behind === 1 ? '1 new message' : `${behind} new messages`} ↓
+            </button>
+          )}
         </div>
 
         {tasks.length > 0 && view === 'all' && (

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
 import TimeUp from './TimeUp.jsx';
 import PadDock from './PadDock.jsx';
+import { useVisiblePoll } from '../lib/useVisiblePoll.js';
 
 // One navigation for the whole app.
 //
@@ -221,6 +222,10 @@ export default function AppShell({ children, title, actions, active }) {
     approvals: 0, notices: 0, messages: 0, tasks: 0, requests: 0,
   });
   const [waiting, setWaiting] = useState(0);
+  // Which badges have gone up since this reader last looked at them. A count
+  // is a fact; this is the news, and it is what stops a live rail from being
+  // a rail that renumbers itself behind your back.
+  const [arrived, setArrived] = useState(() => new Set());
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -235,22 +240,54 @@ export default function AppShell({ children, title, actions, active }) {
     }).catch(() => {});
   }, []);
 
-  // Refetched on every navigation, which is when it can have changed from the
-  // reader's point of view: they have just done something, or come back after
-  // being away. Deliberately not polled — a rail that quietly renumbers itself
-  // while somebody is reading it is a rail that makes them look twice.
-  useEffect(() => {
+  /**
+   * What is waiting, kept current.
+   *
+   * This used to refetch only on navigation, on the reasoning that "a rail
+   * that quietly renumbers itself while somebody is reading it is a rail that
+   * makes them look twice". That reasoning is right and is kept — the fault
+   * was the remedy. Somebody sitting on Today while their assistant sends
+   * three messages should not have to click something unrelated to discover
+   * them; the answer is to ANNOUNCE a rise rather than to sneak it in, which
+   * is what `arrived` below is for. Silence was never the point; not being
+   * startled was.
+   */
+  const refreshBadges = useCallback(() => {
     if (!activeId) return;
-    let live = true;
     api.get(`/attention?principalId=${activeId}`)
       .then((d) => {
-        if (!live) return;
-        setBadges(d.counts);
+        setBadges((was) => {
+          // Which counts went UP since the last look. A number that fell —
+          // because you just dealt with something — is not news.
+          const risen = Object.keys(d.counts).filter((k) => (d.counts[k] || 0) > (was[k] || 0));
+          if (risen.length > 0) setArrived((a) => new Set([...a, ...risen]));
+          return d.counts;
+        });
         setWaiting(d.total);
       })
       .catch(() => {});
-    return () => { live = false; };
-  }, [activeId, location.pathname, location.search]);
+  }, [activeId]);
+
+  // On arriving anywhere, and on the way back to the tab.
+  useEffect(() => { refreshBadges(); }, [refreshBadges, location.pathname, location.search]);
+  // Slow on purpose. The question is "has anything landed", which nobody needs
+  // answered to the second, and a phone in a pocket should not be asking at
+  // all — see lib/useVisiblePoll.js.
+  useVisiblePoll(refreshBadges, 25000);
+
+  // Looking at the thing clears its mark. Not a read receipt — just "you have
+  // been shown this", which is all the dot ever claimed.
+  useEffect(() => {
+    if (arrived.size === 0) return;
+    const here = NAV.find((item) => location.pathname.startsWith(item.match || item.to.split('?')[0]));
+    if (here?.badge && arrived.has(here.badge)) {
+      setArrived((a) => {
+        const next = new Set(a);
+        next.delete(here.badge);
+        return next;
+      });
+    }
+  }, [location.pathname, arrived]);
 
   function switchPrincipal(id) {
     setActivePrincipal(id);
@@ -343,6 +380,11 @@ export default function AppShell({ children, title, actions, active }) {
                       : item.to)
                     : item.to;
                   const count = item.badge ? badges[item.badge] : 0;
+                  // Something landed here since you last looked. The number
+                  // alone cannot say that — three unread and three read look
+                  // identical — so the arrival gets its own mark and the mark
+                  // clears when you open the screen it is about.
+                  const isNew = !!item.badge && arrived.has(item.badge);
                   return (
                     <NavLink
                       key={item.label}
@@ -352,7 +394,19 @@ export default function AppShell({ children, title, actions, active }) {
                     >
                       <span className="nav-icon" aria-hidden="true">{item.icon}</span>
                       <span className="nav-label">{item.label}</span>
-                      {count > 0 && <span className="nav-badge">{count}</span>}
+                      {count > 0 && (
+                        // The "new" part is announced with a label rather than
+                        // hidden text inside the badge: text in there becomes
+                        // part of the badge's own content, so anything reading
+                        // the number back — a person, or a test — gets the
+                        // explanation glued onto it.
+                        <span
+                          className={'nav-badge' + (isNew ? ' is-new' : '')}
+                          aria-label={isNew ? `${count} waiting, new since you last looked` : `${count} waiting`}
+                        >
+                          {count}
+                        </span>
+                      )}
                       {item.soon && <span className="nav-soon">Soon</span>}
                     </NavLink>
                   );
