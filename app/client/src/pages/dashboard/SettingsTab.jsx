@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import DeleteAccount from '../../components/DeleteAccount.jsx';
 import ConnectorsPanel from './ConnectorsPanel.jsx';
 import HandleCard from './HandleCard.jsx';
+import InstallApp from '../../components/InstallApp.jsx';
 import { api } from '../../lib/api.js';
 import { BRAND_SHORT } from '../../lib/brand.js';
 
@@ -72,6 +73,8 @@ export default function SettingsTab({ ownerId }) {
       {/* First, because it is the one thing on this screen that is about who
           you are rather than what is wired up. */}
       <HandleCard />
+
+      <InstallApp />
 
       <ConnectorsPanel ownerId={ownerId} />
 

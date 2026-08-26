@@ -2,8 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- viewport-fit=cover so a phone's safe-area insets are ours to respect
+     rather than the browser's to pad around; see the pad dock's bottom
+     offset in styles.css. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Kairos by Exousia</title>
+<meta name="description" content="Scheduling and custody for principals and the people who run their days." />
+
+<!-- Installed on a phone, this is what makes it an app rather than a tab:
+     an icon on the home screen, no address bar, and — on iOS — the only
+     state in which the browser will ever deliver a push notification. -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#3E6357" />
+
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<!-- iOS reads none of the manifest's icons and needs to be told separately. -->
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Kairos" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 </head>
 <body>
 <div id="root"></div>

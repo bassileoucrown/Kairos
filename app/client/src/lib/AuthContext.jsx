@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api, ApiError } from './api';
+import { signedOut } from './pwa.js';
 
 const AuthContext = createContext(null);
 
@@ -41,6 +42,10 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await api.post('/auth/logout');
     setUser(null);
+    // Empty the app's offline shell too. Nothing private is ever cached — see
+    // public/sw.js, which does not touch /api at all — but a laptop passed
+    // between two assistants should not open on the last person's copy.
+    signedOut();
   }, []);
 
   const updateUser = useCallback((patch) => {
