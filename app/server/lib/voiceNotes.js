@@ -143,6 +143,18 @@ async function open(messageId) {
   return { buffer: Buffer.from(plain, 'base64'), mimeType: row.mime_type };
 }
 
+/**
+ * Drops one recording, now, because its message was taken back.
+ *
+ * The sweep below is about time; this is about intent, and the two must not be
+ * confused. A voice note whose text was withdrawn while the audio still played
+ * would be the loudest possible version of not having withdrawn it.
+ */
+async function remove(messageId) {
+  const res = await db.prepare('DELETE FROM voice_notes WHERE message_id = ?').run(messageId);
+  return res?.changes ?? 0;
+}
+
 /** Drops recordings past their date. The messages they belonged to stay. */
 async function sweepExpired() {
   const res = await db.prepare('DELETE FROM voice_notes WHERE expires_at <= ?')
@@ -164,5 +176,5 @@ function startVoiceExpiry() {
 
 module.exports = {
   MAX_SECONDS, MAX_BYTES, RETENTION_DAYS, ALLOWED_MIME, UNAVAILABLE,
-  isAvailable, attach, forThread, open, sweepExpired, startVoiceExpiry,
+  isAvailable, attach, forThread, open, remove, sweepExpired, startVoiceExpiry,
 };

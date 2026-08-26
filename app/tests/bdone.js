@@ -166,6 +166,10 @@ function client() {
     await p.goto(`${BASE}/threads/${threadId}`);
     await p.waitForSelector('.msg-note:has(audio)', { timeout: 20000 });
     const voiceNote = p.locator('.msg-note:has(audio)').last();
+    // The verbs belong to the message you picked. Tapping the row is how you
+    // pick it — and a recording has no bubble, which is exactly why the handle
+    // is the row. See pickHandler in ThreadView.
+    await voiceNote.click({ position: { x: 5, y: 5 } });
     ok('and the screen offers to mark it done with nothing written',
       (await voiceNote.locator('button:has-text("Mark done")').count()) === 1);
     ok('saying so plainly, where it used to only offer the heavy paths',

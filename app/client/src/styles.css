@@ -2981,3 +2981,56 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .minute-when { font-weight: 400; }
 .minute-body { font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .booking-minutes textarea { width: 100%; }
+
+/* --- Picking one message ---------------------------------------------------
+   Five verbs under every line is what this used to be, and on a phone it was
+   four cramped buttons beneath every sentence anybody had said. Tapping a
+   message is how a person says "this one"; the verbs then belong to it. */
+
+/* The whole row is the handle — see pickHandler in ThreadView for why it is
+   not the bubble. A voice note has no bubble to tap. */
+.msg-note, .msg-record { cursor: default; }
+.msg-note.is-picked .msg-bubble,
+.msg-note.is-picked .msg-voice,
+.msg-record.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Withdrawn: the words are gone from the row, and what is left says so. */
+.msg-bubble.is-withdrawn {
+  font-style: italic; color: var(--text-muted);
+  background: var(--bg); border-style: dashed;
+}
+.msg-promote.is-danger { color: var(--danger); }
+
+/* --- Your other conversations ---------------------------------------------
+   A switcher rather than a merge: the office room holds the principal and
+   every assistant, so folding private lines into it would put two people's
+   conversation in front of everybody. */
+.line-switcher {
+  display: flex; gap: 6px; margin-bottom: 12px;
+  overflow-x: auto; padding-bottom: 4px;
+  /* The one row on this screen allowed to scroll sideways — a phone cannot
+     show six rooms at once, and wrapping them would push the conversation
+     itself below the fold. */
+  scrollbar-width: thin;
+}
+.line-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font: inherit; font-size: 0.82rem; color: var(--text-muted);
+  cursor: pointer; white-space: nowrap; max-width: 60vw;
+}
+.line-chip:hover { border-color: var(--accent); color: var(--text); }
+.line-chip.is-here {
+  background: var(--accent); border-color: var(--accent); color: #fff; cursor: default;
+}
+.line-chip.is-private:not(.is-here) { border-style: dashed; }
+.line-chip-name { overflow: hidden; text-overflow: ellipsis; }
+.line-chip-count {
+  background: var(--accent); color: #fff;
+  min-width: 18px; padding: 0 5px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; text-align: center;
+}

@@ -346,6 +346,7 @@ function client() {
     await p.waitForSelector('.msg-note', { timeout: 20000 });
 
     const line = p.locator(`#m-${said.d.id}`);
+    await line.click({ position: { x: 5, y: 5 } });
     ok('your own line offers Edit',
       (await line.locator('button:has-text("Edit")').count()) === 1);
     await line.locator('button:has-text("Edit")').click();
@@ -353,9 +354,48 @@ function client() {
     await p.fill('textarea[aria-label="Edit this message"]', 'Car at half six tomorrow');
     await p.click('.msg-edit button:has-text("Save")');
     await p.waitForSelector('.msg-edit', { state: 'detached', timeout: 15000 });
+    // WAIT FOR THE WORDS, do not read once. The edit form unmounts as soon as
+    // the save resolves, and the message re-renders when the reload lands a
+    // moment later — reading innerText in between catches the row mid-flight
+    // and returns the avatar and nothing else. This failed intermittently
+    // exactly that way.
+    await line.locator('.msg-bubble', { hasText: 'half six' })
+      .waitFor({ timeout: 15000 })
+      .catch(() => {});
+    const afterSave = await line.innerText();
     ok('and saving really changes it',
-      /half six/.test(await line.innerText()), (await line.innerText()).slice(0, 120));
+      /half six/.test(afterSave), afterSave.slice(0, 120));
     ok('with "edited" against it', /edited/.test(await line.innerText()));
+
+    // ---- Picking a message, and taking one back ---------------------------
+    head('Taking back something you said:');
+    const regret = await boss('POST', `/threads/${threadId}/messages`,
+      { body: 'Tell him the number is forty-two million.' });
+    const taken = await boss('DELETE', `/threads/${threadId}/messages/${regret.d.id}`);
+    ok('your own note can be withdrawn', taken.s === 200, JSON.stringify(taken.d));
+
+    const tombstone = (await pa('GET', `/threads/${threadId}/messages`))
+      .d.messages.find((m) => m.id === regret.d.id);
+    // A TOMBSTONE, NOT A DELETE. The words go and the fact stays: this is the
+    // product that freezes a record on acknowledgement and keeps an immutable
+    // trail on every appointment, and a room where a line can vanish without
+    // trace is a room whose history nobody can rely on.
+    ok('the words are gone from the row itself', tombstone.body === '', JSON.stringify(tombstone.body));
+    ok('but the row is still there, saying so', !!tombstone.withdrawnAt);
+    ok('and still carries who said it', tombstone.authorName === 'Adaeze Okonkwo');
+    ok('the number is nowhere in what the other person is sent',
+      !JSON.stringify(await pa('GET', `/threads/${threadId}/messages`)).includes('forty-two million'));
+
+    ok('twice is refused rather than re-stamped',
+      (await boss('DELETE', `/threads/${threadId}/messages/${regret.d.id}`)).s === 409);
+    const someoneElse = await pa('POST', `/threads/${threadId}/messages`, { body: 'Noted.' });
+    ok('and you cannot take back somebody else\'s words',
+      (await boss('DELETE', `/threads/${threadId}/messages/${someoneElse.d.id}`)).s === 403);
+    // Withdrawing a record would be exactly the edit the lock exists to
+    // prevent, wearing a different name.
+    const refusedRec = await boss('DELETE', `/threads/${threadId}/messages/${rec.d.id}`);
+    ok('a record cannot be withdrawn at all', refusedRec.s === 400, String(refusedRec.s));
+    ok('and is told to supersede instead', /supersede/i.test(refusedRec.d.error || ''), refusedRec.d.error);
 
     head('An @ in the middle of a sentence:');
     // THE MOST NATURAL PLACE TO CLICK A PERSON, and for a while the one place
@@ -451,7 +491,35 @@ function client() {
     );
     ok('which opens the room for the two of you', true);
 
+    head('Your other conversations, from inside one of them:');
+    // A SWITCHER, NOT A MERGE. The office room holds the principal AND every
+    // assistant; folding a private line into it would put two people's
+    // conversation in front of everybody, which is the leak the pair room
+    // exists to prevent and the end of the general room being general.
+    await p.goto(`${BASE}/threads/${threadId}`);
+    await p.waitForSelector('.line-switcher', { timeout: 20000 });
+    const chips = await p.locator('.line-chip').allInnerTexts();
+    ok('the office room and the private line are both offered',
+      chips.length >= 2, JSON.stringify(chips));
+    ok('and the one you are in is marked as such',
+      (await p.locator('.line-chip.is-here').count()) === 1);
+
+    // What was said privately must not have leaked into the general room.
+    ok('nothing from the private line is in the general one',
+      !/Between us/.test(await p.locator('.msg-stream').innerText()));
+
+    const otherChip = p.locator('.line-chip:not(.is-here)').first();
+    await otherChip.click();
+    await p.waitForFunction(
+      (t) => window.location.pathname !== `/threads/${t}`, threadId, { timeout: 20000 },
+    );
+    await p.waitForSelector('.msg-stream', { timeout: 20000 });
+    ok('and switching lands in the other room',
+      /Between us/.test(await p.locator('.msg-stream').innerText()),
+      (await p.locator('.msg-stream').innerText()).slice(0, 120));
+
     head('A past appointment on screen:');
+    
     await p.goto(`${BASE}/appointments/${bossId}/${gone}`);
     await p.waitForSelector('.card', { timeout: 20000 });
     const page = await p.locator('body').innerText();

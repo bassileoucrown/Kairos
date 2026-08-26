@@ -444,6 +444,19 @@ CREATE TABLE IF NOT EXISTS messages (
   -- Always an ordinary message, and always in the same thread: this is a
   -- pointer within one conversation, not a way to quote across rooms.
   reply_to_id   TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  -- Taken back, but not pretended away.
+  --
+  -- A TOMBSTONE RATHER THAN A DELETE, and in this product that is not
+  -- squeamishness. People type the wrong thing into a chat and reasonably want
+  -- it gone — but a room where a line can vanish without trace is a room whose
+  -- history nobody can rely on, and this is the same product that freezes a
+  -- record on acknowledgement and keeps an immutable trail against every
+  -- appointment. So the body goes and the fact does not: who wrote it, when,
+  -- and that there was something here somebody thought better of.
+  --
+  -- Anyone who already read it read it. Erasing the row would have the product
+  -- assert something untrue about what happened in the room.
+  withdrawn_at  TEXT,
   created_at    TEXT NOT NULL,
   edited_at     TEXT
 );

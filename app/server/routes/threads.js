@@ -91,6 +91,10 @@ function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tas
     promotedByName: m.promoted_by_name,
     supersedesId: m.supersedes_id,
     locked: !!m.locked_at,
+    // Taken back. The body is gone from the row itself, so there is nothing
+    // here to leak — what remains is that somebody said something and thought
+    // better of it, which is the honest state of the room.
+    withdrawnAt: m.withdrawn_at || null,
     createdAt: m.created_at,
     editedAt: m.edited_at,
     acks: acks.filter((a) => a.message_id === m.id).map((a) => ({ userId: a.user_id, name: a.name, ackedAt: a.acked_at })),
@@ -581,6 +585,53 @@ router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {
 
 // The escape hatch from immutability: a new record that replaces a locked one,
 // leaving both in the history.
+/**
+ * Taking back something you said.
+ *
+ * A TOMBSTONE, NOT A DELETE, and in this product that is not squeamishness.
+ * People type the wrong thing into a chat and reasonably want it gone — but
+ * this is the same product that freezes a record on acknowledgement and keeps
+ * an immutable trail against every appointment, and a room where a line can
+ * vanish without trace is a room whose history nobody can rely on. Anyone who
+ * already read it read it; erasing the row would have Kairos assert something
+ * untrue about what happened.
+ *
+ * So the words go and the fact stays: who, when, and that there was something
+ * here. The body is overwritten in the row rather than hidden at render time,
+ * because a body that still exists is a body that leaks the first time
+ * somebody writes a query that forgets to check.
+ *
+ * ONLY YOUR OWN, and never a record. A record is the thing other people have
+ * agreed to and cited; withdrawing one would be exactly the edit the lock
+ * exists to prevent, wearing a different name. Supersede is how a record
+ * changes.
+ */
+router.delete('/:threadId/messages/:messageId', loadThread, async (req, res) => {
+  const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
+    .get(req.params.messageId, req.thread.id);
+  if (!message) return res.status(404).json({ error: 'Message not found.' });
+  if (message.author_id !== req.user.id) {
+    return res.status(403).json({ error: 'You can only take back your own messages.' });
+  }
+  if (message.register === 'record') {
+    return res.status(400).json({
+      error: 'A record cannot be taken back — people have acknowledged and cited it. '
+        + 'Supersede it instead, which leaves both in the history.',
+    });
+  }
+  if (message.withdrawn_at) return res.status(409).json({ error: 'That is already withdrawn.' });
+
+  await db.prepare("UPDATE messages SET body = '', withdrawn_at = ? WHERE id = ?")
+    .run(new Date().toISOString(), message.id);
+
+  // The recording goes with it. A voice note whose text was withdrawn but whose
+  // audio still plays would be the loudest possible version of not having
+  // withdrawn it.
+  await voice.remove(message.id).catch(() => {});
+
+  res.json({ ok: true });
+});
+
 router.post('/:threadId/messages/:messageId/supersede', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
 

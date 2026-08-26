@@ -9,6 +9,7 @@ import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 import { useVisiblePoll } from '../../lib/useVisiblePoll.js';
 import TaskList from './TaskList.jsx';
 import { PersonName } from '../../components/PersonMenu.jsx';
+import LineSwitcher from '../../components/LineSwitcher.jsx';
 
 const RECORD_TYPES = [
   { value: 'decision', label: 'Decision' },
@@ -23,6 +24,38 @@ const STATUS_LABEL = {
   open: 'Awaiting', accepted: 'Accepted', declined: 'Declined',
   resolved: 'Resolved', superseded: 'Superseded',
 };
+
+/**
+ * Put the words on the clipboard.
+ *
+ * Refused in plenty of ordinary situations — an insecure origin, a browser
+ * that wants a fresher gesture — and there is nothing useful to say when it
+ * is: the text is on screen and selectable, so a convenience failing is not
+ * the task failing.
+ */
+/**
+ * Picking a message by tapping it — anywhere on it.
+ *
+ * ON THE ROW, NOT THE BUBBLE, for two reasons. A voice note has no bubble at
+ * all: its body is empty until somebody transcribes it, so a bubble-only
+ * handle would leave recordings — the format most likely to be sent in error
+ * from a car — as the one kind of message that could not be picked or taken
+ * back. And the bubble already contains buttons, because an @ in it opens a
+ * person menu; a button inside a button is invalid and behaves accordingly.
+ *
+ * Anything already interactive keeps its own click. Tapping a name, a link, an
+ * audio control or a verb means that thing, not "select this line".
+ */
+function pickHandler(id, selected, onSelect) {
+  return (e) => {
+    if (e.target.closest('button, a, audio, input, textarea, select, label')) return;
+    onSelect(selected ? null : id);
+  };
+}
+
+function copyText(text) {
+  try { navigator.clipboard?.writeText(String(text || '')); } catch { /* on screen anyway */ }
+}
 
 function initials(name) {
   return (name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -198,7 +231,11 @@ function VoiceBubble({ threadId, m }) {
   );
 }
 
-function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone, onReply, onEdit }) {
+function Note({
+  m, threadId, canWrite, members, viewerId,
+  onPromote, onMakeTask, onDone, onReply, onEdit, onWithdraw,
+  selected, onSelect,
+}) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -207,7 +244,12 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
   // retype, and the transcript it does not have yet is a different feature.
   const mine = m.authorId === viewerId && hasText;
   return (
-    <div className={'msg-note' + (m.doneAt ? ' is-done' : '')} id={`m-${m.id}`}>
+    <div
+      className={'msg-note' + (m.doneAt ? ' is-done' : '') + (selected ? ' is-picked' : '')
+        + (m.withdrawnAt ? ' is-withdrawn' : '')}
+      id={`m-${m.id}`}
+      onClick={pickHandler(m.id, selected, onSelect)}
+    >
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
         <div className="msg-who">
@@ -221,6 +263,10 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
             onCancel={() => setEditing(false)}
             onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
           />
+        ) : m.withdrawnAt ? (
+          // The words are gone from the row itself; what is left is that
+          // somebody said something and thought better of it.
+          <div className="msg-bubble is-withdrawn">Message withdrawn</div>
         ) : hasText && (
           <div className="msg-bubble">
             <MentionText body={m.body} mentions={m.mentions} viewerId={viewerId} />
@@ -254,14 +300,30 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
             turned out the car was cancelled" — and hiding the answer button
             behind the message's state is what made a task the end of a
             conversation. */}
-        {canWrite && !picking && !tasking && !editing && (
+        {/* ONLY ON THE MESSAGE YOU PICKED. Five verbs under every line is what
+            this used to be, and on a phone it was four cramped buttons beneath
+            every sentence somebody had said. Tapping a message is how a person
+            says "this one" — the verbs then belong to it, and to nothing else.
+            The row is in the same place in the tree either way, so what changed
+            is when it is there, not where. */}
+        {canWrite && selected && !picking && !tasking && !editing && (
           <div className="msg-actions-row">
             <button className="msg-promote" type="button" onClick={() => onReply(m)}>
               Reply
             </button>
-            {mine && (
+            <button className="msg-promote" type="button"
+              onClick={() => copyText(hasText ? m.body : '')}>
+              Copy
+            </button>
+            {mine && !m.withdrawnAt && (
               <button className="msg-promote" type="button" onClick={() => setEditing(true)}>
                 Edit
+              </button>
+            )}
+            {mine && !m.withdrawnAt && (
+              <button className="msg-promote is-danger" type="button"
+                onClick={() => onWithdraw(m.id)}>
+                Take it back
               </button>
             )}
             {!m.doneAt && (
@@ -319,7 +381,7 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
   );
 }
 
-function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, onEdit }) {
+function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, onEdit, selected, onSelect }) {
   const [superseding, setSuperseding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [replacement, setReplacement] = useState('');
@@ -329,7 +391,11 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, 
   const isBlocker = m.recordType === 'blocker';
 
   return (
-    <div className={'msg-record' + (isSuperseded ? ' is-superseded' : '')} id={`m-${m.id}`}>
+    <div
+      className={'msg-record' + (isSuperseded ? ' is-superseded' : '') + (selected ? ' is-picked' : '')}
+      id={`m-${m.id}`}
+      onClick={pickHandler(m.id, selected, onSelect)}
+    >
       <div className="msg-record-head">
         <span className="msg-badge">{TYPE_LABEL[m.recordType] || m.recordType}</span>
         <span className={'msg-badge status-' + m.recordStatus}>{STATUS_LABEL[m.recordStatus]}</span>
@@ -372,10 +438,13 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, 
           order to ask a question about it would be absurd. So Reply sits
           outside every gate on this row, including the superseded one: why a
           record was replaced is worth saying underneath it. */}
-      {canWrite && (
+      {canWrite && selected && (
         <div className="msg-record-actions">
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => onReply(m)}>
             Reply
+          </button>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={() => copyText(m.body)}>
+            Copy
           </button>
           {/* A record can be corrected right up until somebody acknowledges
               it, and not one moment after. Before the lock it is a draft
@@ -468,6 +537,9 @@ export default function ThreadView() {
   // rather than on the message, because there is one composer and it can only
   // be answering one thing at a time.
   const [replyTo, setReplyTo] = useState(null);
+  // WHICH MESSAGE THE VERBS BELONG TO. One at a time: two messages with their
+  // actions open is two ways to press the wrong Take it back.
+  const [picked, setPicked] = useState(null);
   const endRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -510,6 +582,14 @@ export default function ThreadView() {
   }, [threadId]);
 
   useEffect(() => { load(); }, [threadId]);
+  // Escape puts a message down. Nothing else on this screen claims the key,
+  // and a selection you cannot clear without hunting for the same words again
+  // is a selection people leave on.
+  useEffect(() => {
+    const key = (e) => { if (e.key === 'Escape') setPicked(null); };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, []);
   useVisiblePoll(refresh, 12000);
 
   /**
@@ -644,6 +724,24 @@ export default function ThreadView() {
     ? api.post(`/threads/${threadId}/messages/${id}/done`)
     : api.del(`/threads/${threadId}/messages/${id}/done`)));
 
+  /**
+   * Taking a message back.
+   *
+   * Confirmed first, because it cannot be undone and the words are gone from
+   * the row rather than hidden — see routes/threads.js. What remains is that
+   * somebody said something and thought better of it, which is the honest
+   * state of the room and the reason this is not called Delete.
+   */
+  async function withdraw(id) {
+    if (!window.confirm('Take this message back? The words go; that you said something stays.')) return;
+    setError('');
+    try {
+      await api.del(`/threads/${threadId}/messages/${id}`);
+      setPicked(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
 
@@ -684,6 +782,8 @@ export default function ThreadView() {
             : 'Chat freely. When something is actually decided, promote it to a record so it counts.'}
         </p>
 
+        <LineSwitcher threadId={threadId} />
+
         <div className="msg-stream">
           {shown.length === 0 && (
             <div className="empty-state">
@@ -694,10 +794,11 @@ export default function ThreadView() {
             m.register === 'record'
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
                   onAck={ack} onStatus={setStatus} onSupersede={supersede} onReply={startReply}
-                  onEdit={editMessage} />
+                  onEdit={editMessage} selected={picked === m.id} onSelect={setPicked} />
               : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
                   viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask}
-                  onDone={markDone} onReply={startReply} onEdit={editMessage} />
+                  onDone={markDone} onReply={startReply} onEdit={editMessage}
+                  onWithdraw={withdraw} selected={picked === m.id} onSelect={setPicked} />
           ))}
           <div ref={endRef} />
           {/* Said rather than done. Somebody reading back through last Tuesday

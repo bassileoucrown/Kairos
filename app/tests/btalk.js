@@ -244,6 +244,8 @@ function client() {
     await p.waitForSelector('.msg-task', { timeout: 20000 });
 
     const instructed = p.locator(`#m-${saidId}`);
+    // Pick it first: the verbs belong to the message somebody tapped.
+    await instructed.click({ position: { x: 5, y: 5 } });
     ok('the line that became a task says so on the line itself',
       /Book the car/.test(await instructed.locator('.msg-task').innerText()),
       await instructed.locator('.msg-task').innerText());
@@ -268,6 +270,7 @@ function client() {
 
     head('A record on the screen — the frozen one:');
     const recordEl = p.locator(`#m-${rec.d.id}`);
+    await recordEl.click({ position: { x: 5, y: 5 } });
     ok('shows it is locked', /locked/i.test(await recordEl.innerText()));
     ok('offers no way to edit it', (await recordEl.locator('button:has-text("Edit")').count()) === 0);
     ok('and offers Reply anyway',
