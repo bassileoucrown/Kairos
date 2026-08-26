@@ -7,6 +7,8 @@ const { resolveAccess, spaceAudience } = require('../lib/spaceAccess');
 const pad = require('../lib/pad');
 const mentions = require('../lib/mentions');
 const reachable = require('../lib/reachable');
+const { directLineFor } = require('../lib/directLine');
+const { officeAudience } = require('../lib/paAccess');
 
 /**
  * The pad, and the four things a line on it can become.
@@ -290,6 +292,92 @@ router.post('/:id/task', loadItem, async (req, res) => {
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
   res.status(201).json({ item: await pad.present(row, req.user.id), taskId });
+});
+
+/**
+ * Taking it to the team.
+ *
+ * WHEN A LINE OUTGROWS THE PAD. Two people and four sentences belong on the
+ * note — that is why replies live there at all. But "book the car" sometimes
+ * turns into a thing three people need to see and nobody should have to
+ * reconstruct from somebody's private jottings. This is the door out.
+ *
+ * DELIBERATE, NOT AUTOMATIC. Handing a line over does NOT post it here, and
+ * that is the whole design rather than an omission. The direct line holds the
+ * principal and every active assistant, so auto-posting would put every errand
+ * handed to any colleague in front of the entire office — noise for them, and
+ * for a private line a straightforward leak of the thing the pad promises to
+ * keep. Sharing is an act somebody performs, once, when it is warranted.
+ *
+ * THE EXCHANGE TRAVELS, AND KEEPS ITS AUTHORS. Each reply is posted as the
+ * person who wrote it, not as whoever pressed the button — the same rule the
+ * thread's own promote-to-record follows, because authority comes from whose
+ * words were captured rather than who filed them. Arriving in the room as a
+ * wall of text attributed to one person would be worse than arriving with no
+ * history at all: it would be a misattributed record.
+ *
+ * The line is kept, settled, pointing at the room. Deleting it would be tidier
+ * and would lose the only trace that the thought started on somebody's pad.
+ */
+router.post('/:id/thread', loadItem, async (req, res) => {
+  if (!pad.canEdit(req.item, req.user.id)) {
+    return res.status(403).json({ error: 'Only whoever wrote it can take it to the team.' });
+  }
+  if (req.item.thread_id) {
+    return res.status(400).json({ error: 'That note is already with the team.' });
+  }
+
+  // Whose team room. An assistant supporting two principals has two, and
+  // guessing would be how a note about one lands in front of the other.
+  const ownerId = req.body?.ownerId || req.user.id;
+  const line = await directLineFor(ownerId, req.user.id);
+  if (!line) {
+    return res.status(400).json({
+      error: 'There is no team room here yet — it appears once a principal has somebody working with them.',
+    });
+  }
+
+  // Everybody on the note must be able to read the room, or promoting it
+  // would quietly drop one of them out of their own conversation.
+  const audience = await officeAudience(ownerId);
+  const onTheNote = [req.item.author_user_id, req.item.assignee_id].filter(Boolean);
+  const stranded = onTheNote.filter((id) => !audience.has(id));
+  if (stranded.length > 0) {
+    const who = await db.prepare('SELECT name FROM users WHERE id = ?').get(stranded[0]);
+    return res.status(400).json({
+      error: `${who?.name || 'Somebody on this note'} is not in that team room, so taking it there would leave them out of it.`,
+    });
+  }
+
+  const replies = await pad.replies(req.item.id);
+  const now = Date.now();
+  let n = 0;
+  const post = async (authorId, body, at) => {
+    await db.prepare(`
+      INSERT INTO messages (id, thread_id, author_id, body, register, created_at)
+      VALUES (?, ?, ?, ?, 'note', ?)
+    `).run(crypto.randomUUID(), line.threadId, authorId, body, at);
+    n += 1;
+  };
+
+  // The note itself first, then what was said about it, in the order it was
+  // said. Timestamps are nudged forward from now rather than carrying the
+  // original ones: a thread is read in the order it is stored, and back-dating
+  // would file today's conversation under last Tuesday.
+  await post(req.item.author_user_id, req.item.body, new Date(now).toISOString());
+  for (const r of replies) {
+    await post(r.author_id, r.body, new Date(now + (n * 1000)).toISOString());
+  }
+
+  await db.prepare('UPDATE pad_items SET thread_id = ?, state = ?, done_at = ? WHERE id = ?')
+    .run(line.threadId, 'done', new Date().toISOString(), req.item.id);
+
+  const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
+  res.status(201).json({
+    item: await pad.present(row, req.user.id),
+    threadId: line.threadId,
+    carried: n,
+  });
 });
 
 // --- Becoming something on the diary --------------------------------------

@@ -160,6 +160,64 @@ const turnOf = (items, id) => (items.find((i) => i.id === id) || {});
     ok('but what was said is still there', (r.d.replies || []).length === 3,
       String((r.d.replies || []).length));
 
+
+    // --- When it outgrows two people ----------------------------------------
+    head('A line that has outgrown the note goes to the team, with its history:');
+    let r2 = await boss('POST', '/pad', { body: 'The Lagos office lease.' });
+    const big = r2.d.item.id;
+    await boss('POST', `/pad/${big}/hand`, { toUserId: paMe.id });
+    await pa('POST', `/pad/${big}/replies`, { body: 'The agent wants a decision by Friday.' });
+    await boss('POST', `/pad/${big}/replies`, { body: 'Ask him for another week.' });
+
+    r2 = await boss('POST', `/pad/${big}/thread`, { ownerId: me.id });
+    ok('it is taken to the team room', r2.s === 201, JSON.stringify(r2.d).slice(0, 160));
+    const threadId = r2.d.threadId;
+    ok('and lands in the room the team already has',
+      threadId === (await boss('GET', `/today/${me.id}`)).d.directLine.threadId, threadId);
+    // The note itself plus both replies — the whole exchange, not just a
+    // pointer somebody has to go and reconstruct.
+    ok('carrying the note and everything said about it', r2.d.carried === 3, String(r2.d.carried));
+
+    r2 = await boss('GET', `/threads/${threadId}/messages`);
+    const said = (r2.d.messages || []).map((m) => `${m.authorName}: ${m.body}`);
+    ok('the note arrives first', /Adaeze.*Lagos office lease/.test(said[said.length - 3] || ''),
+      JSON.stringify(said.slice(-3)));
+    // THE PART THAT MATTERS. Each line keeps whoever wrote it. Arriving as a
+    // wall of text attributed to whoever pressed the button would be worse
+    // than arriving with no history at all — it would be a misattributed one.
+    ok('and each reply keeps whoever actually wrote it',
+      /Kit Staff: The agent wants/.test(said[said.length - 2] || '')
+      && /Adaeze Okonkwo: Ask him/.test(said[said.length - 1] || ''),
+      JSON.stringify(said.slice(-2)));
+
+    r2 = await boss('GET', '/pad?state=done');
+    const moved = (r2.d.items || []).find((i) => i.id === big);
+    ok('the line is settled rather than deleted', moved?.state === 'done', moved?.state);
+    ok('and points at the room it went to', moved?.threadId === threadId, moved?.threadId);
+
+    head('And the obvious refusals:');
+    r2 = await boss('POST', `/pad/${big}/thread`, { ownerId: me.id });
+    ok('taking it twice is refused', r2.s === 400, String(r2.s));
+    ok('and says it is already there', /already with the team/i.test(r2.d?.error || ''), r2.d?.error);
+
+    // Somebody outside the office would be dropped from their own
+    // conversation, so it refuses rather than doing it quietly.
+    const stranger = client();
+    await stranger('POST', '/auth/signup', { name: 'Outside Person', email: `out${ID}@x.com`, password: PW });
+    r2 = await stranger('POST', '/pad', { body: 'Their own note.' });
+    r2 = await stranger('POST', `/pad/${r2.d.item.id}/thread`, {});
+    ok('somebody with no team room is told so rather than failing oddly',
+      r2.s === 400 && /no team room/i.test(r2.d?.error || ''), JSON.stringify(r2.d));
+
+    // Handing does NOT do this on its own — the whole design decision.
+    r2 = await boss('POST', '/pad', { body: 'Something small.' });
+    const small = r2.d.item.id;
+    await boss('POST', `/pad/${small}/hand`, { toUserId: paMe.id });
+    r2 = await boss('GET', `/threads/${threadId}/messages`);
+    ok('handing a line over still posts nothing to the team by itself',
+      !(r2.d.messages || []).some((m) => /Something small/.test(m.body)),
+      JSON.stringify((r2.d.messages || []).map((m) => m.body)).slice(0, 200));
+
     // --- A note nobody was handed --------------------------------------------
     head('A note you have not handed to anybody does not nag you:');
     r = await boss('POST', '/pad', { body: 'Think about the Q3 numbers.' });

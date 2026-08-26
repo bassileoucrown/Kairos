@@ -1046,6 +1046,9 @@ CREATE TABLE IF NOT EXISTS pad_items (
   -- into a second one.
   task_id           TEXT REFERENCES tasks(id) ON DELETE SET NULL,
   itinerary_item_id TEXT REFERENCES itinerary_items(id) ON DELETE SET NULL,
+  -- Where the line went when it outgrew two people and a handful of replies.
+  -- The exchange travels with it; the line stays, pointing at the room.
+  thread_id         TEXT REFERENCES threads(id) ON DELETE SET NULL,
   created_at     TEXT NOT NULL,
   done_at        TEXT
 );

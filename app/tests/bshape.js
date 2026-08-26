@@ -208,9 +208,30 @@ const minuteOf = (iso) => Number(iso.slice(14, 16));
     head('Turning the breather off:');
     await boss('PUT', '/availability', { rules: week, gapMinutes: 0 });
     shortSlots = await slotsOf(short);
-    const back = shortSlots.filter((s) => hourOf(s.startAt) === 14).sort((a, b) => a.startAt.localeCompare(b.startAt));
-    ok('slots go back to touching', back.length >= 2 && minuteOf(back[1].startAt) === 30,
-      JSON.stringify(back.slice(0, 2).map((s) => s.startAt)));
+    // Measured WITHIN one day and as a distance, for the same reason the
+    // morning assertion above already is. Filtering by the hour alone spans
+    // days: run this at ten past two and today's 14:00 has already gone, so
+    // the pair being compared is today's 14:30 and TOMORROW's 14:00 — a step
+    // of minus thirty minutes across a date boundary, failing on a product
+    // that is behaving perfectly. The property is that with no breather the
+    // slots step by the meeting's own length, which is not a claim about
+    // which digits land on the clock.
+    const afternoons = new Map();
+    for (const s of shortSlots) {
+      if (hourOf(s.startAt) < 14 || hourOf(s.startAt) >= 16) continue;
+      const k = s.startAt.slice(0, 10);
+      if (!afternoons.has(k)) afternoons.set(k, []);
+      afternoons.get(k).push(s);
+    }
+    const back = [...afternoons.values()]
+      .map((list) => list.sort((a, b) => a.startAt.localeCompare(b.startAt)))
+      .find((list) => list.length >= 2);
+    if (!back) throw new Error('no single day has two afternoon slots to measure between');
+    const touchingStep = Math.round(
+      (Date.parse(back[1].startAt) - Date.parse(back[0].startAt)) / 60000,
+    );
+    ok('slots go back to touching', touchingStep === 30,
+      `${back[0].startAt} then ${back[1].startAt} — ${touchingStep} min`);
 
     r = await boss('PUT', '/availability', { rules: week, gapMinutes: 500 });
     ok('an absurd breather is refused', r.s === 400, `${r.s} ${JSON.stringify(r.d)}`);

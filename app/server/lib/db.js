@@ -368,6 +368,8 @@ function ready() {
       await ensureColumn('itinerary_items', 'decision_note', "TEXT NOT NULL DEFAULT ''");
       await ensureColumn('itinerary_items', 'decided_at', 'TEXT');
       await ensureColumn('itinerary_items', 'decided_by', 'TEXT');
+      // Where a pad line went when it outgrew two people. See routes/pad.js.
+      await ensureColumn('pad_items', 'thread_id', 'TEXT');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

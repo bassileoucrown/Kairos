@@ -128,6 +128,7 @@ function serialize(p, viewerId = null, aboutOwnerId = null) {
     about: p.about_kind ? { kind: p.about_kind, id: p.about_id, ownerId: aboutOwnerId } : null,
     taskId: p.task_id || null,
     itineraryItemId: p.itinerary_item_id || null,
+    threadId: p.thread_id || null,
     createdAt: p.created_at,
     doneAt: p.done_at || null,
     // The conversation this line has grown, if any.

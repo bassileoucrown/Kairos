@@ -306,6 +306,7 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
                 it became instead of just vanishing from the pad. */}
             {item.taskId && <> · <Link to="/tasks">now a task</Link></>}
             {item.itineraryItemId && <> · <Link to="/itinerary">on the diary</Link></>}
+            {item.threadId && <> · <Link to={`/threads/${item.threadId}`}>with the team</Link></>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -403,6 +404,13 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
           onClick={() => setMode(mode === 'diary' ? null : 'diary')}>Something on the diary</button>
         <button className="itin-tool" type="button"
           onClick={() => setMode(mode === 'hand' ? null : 'hand')}>Somebody else's</button>
+        {/* Only once there is a conversation to carry. Before that, "take it
+            to the team" means posting a line nobody has discussed, which is
+            what the office pad register is already for. */}
+        {(item.replyCount > 0 || item.assigneeId) && (
+          <button className="itin-tool" type="button"
+            onClick={() => setMode(mode === 'team' ? null : 'team')}>The team's</button>
+        )}
         <button className="itin-tool is-danger" type="button"
           onClick={() => onRemove(item.id)}>Bin it</button>
       </div>
@@ -440,6 +448,20 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
               startAt: new Date(`${when.date}T${when.time}`).toISOString(),
             })}>
             {busy ? 'Adding…' : 'Put it on the day'}
+          </button>
+        </div>
+      )}
+
+      {mode === 'team' && (
+        <div className="pad-action-form">
+          <p className="hint" style={{ flexBasis: '100%', margin: 0 }}>
+            This moves the note and everything said about it into the team room, where
+            the whole office can see it. Each line keeps whoever wrote it. The note stays
+            here, settled, pointing at the room.
+          </p>
+          <button className="btn btn-primary btn-sm" type="button" disabled={busy}
+            onClick={() => run('thread', { ownerId })}>
+            {busy ? 'Taking it over…' : 'Take it to the team'}
           </button>
         </div>
       )}
