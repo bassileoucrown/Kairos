@@ -377,8 +377,28 @@ function ready() {
       // What actually happened at a meeting, as against what to prepare for
       // it. See the comment on the column in schema.sql.
       await ensureColumn('booking_notes', 'kind', "TEXT NOT NULL DEFAULT 'note'");
-      // Taken back, but not pretended away. See the column in schema.sql.
+      // Taking a message back left a tombstone for one release — the row
+      // stayed with its body emptied and the line read "Message withdrawn".
+      // It is a hard delete now, so these are finished off: every one of them
+      // is a message whose author already asked for it to be gone, and a row
+      // that says somebody thought better of something is an invitation to ask
+      // what it was. The column stays because dropping one is not worth the
+      // migration, and nothing writes it any more.
       await ensureColumn('messages', 'withdrawn_at', 'TEXT');
+      await impl.prepare('DELETE FROM messages WHERE withdrawn_at IS NOT NULL').run();
+
+      // Every handle in use, recorded as its holder's. Without this the table
+      // starts empty, and the first person to change their handle would find
+      // it immediately claimable by somebody else — which is the whole thing
+      // handle_history exists to prevent. Written as a left join so it is
+      // idempotent: on every boot after the first it inserts nothing.
+      await impl.prepare(`
+        INSERT INTO handle_history (id, user_id, handle, held_at)
+        SELECT u.id, u.id, u.slug, u.created_at
+        FROM users u
+        LEFT JOIN handle_history h ON h.user_id = u.id AND h.handle = u.slug
+        WHERE u.slug IS NOT NULL AND u.slug != '' AND h.id IS NULL
+      `).run();
       // The two people in a room for two. See lib/pairLine.js.
       await ensureColumn('spaces', 'pair_key', 'TEXT');
       await ensureIndex('idx_spaces_pair', 'spaces(pair_key)');

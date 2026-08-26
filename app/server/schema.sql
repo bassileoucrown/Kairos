@@ -618,6 +618,28 @@ CREATE INDEX IF NOT EXISTS idx_access_log_subject ON access_log(subject_owner_id
 -- Reached by typing an exact handle. There is no search and no directory, and
 -- a request against a handle that does not exist is answered exactly like one
 -- that does, so this cannot be used to discover who is on Kairos.
+-- Every handle anybody has ever held.
+--
+-- A handle is stored as TEXT in the things people write — "@ada" in a message,
+-- a brief, an instruction — and resolved when the page is drawn. That is the
+-- right way round (rewriting old bodies on a rename would edit what people
+-- wrote, records included), but it means a rename used to break every mention
+-- already written: the words stayed and the person in them went inert.
+--
+-- So this table is the memory. A mention that finds no live holder asks it who
+-- the handle used to mean, and keeps working. It is also what stops the worse
+-- version: without it, a released handle is free for the taking, and whoever
+-- took it would silently inherit every mention of the person who had it. Held
+-- once is held for good. See lib/handles.js.
+CREATE TABLE IF NOT EXISTS handle_history (
+  id       TEXT PRIMARY KEY,
+  user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  handle   TEXT NOT NULL,
+  held_at  TEXT NOT NULL,
+  UNIQUE(user_id, handle)
+);
+CREATE INDEX IF NOT EXISTS idx_handle_history_handle ON handle_history(handle);
+
 CREATE TABLE IF NOT EXISTS connections (
   id            TEXT PRIMARY KEY,
   requester_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

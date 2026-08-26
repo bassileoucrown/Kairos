@@ -24,12 +24,10 @@ const db = require('./db');
  *
  * A voice note carries no text until somebody transcribes it, and a blank line
  * beside a name reads as a bug rather than as a recording waiting to be played
- * — so it is described instead. Same for a message that has been withdrawn:
- * the preview says so rather than showing an empty row.
+ * — so it is described instead.
  */
 function preview(last) {
   if (!last) return '';
-  if (last.withdrawn_at) return 'Message withdrawn';
   const body = String(last.body || '').trim();
   if (body) return body.length > 140 ? `${body.slice(0, 140)}…` : body;
   if (last.duration_ms === null || last.duration_ms === undefined) return '';
@@ -40,7 +38,7 @@ function preview(last) {
 /** { lastMessage, unanswered } for one thread, as one person sees it. */
 async function summarise(threadId, viewerId) {
   const last = await db.prepare(`
-    SELECT m.id, m.body, m.created_at, m.withdrawn_at, u.name AS author_name, v.duration_ms
+    SELECT m.id, m.body, m.created_at, u.name AS author_name, v.duration_ms
     FROM messages m
     JOIN users u ON u.id = m.author_id
     LEFT JOIN voice_notes v ON v.message_id = m.id

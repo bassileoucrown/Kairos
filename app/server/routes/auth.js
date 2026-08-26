@@ -10,7 +10,7 @@ const {
 } = require('../lib/auth');
 const { isValidTimeZone } = require('../lib/timezone');
 const { isHouseholdStaff } = require('../lib/household');
-const { handleProblem } = require('../lib/handles');
+const { handleProblem, everHeldBy, rememberHandle } = require('../lib/handles');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
 const { DEFAULT_PLAN } = require('../lib/plans');
 const totp = require('../lib/totp');
@@ -70,10 +70,14 @@ async function uniqueSlugFromName(name) {
   const base = slugify(name) || 'user';
   let candidate = base;
   let n = 1;
-  const exists = db.prepare('SELECT 1 FROM users WHERE slug = ?');
+  // everHeldBy rather than a live lookup, because a handle somebody released
+  // still belongs to them — handing it to the next Adaeze Okonkwo who signs up
+  // would give her every @ada-okonkwo ever written about the first one. See
+  // lib/handles.js.
+  //
   // Also skips anything reserved or too short — a name like "Ed" or "API"
   // would otherwise be auto-assigned a handle nobody is allowed to hold.
-  while (handleProblem(candidate) || await exists.get(candidate)) {
+  while (handleProblem(candidate) || await everHeldBy(candidate)) {
     n += 1;
     candidate = `${base}-${n}`;
   }
@@ -116,6 +120,10 @@ router.post('/signup', async (req, res) => {
     // and quietly put everybody on the founding plan forever.
     DEFAULT_PLAN,
     new Date().toISOString());
+  // Written down the moment the account exists, so the handle is theirs from
+  // the first day rather than from the first time they change it — which is
+  // what keeps the NEXT Adaeze Okonkwo from being handed this one's name.
+  await rememberHandle(id, slug);
   // MVP note: email_verified is set to 1 immediately — there is no email
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.

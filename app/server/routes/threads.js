@@ -91,10 +91,6 @@ function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tas
     promotedByName: m.promoted_by_name,
     supersedesId: m.supersedes_id,
     locked: !!m.locked_at,
-    // Taken back. The body is gone from the row itself, so there is nothing
-    // here to leak — what remains is that somebody said something and thought
-    // better of it, which is the honest state of the room.
-    withdrawnAt: m.withdrawn_at || null,
     createdAt: m.created_at,
     editedAt: m.edited_at,
     acks: acks.filter((a) => a.message_id === m.id).map((a) => ({ userId: a.user_id, name: a.name, ackedAt: a.acked_at })),
@@ -619,15 +615,36 @@ router.delete('/:threadId/messages/:messageId', loadThread, async (req, res) => 
         + 'Supersede it instead, which leaves both in the history.',
     });
   }
-  if (message.withdrawn_at) return res.status(409).json({ error: 'That is already withdrawn.' });
+  // TAKING SOMETHING BACK MEANS IT IS GONE. This left a tombstone for a while
+  // — the row stayed, the words were emptied, and the line read "Message
+  // withdrawn". The argument for that was that a conversation with holes in it
+  // is hard to read. The argument against it won: a row saying somebody said
+  // something and thought better of it is an invitation to ask what it was,
+  // which is worse in a principal's office than a gap nobody notices. Take it
+  // back and there is nothing to point at.
 
-  await db.prepare("UPDATE messages SET body = '', withdrawn_at = ? WHERE id = ?")
-    .run(new Date().toISOString(), message.id);
+  // Two pointers have no ON DELETE rule of their own, because neither is a
+  // relationship the schema wants broken casually. A promoted record holds its
+  // own copy of the words, so what is lost here is a link, not the content —
+  // and refusing the delete because somebody else filed a record would leave
+  // the author unable to retract a line whose text has already been kept
+  // elsewhere regardless.
+  await db.prepare('UPDATE messages SET promoted_from_id = NULL WHERE promoted_from_id = ?')
+    .run(message.id);
+  await db.prepare('UPDATE messages SET supersedes_id = NULL WHERE supersedes_id = ?')
+    .run(message.id);
 
-  // The recording goes with it. A voice note whose text was withdrawn but whose
-  // audio still plays would be the loudest possible version of not having
-  // withdrawn it.
+  // The recording first, explicitly, rather than trusting the cascade: the row
+  // is the only handle on the ciphertext, and a voice note whose message is
+  // gone but whose audio still plays would be the loudest possible version of
+  // not having taken it back.
   await voice.remove(message.id).catch(() => {});
+
+  // Acknowledgements go with it by cascade. Replies that quoted it and tasks
+  // made from it survive with a null pointer — ON DELETE SET NULL, decided
+  // when those columns were written: a question somebody asked about this line
+  // is still their question, and a task somebody is doing is still their task.
+  await db.prepare('DELETE FROM messages WHERE id = ?').run(message.id);
 
   res.json({ ok: true });
 });

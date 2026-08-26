@@ -114,9 +114,18 @@ async function onboard(p, name, email, roleLabel) {
     // in this tab knows it happened.
     await boss('POST', `/threads/${line.threadId}/messages`, { body: 'Car is outside.' });
 
-    // No reload, no click. The poll is 12s; allow it two turns.
+    // No reload, no click.
+    const sent = Date.now();
     await page.waitForSelector('text=Car is outside.', { timeout: 30000 });
+    const took = Date.now() - sent;
     ok('it appears on its own, with nothing clicked', true);
+    // HOW FAST, not just whether. This passed for months at twelve seconds
+    // flat, and twelve seconds of staring at a conversation reads as the app
+    // being broken — people reload, which is exactly the report that made the
+    // interval adaptive. A room somebody is sitting in asks every two seconds;
+    // the allowance here is generous against a loaded test machine, and still
+    // fails the old fixed interval.
+    ok('and soon enough that nobody reaches for reload', took < 8000, `${took}ms`);
     const after = await page.locator('.msg-note').count();
     ok('and the conversation actually grew', after === before + 1, `${before} -> ${after}`);
 

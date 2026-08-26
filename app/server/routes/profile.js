@@ -2,7 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth, verifyPassword, clearSessionCookie } = require('../lib/auth');
-const { normalizeHandle, handleProblem } = require('../lib/handles');
+const { claimHandle } = require('../lib/handles');
 const { isValidTimeZone } = require('../lib/timezone');
 const { publicUser } = require('./auth');
 const { summarizeAccount, deleteAccount } = require('../lib/accountDeletion');
@@ -28,13 +28,16 @@ router.patch('/', async (req, res) => {
   }
   // `slug` on the wire, a handle to everyone who sees it.
   if (slug !== undefined) {
-    const handle = normalizeHandle(slug);
-    const problem = handleProblem(handle);
-    if (problem) return res.status(400).json({ error: problem });
-    const taken = await db.prepare('SELECT 1 FROM users WHERE slug = ? AND id != ?').get(handle, req.user.id);
-    if (taken) return res.status(409).json({ error: 'That handle is already taken.' });
+    // claimHandle validates, checks that nobody else has ever held it, and
+    // writes the history that keeps every @you already written pointing at you
+    // after the change. See lib/handles.js for why the history is the fix
+    // rather than rewriting old message bodies.
+    const claim = await claimHandle(req.user.id, slug);
+    if (claim.problem) {
+      return res.status(claim.problem.includes('taken') ? 409 : 400).json({ error: claim.problem });
+    }
     updates.push('slug = ?');
-    values.push(handle);
+    values.push(claim.handle);
   }
 
   if (updates.length === 0) {

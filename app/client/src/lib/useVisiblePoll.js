@@ -19,39 +19,61 @@ import { useEffect, useRef } from 'react';
  * every proxy and captive portal a principal's phone will meet in an airport.
  * A live connection would be more elegant and less reliable, and would have to
  * be reconnected on exactly the transitions this handles for free.
+ *
+ * `ms` MAY BE A FUNCTION, asked before each wait rather than once at the start.
+ * That is what lets a screen be quick when it matters and quiet when it does
+ * not — a conversation somebody is having asks every couple of seconds, and
+ * the same conversation twenty minutes later asks every thirty. A fixed
+ * interval cannot do both, and picking one number meant picking which half to
+ * get wrong. Chained timeouts rather than setInterval for the same reason:
+ * each wait is decided when it begins.
+ *
+ * FOCUS AS WELL AS VISIBILITY. visibilitychange covers switching tabs and
+ * locking a phone. It does NOT fire for clicking from another window back onto
+ * this one, which on a laptop is the commonest way of returning to something
+ * you left open — so that is listened for too, and both lead to the same
+ * place: ask now, then resume the rhythm.
  */
 export function useVisiblePoll(fn, ms) {
   // Held in a ref so a caller can pass an inline arrow without restarting the
   // timer on every render — which would mean it never actually fired.
   const saved = useRef(fn);
   useEffect(() => { saved.current = fn; }, [fn]);
+  // Same for the interval, so passing `() => something` does not re-arm on
+  // every render either.
+  const every = useRef(ms);
+  useEffect(() => { every.current = ms; }, [ms]);
 
   useEffect(() => {
-    if (!ms) return undefined;
     let timer = null;
+    let stopped = false;
 
-    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
-    const start = () => {
-      stop();
-      timer = setInterval(() => saved.current?.(), ms);
+    const wait = () => {
+      const next = typeof every.current === 'function' ? every.current() : every.current;
+      if (!next || stopped) return;
+      timer = setTimeout(() => { saved.current?.(); wait(); }, next);
     };
+    const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const start = () => { stop(); wait(); };
 
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        saved.current?.();
-        start();
-      } else {
-        stop();
-      }
+    // Coming back is the moment the screen is most likely to be stale, so the
+    // question is asked immediately rather than after another full wait.
+    const resume = () => {
+      if (document.visibilityState !== 'visible') { stop(); return; }
+      saved.current?.();
+      start();
     };
 
     if (document.visibilityState === 'visible') start();
-    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
     return () => {
+      stopped = true;
       stop();
-      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
     };
-  }, [ms]);
+  }, []);
 }
 
 export default useVisiblePoll;

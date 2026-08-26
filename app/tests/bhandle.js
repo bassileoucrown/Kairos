@@ -125,6 +125,45 @@ function client() {
     const seen = await mentions.of(`@${me.slug}`, { viewerId: me.id, ownerId: me.id });
     ok('the handle on the settings screen is the one @ finds',
       seen[0]?.kind === 'person' && seen[0]?.id === me.id, JSON.stringify(seen[0]));
+
+    // --- What a rename must NOT cost ---------------------------------------
+    //
+    // Handles live as TEXT inside the things people write, and are resolved
+    // when the page is drawn. So without a memory of who held what, changing
+    // your handle quietly emptied every @you already written: the sentences
+    // survived and the person in them went inert. Three separate ways of
+    // asking, because each is a different road to the same fact.
+    head('Changing your name does not empty what was already said:');
+    const oldOne = derived;
+    const stillWorks = await mentions.of(`@${oldOne}`, { viewerId: me.id, ownerId: me.id });
+    ok('an @ written before the change still finds the person',
+      stillWorks[0]?.kind === 'person' && stillWorks[0]?.id === me.id,
+      JSON.stringify(stillWorks[0]));
+    ok('and finds them under the name they go by now',
+      stillWorks[0]?.name === me.name, JSON.stringify(stillWorks[0]?.name));
+    // Written as it was typed. Rewriting the body would be editing what
+    // somebody wrote — including records that are frozen on purpose.
+    ok('without the words on the page having been touched',
+      stillWorks[0]?.handle === oldOne, stillWorks[0]?.handle);
+
+    // THE ONE THAT MATTERS MORE. A released handle that anybody could claim
+    // would hand the claimant every mention of the person who used to have it.
+    head('And nobody else can pick up the name you put down:');
+    const squatter = client();
+    await squatter('POST', '/auth/signup',
+      { name: 'Someone Else', email: `squat${ID}@x.com`, password: PW });
+    await squatter('POST', '/profile/onboarding-step', { step: 'done' });
+    r = await squatter('PATCH', '/profile', { slug: oldOne });
+    ok('a handle somebody has ever held is refused to everyone else',
+      r.s === 409, `${r.s} ${JSON.stringify(r.d)}`);
+    // Said the same way as "somebody has it now". Which of the two it is would
+    // be a fact about a stranger's account, and this app does not confirm those.
+    ok('in the same words as one still in use',
+      /taken/i.test(r.d?.error || ''), r.d?.error);
+    r = await boss('PATCH', '/profile', { slug: oldOne });
+    ok('but you can always take your own name back', r.s === 200, String(r.s));
+    r = await boss('PATCH', '/profile', { slug: `ada-two-${ID}` });
+    ok('and go back again', r.s === 200, String(r.s));
   } finally {
     proc.kill();
   }

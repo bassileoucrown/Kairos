@@ -3006,11 +3006,6 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* Withdrawn: the words are gone from the row, and what is left says so. */
-.msg-bubble.is-withdrawn {
-  font-style: italic; color: var(--text-muted);
-  background: var(--bg); border-style: dashed;
-}
 .msg-promote.is-danger { color: var(--danger); }
 
 /* --- Your other conversations ---------------------------------------------

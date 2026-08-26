@@ -53,6 +53,70 @@ function handleProblem(handle) {
 }
 
 /**
+ * A HANDLE IS KEPT, NOT RENTED.
+ *
+ * Changing your handle used to break your own past. Every @you already written
+ * — in a thread, a brief, an instruction — is stored as the text somebody
+ * typed, and resolved when the page is drawn. So the moment the handle moved,
+ * a year of messages stopped pointing at anybody: the words survived, but the
+ * person in them became inert grey text, and nobody could be reached from the
+ * conversation where they were named.
+ *
+ * Rewriting old message bodies on a rename was the obvious fix and the wrong
+ * one — it edits what people wrote, including records that are supposed to be
+ * frozen. So the handle is what moves and the history is what stays: every
+ * handle anybody has ever held is written down here, and a mention that finds
+ * no live holder asks this table who it used to mean.
+ *
+ * IT ALSO STOPS THE WORSE THING. Without a record of who held what, a released
+ * handle is free for the taking — and whoever took @ada would silently inherit
+ * every @ada written about somebody else, in offices they have never seen.
+ * A handle held once is held for good: `claimHandle` refuses it to anybody
+ * else, forever, and the only person who can take it back is the one who had
+ * it. That is a small cost — one word out of forty characters' worth of
+ * possibilities — against somebody's history quietly changing hands.
+ */
+async function rememberHandle(userId, handle) {
+  const held = await db.prepare('SELECT id FROM handle_history WHERE handle = ? AND user_id = ?')
+    .get(handle, userId);
+  if (held) return;
+  await db.prepare('INSERT INTO handle_history (id, user_id, handle, held_at) VALUES (?, ?, ?, ?)')
+    .run(require('crypto').randomUUID(), userId, handle, new Date().toISOString());
+}
+
+/** Who has ever held this handle, live or not. Null if nobody ever has. */
+async function everHeldBy(handle) {
+  const live = await db.prepare('SELECT id FROM users WHERE slug = ?').get(handle);
+  if (live) return live.id;
+  const past = await db.prepare(
+    'SELECT user_id FROM handle_history WHERE handle = ? ORDER BY held_at DESC LIMIT 1',
+  ).get(handle);
+  return past?.user_id || null;
+}
+
+/**
+ * Take a handle for somebody, or say why not. Prose, because callers show it.
+ *
+ * The one place a handle is ever assigned — signup and the profile screen both
+ * come through here, so the history cannot be written by one path and skipped
+ * by the other.
+ */
+async function claimHandle(userId, rawHandle) {
+  const handle = normalizeHandle(rawHandle);
+  const problem = handleProblem(handle);
+  if (problem) return { problem };
+  const owner = await everHeldBy(handle);
+  if (owner && owner !== userId) {
+    // Deliberately the same sentence whether they hold it now or held it in
+    // 2023. "Somebody used to have that" is a fact about a stranger's account,
+    // and this app does not confirm those.
+    return { problem: 'That handle is already taken.' };
+  }
+  await rememberHandle(userId, handle);
+  return { handle };
+}
+
+/**
  * Resolve a handle to a person the caller already has a relationship with.
  *
  * Returns null for a handle that exists but is a stranger, exactly as for one
@@ -63,8 +127,19 @@ async function resolveVisibleHandle(viewerId, rawHandle) {
   const handle = normalizeHandle(rawHandle);
   if (handleProblem(handle)) return null;
 
-  const person = await db.prepare('SELECT id, name, slug, account_category FROM users WHERE slug = ?')
+  let person = await db.prepare('SELECT id, name, slug, account_category FROM users WHERE slug = ?')
     .get(handle);
+  // Nobody holds it now — so it is either a typo or somebody's old name. The
+  // relationship check below is unchanged either way: an old handle opens no
+  // door a current one would not have opened.
+  if (!person) {
+    const past = await db.prepare(`
+      SELECT u.id, u.name, u.slug, u.account_category
+      FROM handle_history h JOIN users u ON u.id = h.user_id
+      WHERE h.handle = ? ORDER BY h.held_at DESC LIMIT 1
+    `).get(handle);
+    person = past || null;
+  }
   if (!person) return null;
   if (person.id === viewerId) return person;
 
@@ -94,4 +169,7 @@ async function resolveVisibleHandle(viewerId, rawHandle) {
   return related ? person : null;
 }
 
-module.exports = { normalizeHandle, handleProblem, resolveVisibleHandle, RESERVED };
+module.exports = {
+  normalizeHandle, handleProblem, resolveVisibleHandle,
+  claimHandle, rememberHandle, everHeldBy, RESERVED,
+};

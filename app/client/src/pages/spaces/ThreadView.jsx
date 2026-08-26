@@ -245,8 +245,7 @@ function Note({
   const mine = m.authorId === viewerId && hasText;
   return (
     <div
-      className={'msg-note' + (m.doneAt ? ' is-done' : '') + (selected ? ' is-picked' : '')
-        + (m.withdrawnAt ? ' is-withdrawn' : '')}
+      className={'msg-note' + (m.doneAt ? ' is-done' : '') + (selected ? ' is-picked' : '')}
       id={`m-${m.id}`}
       onClick={pickHandler(m.id, selected, onSelect)}
     >
@@ -263,10 +262,6 @@ function Note({
             onCancel={() => setEditing(false)}
             onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
           />
-        ) : m.withdrawnAt ? (
-          // The words are gone from the row itself; what is left is that
-          // somebody said something and thought better of it.
-          <div className="msg-bubble is-withdrawn">Message withdrawn</div>
         ) : hasText && (
           <div className="msg-bubble">
             <MentionText body={m.body} mentions={m.mentions} viewerId={viewerId} />
@@ -315,12 +310,12 @@ function Note({
               onClick={() => copyText(hasText ? m.body : '')}>
               Copy
             </button>
-            {mine && !m.withdrawnAt && (
+            {mine && (
               <button className="msg-promote" type="button" onClick={() => setEditing(true)}>
                 Edit
               </button>
             )}
-            {mine && !m.withdrawnAt && (
+            {mine && (
               <button className="msg-promote is-danger" type="button"
                 onClick={() => onWithdraw(m.id)}>
                 Take it back
@@ -542,6 +537,9 @@ export default function ThreadView() {
   const [picked, setPicked] = useState(null);
   const endRef = useRef(null);
   const composerRef = useRef(null);
+  // When this room last had anything happen in it, which is what sets how
+  // often it asks for more. See `beat` below.
+  const lastSaidRef = useRef(0);
 
   function load() {
     return api.get(`/threads/${threadId}/messages`).then((d) => {
@@ -599,6 +597,11 @@ export default function ThreadView() {
   useEffect(() => {
     setData(null); setMembers([]); setTasks([]);
     setError(''); setReplyTo(null); setPicked(null); setBody('');
+    // Arriving counts as activity. Somebody who has just opened a room is
+    // present and looking, whatever the room's history — seeding this from the
+    // age of the last message instead would leave a quiet room on its slowest
+    // rhythm at precisely the moment a person is sitting in front of it.
+    lastSaidRef.current = Date.now();
     load();
   }, [threadId]);
   // Escape puts a message down. Nothing else on this screen claims the key,
@@ -609,7 +612,27 @@ export default function ThreadView() {
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
   }, []);
-  useVisiblePoll(refresh, 12000);
+  /**
+   * How often to ask, decided by whether anybody is actually talking.
+   *
+   * This was every twelve seconds, flat, and twelve seconds is the wrong
+   * number twice over. Waiting that long for a reply that has already been
+   * sent reads as the app being broken — people reload, which is the report
+   * that started this. And twelve seconds is far too eager for a room nobody
+   * has spoken in since Tuesday, on a phone, all day.
+   *
+   * So the interval follows the conversation: while something was said in the
+   * last two minutes it asks every two seconds, and it lengthens from there as
+   * the room goes quiet, out to half a minute. Somebody mid-exchange gets an
+   * answer that lands like an answer; a room at rest costs almost nothing.
+   */
+  const beat = useCallback(() => {
+    const quietFor = Date.now() - lastSaidRef.current;
+    if (quietFor < 2 * 60 * 1000) return 2000;
+    if (quietFor < 10 * 60 * 1000) return 6000;
+    return 30000;
+  }, []);
+  useVisiblePoll(refresh, beat);
 
   /**
    * Arriving without stealing the reader's place.
@@ -664,6 +687,10 @@ export default function ThreadView() {
     const grew = count - lastCount.current;
     lastCount.current = count;
     if (grew <= 0) return;
+    // Anything arriving — theirs or your own — puts the room back on its
+    // quickest rhythm. One place, so the cadence cannot disagree with what is
+    // on screen. See `beat` above.
+    lastSaidRef.current = Date.now();
     if (wantedAnchor.current) { wantedAnchor.current = false; return; }
     if (atBottom.current) {
       endRef.current?.scrollIntoView({ block: 'nearest' });

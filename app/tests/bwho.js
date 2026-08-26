@@ -374,20 +374,21 @@ function client() {
     const taken = await boss('DELETE', `/threads/${threadId}/messages/${regret.d.id}`);
     ok('your own note can be withdrawn', taken.s === 200, JSON.stringify(taken.d));
 
-    const tombstone = (await pa('GET', `/threads/${threadId}/messages`))
-      .d.messages.find((m) => m.id === regret.d.id);
-    // A TOMBSTONE, NOT A DELETE. The words go and the fact stays: this is the
-    // product that freezes a record on acknowledgement and keeps an immutable
-    // trail on every appointment, and a room where a line can vanish without
-    // trace is a room whose history nobody can rely on.
-    ok('the words are gone from the row itself', tombstone.body === '', JSON.stringify(tombstone.body));
-    ok('but the row is still there, saying so', !!tombstone.withdrawnAt);
-    ok('and still carries who said it', tombstone.authorName === 'Adaeze Okonkwo');
+    // GONE, NOT A TOMBSTONE. This left the row in place with its body emptied
+    // for one release, on the argument that a room whose history has holes in
+    // it cannot be relied on. The other argument won: a line reading "message
+    // withdrawn" in a principal's office is an invitation to ask what it said,
+    // and the person who took it back is the one who has to field the asking.
+    const afterTakeBack = await pa('GET', `/threads/${threadId}/messages`);
+    ok('the row is gone entirely',
+      !afterTakeBack.d.messages.some((m) => m.id === regret.d.id),
+      JSON.stringify(afterTakeBack.d.messages.map((m) => m.id)));
     ok('the number is nowhere in what the other person is sent',
-      !JSON.stringify(await pa('GET', `/threads/${threadId}/messages`)).includes('forty-two million'));
-
-    ok('twice is refused rather than re-stamped',
-      (await boss('DELETE', `/threads/${threadId}/messages/${regret.d.id}`)).s === 409);
+      !JSON.stringify(afterTakeBack).includes('forty-two million'));
+    // Nothing left to point at means nothing left to say no to, and a 404 is
+    // the honest answer rather than a special case pretending otherwise.
+    ok('and asking again finds nothing to take',
+      (await boss('DELETE', `/threads/${threadId}/messages/${regret.d.id}`)).s === 404);
     const someoneElse = await pa('POST', `/threads/${threadId}/messages`, { body: 'Noted.' });
     ok('and you cannot take back somebody else\'s words',
       (await boss('DELETE', `/threads/${threadId}/messages/${someoneElse.d.id}`)).s === 403);
