@@ -46,6 +46,10 @@ const ROLE_LABEL = {
 
 export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
   const navigate = useNavigate();
+  // Where the popover sits when it would otherwise run off the right edge.
+  // Only consulted above the phone breakpoint — below it the menu is a sheet
+  // pinned to the bottom of the screen and horizontal position is moot.
+  const [flip, setFlip] = useState(false);
   const [card, setCard] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,6 +63,28 @@ export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
       .then(setCard)
       .catch((err) => setError(err.message));
   }, [userId]);
+
+  /**
+   * Keep it on the screen.
+   *
+   * A popover anchored to an inline name inherits that name's position, and a
+   * name can be most of the way across a line — in a record's footer, after
+   * "promoted from a note by". At 360px that put the menu 95px off the right
+   * edge AND gave the whole document a horizontal scrollbar, which is the one
+   * thing the layout rules say must never happen.
+   *
+   * Below the breakpoint the stylesheet turns this into a bottom sheet and no
+   * measuring is needed. Above it, the menu flips to right-aligned when the
+   * left-aligned position would overflow — measured after render, because
+   * where a name sits depends on the words in front of it.
+   */
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const anchor = el.parentElement?.getBoundingClientRect();
+    if (!anchor) return;
+    setFlip(anchor.left + el.offsetWidth > window.innerWidth - 8);
+  }, [card]);
 
   // Closes on a click anywhere else and on Escape. A menu that can only be
   // dismissed by finding its own small × is a menu people leave open.
@@ -112,7 +138,17 @@ export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
   const b = card?.between;
 
   return (
-    <div className="person-menu" ref={boxRef} role="dialog" aria-label={`About ${name}`}>
+    <>
+      {/* Only drawn on a phone, where the menu is a sheet over the page — a tap
+          on the page behind it should dismiss rather than land on whatever is
+          under it. Hidden by the stylesheet at wider widths. */}
+      <div className="person-scrim" aria-hidden="true" />
+      <div
+        className={'person-menu' + (flip ? ' is-flipped' : '')}
+        ref={boxRef}
+        role="dialog"
+        aria-label={`About ${name}`}
+      >
       <div className="person-head">
         <span className="person-name">{p?.name || name}</span>
         {p?.handle && <span className="person-handle">@{p.handle}</span>}
@@ -181,7 +217,8 @@ export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
           </button>
         </form>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

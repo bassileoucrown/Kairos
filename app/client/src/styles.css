@@ -2845,11 +2845,19 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    used to do anything. The verbs belong where the thought happens. */
 .person-anchor { position: relative; display: inline-block; }
 .person-link {
-  border: none; background: none; padding: 0; margin: 0;
+  border: none; background: none;
   font: inherit; color: inherit; cursor: pointer;
   border-bottom: 1px dotted var(--text-muted);
+  /* A NAME IS A THUMB TARGET, not just a word. Inline text sits at about
+     19px, which is a miss on a phone. The padding grows the hit box and the
+     negative margin gives the space straight back, so nothing on the line
+     moves — the target is bigger without the layout knowing. */
+  padding: 5px 2px;
+  margin: -5px -2px;
 }
 .person-link:hover { border-bottom-color: var(--accent); color: var(--accent); }
+
+.person-scrim { display: none; }
 
 .person-menu {
   position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
@@ -2881,6 +2889,50 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .person-hand { margin-top: 10px; }
 .person-hand input { width: 100%; }
 .person-hand .hint { margin: 6px 0 8px; }
+
+/* A name can sit most of the way across a line — in a record's footer, after
+   "promoted from a note by" — and a popover anchored to it inherits that.
+   Right-aligned instead when the left edge would push it off screen. */
+.person-menu.is-flipped { left: auto; right: 0; }
+
+/* ---- On a phone, it is a sheet ------------------------------------------
+   Anchoring to the name stops working on a narrow screen: 270px of menu
+   hanging off a name two thirds of the way across a 360px line runs off the
+   edge, gives the document a horizontal scrollbar, and can land below the
+   fold. A sheet pinned to the bottom is the native answer and fixes all
+   three — it is always fully on screen, always the same place, and always
+   within reach of a thumb rather than wherever the word happened to be. */
+@media (max-width: 560px) {
+  .person-scrim {
+    display: block; position: fixed; inset: 0; z-index: 39;
+    background: rgba(28, 33, 39, 0.32);
+  }
+  .person-menu,
+  .person-menu.is-flipped {
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0;
+    min-width: 0; max-width: none;
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+    padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+    /* Long enough to hold the hand form, short enough that the page behind is
+       still visible — a sheet that fills the screen reads as a new page. */
+    max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 -6px 28px rgba(28, 33, 39, 0.2);
+  }
+  /* The grab bar. Tapping the page behind already dismisses this, but nothing
+     on screen said so — and a panel that appears with no visible way out is a
+     panel people back out of the whole app to escape. This is the shape every
+     phone uses to mean "this slides away". */
+  .person-menu::before {
+    content: ''; display: block;
+    width: 36px; height: 4px; margin: -4px auto 12px;
+    border-radius: 999px; background: var(--border);
+  }
+  /* Full-width and taller: this is the row a thumb is aiming at. */
+  .person-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+  .person-actions .btn { width: 100%; padding: 11px 14px; font-size: 0.9rem; }
+  .person-hand button { width: 100%; padding: 11px 14px; }
+}
 
 /* --- Fixing what you already said ---------------------------------------- */
 .msg-edit { margin: 4px 0 6px; max-width: 60ch; }

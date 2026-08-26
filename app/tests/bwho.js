@@ -393,6 +393,85 @@ function client() {
     ok('but the minutes are still there to read',
       /second tranche/.test(page), page.slice(0, 300));
 
+    // ---- On a phone -------------------------------------------------------
+    //
+    // WHY THIS NEEDED ITS OWN PASS. blayout walks every screen at phone widths
+    // and measures overflow, and it passed this menu without seeing it: it
+    // measures pages as they LOAD, and a menu that is closed takes up no room.
+    // The overflow only exists once somebody taps. Anything that opens over the
+    // page needs measuring open.
+    //
+    // What it was: a popover anchored to an inline name, and a name can sit
+    // most of the way across a line — in a record's footer, after "promoted
+    // from a note by". At 360px that ran 95px past the right edge, gave the
+    // document a horizontal scrollbar, and could land below the fold. Below the
+    // breakpoint it is a sheet at the bottom of the screen instead.
+    head('On a phone:');
+    const phone = await b.newContext({
+      viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true,
+    });
+    const ph = await phone.newPage();
+    const phoneErrs = [];
+    ph.on('pageerror', (e) => phoneErrs.push(e.message));
+    await ph.goto(`${BASE}/login`);
+    await ph.fill('#email', `ada${ID}@x.com`);
+    await ph.fill('#password', PW);
+    await ph.click('button:has-text("Log in")');
+    await ph.waitForURL(/\/workspace|\/today/, { timeout: 20000 });
+    await ph.goto(`${BASE}/threads/${threadId}`);
+    await ph.waitForSelector('button.person-link', { timeout: 20000 });
+
+    // THE RIGHTMOST NAME, which is the one that used to hang off the edge.
+    // Taking the first would pass on a build that is still broken.
+    const names = ph.locator('button.person-link');
+    let worst = names.first();
+    let furthest = -1;
+    for (let i = 0; i < await names.count(); i += 1) {
+      const box = await names.nth(i).boundingBox();
+      if (box && box.x > furthest) { furthest = box.x; worst = names.nth(i); }
+    }
+    const nameBox = await worst.boundingBox();
+    // Inline text sits at about 19px, which is a miss with a thumb. The padding
+    // grows the hit box and the negative margin hands the space back, so the
+    // line does not move.
+    ok('a name is a big enough thing to tap', nameBox.height >= 26, `${nameBox.height}px`);
+
+    await worst.click();
+    await ph.waitForSelector('.person-menu', { timeout: 15000 });
+    const sheet = await ph.locator('.person-menu').boundingBox();
+    ok('the menu is fully on screen from the left', sheet.x >= 0, String(sheet.x));
+    ok('and does not run off the right', sheet.x + sheet.width <= 360,
+      `${(sheet.x + sheet.width).toFixed(0)} of 360`);
+    ok('and is not below the fold', sheet.y + sheet.height <= 740,
+      `${(sheet.y + sheet.height).toFixed(0)} of 740`);
+
+    const sideways = await ph.evaluate(() => ({
+      doc: document.documentElement.scrollWidth, win: window.innerWidth,
+    }));
+    // The layout rule this broke: the page body must never scroll sideways.
+    ok('and the page still does not scroll sideways',
+      sideways.doc <= sideways.win, JSON.stringify(sideways));
+
+    ok('there is a visible way to dismiss it',
+      (await ph.locator('.person-scrim').count()) === 1);
+
+    // Growing it must not push it off the bottom either — the hand form is the
+    // tallest this gets.
+    await ph.locator('.person-menu button:has-text("Hand them something")').click();
+    await ph.waitForSelector('.person-hand', { timeout: 10000 });
+    const grown = await ph.locator('.person-menu').boundingBox();
+    ok('and it stays on screen with the hand form open',
+      grown.y + grown.height <= 740, `${(grown.y + grown.height).toFixed(0)} of 740`);
+
+    const tap = await ph.locator('.person-menu .btn').first().boundingBox();
+    ok('its buttons are thumb-sized', tap.height >= 36, `${tap.height}px`);
+
+    await ph.locator('.person-scrim').click({ position: { x: 180, y: 40 } });
+    await ph.waitForSelector('.person-menu', { state: 'detached', timeout: 10000 });
+    ok('tapping the page behind closes it', true);
+    ok('no page errors on the phone', phoneErrs.length === 0, phoneErrs.join(' | '));
+    await phone.close();
+
     ok('no page errors anywhere', errs.length === 0, errs.join(' | '));
   } catch (err) {
     fails++;
