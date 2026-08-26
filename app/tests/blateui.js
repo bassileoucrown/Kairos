@@ -19,7 +19,9 @@ const DAY = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
   const errs = [];
   try {
-    const deadline = Date.now() + 30000;
+    // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
+    // loaded one, and "no server" on a green tree is a board crying wolf.
+    const deadline = Date.now() + 60000;
     for (;;) {
       let ready = false;
       try { ready = (await (await fetch(`${BASE}/api/status`)).json()).databaseReady; }

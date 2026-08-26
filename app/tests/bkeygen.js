@@ -21,7 +21,9 @@ function boot(key) {
 }
 
 async function waitReady() {
-  const deadline = Date.now() + 30000;
+  // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
+  // loaded one, and "no server" on a green tree is a board crying wolf.
+  const deadline = Date.now() + 60000;
   for (;;) {
     try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) return; }
     catch { /* not up */ }

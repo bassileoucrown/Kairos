@@ -48,7 +48,9 @@ async function onboard(p, name, email, roleLabel) {
   });
   let browser = null;
   try {
-    const deadline = Date.now() + 30000;
+    // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
+    // loaded one, and "no server" on a green tree is a board crying wolf.
+    const deadline = Date.now() + 60000;
     for (;;) {
       try { const r = await (await fetch(`${BASE}/api/status`)).json(); if (r.databaseReady) break; } catch { /* not up */ }
       if (Date.now() > deadline) throw new Error('no server');
