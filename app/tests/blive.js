@@ -151,6 +151,20 @@ async function onboard(p, name, email, roleLabel) {
         if (String(args[0]).includes('/api/attention')) window.__calls += 1;
         return real(...args);
       };
+    });
+    // LET THE PAGE FINISH ARRIVING FIRST, and count from the moment it is
+    // hidden rather than from the moment the spy went in.
+    //
+    // Arriving at a screen asks /attention once, and that request is decided on
+    // while the tab is still visible — it is not the poll, and there is nothing
+    // to cancel about it. On an idle machine it has gone out long before this
+    // point; on one running a full board it can be issued a second later, land
+    // after the tab is hidden, and be counted as a poll that never happened.
+    // This passed alone and failed on the board, three times, while the timer
+    // was behaving perfectly.
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      window.__calls = 0;
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
     });
