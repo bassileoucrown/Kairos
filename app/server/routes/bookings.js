@@ -31,7 +31,8 @@ router.get('/:id/trail', async (req, res) => {
 router.post('/:id/cancel', async (req, res) => {
   const row = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Booking not found.' });
-  await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  const result = await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.status(204).end();
 });
 
@@ -102,6 +103,21 @@ router.post('/:id/notes', loadOwn, async (req, res) => {
     // a private note shown by mistake is recoverable, one sent is not.
     visibility: req.body?.visibility || 'office',
     authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
+});
+
+// A principal minuting their own meeting. Rarer than the delegated case below
+// — the whole point is an account written by whoever was in the room for
+// somebody who was not — but a principal who took the meeting alone and wants
+// it on the record should not have to ask an assistant to type it.
+router.post('/:id/minutes', loadOwn, async (req, res) => {
+  const result = await notes.minute({
+    booking: req.booking,
+    owner: req.user,
+    author: req.user,
     body: req.body?.body,
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });

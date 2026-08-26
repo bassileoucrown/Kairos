@@ -2,6 +2,7 @@ const db = require('./db');
 const events = require('./bookingEvents');
 const { sendEmail } = require('./email');
 const { rangeForEmail } = require('./format');
+const { refuseIfOver } = require('./bookingWindow');
 
 /**
  * Moving an appointment, from the office's side.
@@ -49,6 +50,10 @@ async function rescheduleBooking({ booking, owner, startAt, movedByUserId = null
   if (booking.status === 'declined') {
     return { ok: false, status: 400, error: 'That request was declined — there is nothing to move.' };
   }
+  // The clock closes an appointment as surely as a status does. See
+  // lib/bookingWindow.js for why that answer lives in one place.
+  const over = refuseIfOver(booking, 'move');
+  if (over) return over;
 
   const start = new Date(startAt);
   if (!startAt || Number.isNaN(start.getTime())) {
@@ -134,6 +139,8 @@ async function setDuration({ booking, owner, minutes, movedByUserId = null, note
   if (booking.status === 'cancelled' || booking.status === 'declined') {
     return { ok: false, status: 400, error: 'This appointment is closed.' };
   }
+  const over = refuseIfOver(booking, 'length');
+  if (over) return over;
   const mins = Number(minutes);
   if (!Number.isInteger(mins) || mins < MIN_MINUTES || mins > MAX_MINUTES) {
     return {

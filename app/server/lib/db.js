@@ -374,6 +374,12 @@ function ready() {
       // a task came from be replied to without any of them being unfrozen. See
       // the comment on the column in schema.sql.
       await ensureColumn('messages', 'reply_to_id', 'TEXT');
+      // What actually happened at a meeting, as against what to prepare for
+      // it. See the comment on the column in schema.sql.
+      await ensureColumn('booking_notes', 'kind', "TEXT NOT NULL DEFAULT 'note'");
+      // The two people in a room for two. See lib/pairLine.js.
+      await ensureColumn('spaces', 'pair_key', 'TEXT');
+      await ensureIndex('idx_spaces_pair', 'spaces(pair_key)');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

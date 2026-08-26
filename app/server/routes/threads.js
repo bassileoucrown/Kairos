@@ -147,12 +147,21 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
   // it. One query for the thread; the alternative — a list at the foot of the
   // screen and nothing on the message — is exactly how a task came to be a
   // place a conversation stopped.
+  //
+  // FINISHED WORK LEAVES. A thread is the live state of a conversation, and a
+  // room carrying every task the office has ever closed becomes a room you
+  // scroll past rather than read. The task itself is not deleted — it is on the
+  // space's list and in My Tasks, where a completed thing belongs — it simply
+  // stops taking up room in a conversation that has moved on. Reopening it
+  // brings it back, because the filter is the task's own state rather than a
+  // second flag that could disagree with it.
   const tasksByMessage = new Map();
   for (const t of await db.prepare(`
     SELECT t.id, t.title, t.status, t.source_message_id, u.name AS assignee_name
       FROM tasks t
       LEFT JOIN users u ON u.id = t.assignee_id
      WHERE t.source_message_id IN (SELECT id FROM messages WHERE thread_id = ?)
+       AND t.status != 'done'
      ORDER BY t.created_at ASC
   `).all(req.thread.id)) {
     const list = tasksByMessage.get(t.source_message_id) || [];
@@ -542,9 +551,31 @@ router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {
 
   const { body } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write something first.' });
+  const text = String(body).trim();
 
   await db.prepare('UPDATE messages SET body = ?, edited_at = ? WHERE id = ?')
-    .run(String(body).trim(), new Date().toISOString(), message.id);
+    .run(text, new Date().toISOString(), message.id);
+
+  // ONLY WHOEVER THE EDIT NEWLY NAMED. Adding "@kit, can you take this" to a
+  // line you already sent has to reach Kit — otherwise the only way to address
+  // somebody is to get it right first time, and a typo in a handle is
+  // unrecoverable. But re-running the whole notification would knock everybody
+  // already in the message every time a comma moved. Same rule as retitling a
+  // task; see routes/tasks.js.
+  const before = new Set(mentions.parse(message.body));
+  const audience = await spaceAudience(req.access.space);
+  const found = await mentions.of(text, {
+    viewerId: req.user.id, ownerId: req.access.space.owner_id, audience,
+  });
+  await mentions.notify({
+    found: found.filter((m) => !before.has(m.handle)),
+    author: req.user,
+    ownerId: req.access.space.owner_id,
+    subject: `${req.user.name} mentioned you in ${req.thread.name}`,
+    where: `"${req.thread.name}" (${req.access.space.name})`,
+    url: `/threads/${req.thread.id}`,
+  });
+
   res.json({ ok: true });
 });
 

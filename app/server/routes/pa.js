@@ -429,7 +429,8 @@ router.post('/:ownerId/bookings/:bookingId/cancel', requirePaAccess, async (req,
   if (row.status === 'declined') {
     return res.status(400).json({ error: 'That request was declined — there is nothing to cancel.' });
   }
-  await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  const result = await cancelBooking({ booking: row, cancelledByUserId: req.user.id, note: req.body?.note });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ booking: await history.get(req.principal.id, row.id) });
 });
 
@@ -488,6 +489,21 @@ router.post('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipa
     ownerId: req.principal.id,
     visibility: req.body?.visibility || 'office',
     authorUserId: req.user.id,
+    body: req.body?.body,
+  });
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ note: result.note });
+});
+
+// THE CASE THIS FEATURE WAS BUILT FOR. The assistant was in the room; the
+// principal was not, or was and was not writing. The principal is told — see
+// lib/bookingNotes.js — because minutes nobody is pointed at are minutes
+// nobody reads.
+router.post('/:ownerId/bookings/:bookingId/minutes', requirePaAccess, loadPrincipalBooking, async (req, res) => {
+  const result = await bookingNotes.minute({
+    booking: req.booking,
+    owner: req.principal,
+    author: req.user,
     body: req.body?.body,
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });

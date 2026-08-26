@@ -23,6 +23,7 @@ const db = require('./db');
 const formats = require('./meetingFormats');
 const events = require('./bookingEvents');
 const { formatForEmail } = require('./format');
+const { isOver } = require('./bookingWindow');
 
 // Every field both callers need, in one place, so the principal's list and the
 // assistant's cannot drift into showing different things about one booking.
@@ -52,6 +53,12 @@ function serialize(b) {
     startAt: b.start_at,
     endAt: b.end_at,
     status: b.status,
+    // Whether the arrangements are still arrangements. Answered here, from
+    // lib/bookingWindow.js, so the screen hides exactly the verbs the server
+    // would refuse — a button that exists and always fails is worse than one
+    // that is not offered. Not stored on the row: nobody decided a meeting is
+    // in the past, the clock did. See that file.
+    over: isOver(b),
     videoRoom: b.video_room,
     // How it was to happen, and whether that was the principal's usual — the
     // office is regularly asked "did we agree to see them in person?" and the

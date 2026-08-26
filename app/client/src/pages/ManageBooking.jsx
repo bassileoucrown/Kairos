@@ -197,14 +197,26 @@ export default function ManageBooking() {
               {booking.status === 'confirmed' && booking.videoRoom && (
                 <div style={{ marginBottom: 16 }}><VideoJoinLink room={booking.videoRoom} /></div>
               )}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button className="btn btn-secondary" type="button" onClick={() => setMode('reschedule')}>
-                  Reschedule
-                </button>
-                <button className="btn btn-danger" type="button" onClick={handleCancel}>
-                  {booking.status === 'pending' ? 'Withdraw request' : 'Cancel booking'}
-                </button>
-              </div>
+              {/* Once it has happened there is nothing to reschedule and
+                  nothing to cancel — and the server refuses both, so offering
+                  them here would only be a button that fails. The message box
+                  below stays open, because "thank you, and here is the thing
+                  you asked for" is written after a meeting, not before it. */}
+              {booking.over ? (
+                <p className="tz-note">
+                  This meeting has already taken place. If you need another,
+                  {' '}<Link to={`/book/${booking.ownerSlug}`}>pick a new time</Link>.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary" type="button" onClick={() => setMode('reschedule')}>
+                    Reschedule
+                  </button>
+                  <button className="btn btn-danger" type="button" onClick={handleCancel}>
+                    {booking.status === 'pending' ? 'Withdraw request' : 'Cancel booking'}
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>

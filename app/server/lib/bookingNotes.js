@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
+const { knock } = require('./knock');
 
 /**
  * What is said about an appointment, and to whom.
@@ -19,6 +20,7 @@ const { formatForEmail } = require('./format');
  */
 
 const VISIBILITIES = new Set(['office', 'shared']);
+const KINDS = new Set(['note', 'minute']);
 
 /** Everything about this appointment — both registers. Office eyes only. */
 async function forOffice(ownerId, bookingId) {
@@ -52,6 +54,7 @@ function serialize(n) {
     id: n.id,
     body: n.body,
     visibility: n.visibility || 'shared',
+    kind: n.kind || 'note',
     // The booker has no account, so an absent author is the booker rather than
     // an unknown. Said as a name so no screen has to work it out.
     authorName: n.author_name || null,
@@ -60,17 +63,27 @@ function serialize(n) {
   };
 }
 
-async function add({ bookingId, ownerId, visibility, authorUserId = null, body }) {
+async function add({ bookingId, ownerId, visibility, authorUserId = null, body, kind = 'note' }) {
   const text = String(body || '').trim();
   if (!text) return { ok: false, status: 400, error: 'Write something first.' };
   if (!VISIBILITIES.has(visibility)) {
     return { ok: false, status: 400, error: 'A note is either for the office or for the booker.' };
   }
+  if (!KINDS.has(kind)) {
+    return { ok: false, status: 400, error: 'That is not something that can be written on an appointment.' };
+  }
+  // THE INVARIANT forBooker RELIES ON. Minutes are the office's account of a
+  // meeting, frequently candid about the person who was in it, and forBooker
+  // returns shared notes — so a minute that was ever allowed to be shared would
+  // be a minute handed to its subject through a link they can forward. Forced
+  // here rather than validated, because the caller has no business having an
+  // opinion about it.
+  const seenBy = kind === 'minute' ? 'office' : visibility;
   const id = crypto.randomUUID();
   await db.prepare(`
-    INSERT INTO booking_notes (id, booking_id, owner_id, visibility, author_user_id, body, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, bookingId, ownerId, visibility, authorUserId, text.slice(0, 4000), new Date().toISOString());
+    INSERT INTO booking_notes (id, booking_id, owner_id, visibility, kind, author_user_id, body, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, bookingId, ownerId, seenBy, kind, authorUserId, text.slice(0, 4000), new Date().toISOString());
   const row = await db.prepare(`
     SELECT n.*, u.name AS author_name FROM booking_notes n
     LEFT JOIN users u ON u.id = n.author_user_id WHERE n.id = ?
@@ -123,4 +136,64 @@ async function followUp({ booking, owner, authorUserId, body }) {
   return added;
 }
 
-module.exports = { forOffice, forBooker, add, followUp, serialize, VISIBILITIES };
+/**
+ * What actually happened, written down for the principal.
+ *
+ * THE GAP THIS FILLS. An assistant sits in a meeting the principal could not
+ * take, or takes the notes in one the principal was in and was not writing
+ * during. Until now that account had two places to go: an office note, where it
+ * sank into a list that also holds "he prefers the corner table", or nowhere.
+ * Nowhere is what usually happened, and the thing a principal most wants from
+ * an office — a straight account of what was agreed — was the thing the product
+ * had no word for.
+ *
+ * ONLY ONCE IT HAS STARTED. Minutes of a meeting that has not begun are not
+ * minutes; they are a plan, and a plan is what the note register is for. The
+ * bar is the start rather than the end, because the useful moment is often
+ * while it is still going on — an assistant types up the first half in the
+ * break.
+ *
+ * IT KNOCKS. "For the principal's information" is the entire point, and a
+ * record filed on a page nobody has a reason to open has not informed anybody.
+ * Through lib/knock.js, so it reaches an inbox and a phone by the same rule as
+ * everything else that wants somebody. Never the words themselves — see that
+ * file — and never a knock to yourself, which is what a principal minuting
+ * their own meeting would otherwise get.
+ *
+ * NEVER TO THE BOOKER. Enforced in add() rather than here; see the note there.
+ */
+async function minute({ booking, owner, author, body }) {
+  if (Date.parse(booking.start_at) > Date.now()) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'This meeting has not started yet. Minutes are the account of what happened — '
+        + 'until then, an office note is the right place.',
+    };
+  }
+
+  const added = await add({
+    bookingId: booking.id,
+    ownerId: owner.id,
+    visibility: 'office',
+    kind: 'minute',
+    authorUserId: author.id,
+    body,
+  });
+  if (!added.ok) return added;
+
+  const meetingType = await db.prepare('SELECT name FROM meeting_types WHERE id = ?')
+    .get(booking.meeting_type_id);
+  await knock({
+    toUserId: owner.id,
+    ownerId: owner.id,
+    author,
+    subject: `Minutes: ${meetingType?.name || 'your meeting'} with ${booking.booker_name}`,
+    line: `has minuted your meeting with ${booking.booker_name}.`,
+    url: `/appointments/${owner.id}/${booking.id}`,
+  });
+
+  return added;
+}
+
+module.exports = { forOffice, forBooker, add, followUp, minute, serialize, VISIBILITIES, KINDS };

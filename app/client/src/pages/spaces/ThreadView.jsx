@@ -8,6 +8,7 @@ import { MentionText, MentionPicker } from '../../components/Mention.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
 import { useVisiblePoll } from '../../lib/useVisiblePoll.js';
 import TaskList from './TaskList.jsx';
+import { PersonName } from '../../components/PersonMenu.jsx';
 
 const RECORD_TYPES = [
   { value: 'decision', label: 'Decision' },
@@ -86,7 +87,11 @@ const TASK_STATE_LABEL = { open: 'Open', doing: 'Doing', blocked: 'Blocked', don
  * NOT A LINK, deliberately. The obvious destination is /tasks, and /tasks is
  * MY tasks — so a chip for work handed to somebody else would lead to a list
  * that does not contain it, which is worse than no link at all. The task's own
- * controls are already on this screen, under "Tasks from this thread".
+ * controls are already on this screen, under "Still to do, from this thread".
+ *
+ * A FINISHED TASK IS NOT SHOWN AT ALL. It never reaches here — the server stops
+ * sending it once it is done, so a room does not accumulate every errand the
+ * office has ever closed. It is still on the space's list and in My Tasks.
  */
 function TaskChip({ t }) {
   return (
@@ -118,6 +123,58 @@ function QuotedLine({ q }) {
   );
 }
 
+/**
+ * Fixing what you already said.
+ *
+ * WHY IT IS OFFERED AT ALL. Everything in this product is written in a hurry,
+ * from a car or between meetings, and half of it is instructions somebody will
+ * act on: "car at six" typed as "car at nine" is not a typo, it is a driver in
+ * the wrong place. The alternative — send a correction underneath — leaves both
+ * lines standing and the reader deciding which one is current.
+ *
+ * WHAT IS NOT EDITABLE, and this is the load-bearing half. Only your own words,
+ * and never a record that has been acknowledged: once somebody has agreed to a
+ * decision, the way to change it is to supersede it, which leaves both in the
+ * history. Editing it out from under them is exactly what the lock exists to
+ * stop, and the server refuses it whatever this screen offers.
+ *
+ * IT SAYS SO. An edited line is marked "· edited" from the first save. A
+ * message that can change silently is a message nobody can rely on.
+ */
+function EditMessage({ m, onSave, onCancel }) {
+  const [text, setText] = useState(m.body || '');
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="msg-edit"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        // Left open on a refusal — the words are still in the box, which is
+        // the whole reason not to close it optimistically.
+        try { await onSave(text); } catch { /* said in the banner */ } finally { setBusy(false); }
+      }}
+    >
+      <textarea
+        aria-label="Edit this message"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={3}
+        required
+      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn btn-primary btn-sm" type="submit"
+          disabled={busy || !text.trim() || text.trim() === (m.body || '').trim()}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={onCancel}>
+          Never mind
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function clipLength(ms) {
   const s = Math.max(1, Math.round(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -141,17 +198,30 @@ function VoiceBubble({ threadId, m }) {
   );
 }
 
-function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone, onReply }) {
+function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask, onDone, onReply, onEdit }) {
   const [picking, setPicking] = useState(false);
   const [tasking, setTasking] = useState(false);
+  const [editing, setEditing] = useState(false);
   const hasText = !!String(m.body || '').trim();
+  // Your own words, and only where there are words: a recording has nothing to
+  // retype, and the transcript it does not have yet is a different feature.
+  const mine = m.authorId === viewerId && hasText;
   return (
     <div className={'msg-note' + (m.doneAt ? ' is-done' : '')} id={`m-${m.id}`}>
       <span className="msg-avatar" aria-hidden="true">{initials(m.authorName)}</span>
       <div style={{ minWidth: 0 }}>
-        <div className="msg-who">{m.authorName} <em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em></div>
+        <div className="msg-who">
+          <PersonName userId={m.authorId} name={m.authorName} viewerId={viewerId} />
+          {' '}<em>{timeLabel(m.createdAt)}{m.editedAt ? ' · edited' : ''}</em>
+        </div>
         {m.replyTo && <QuotedLine q={m.replyTo} />}
-        {hasText && (
+        {editing ? (
+          <EditMessage
+            m={m}
+            onCancel={() => setEditing(false)}
+            onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
+          />
+        ) : hasText && (
           <div className="msg-bubble"><MentionText body={m.body} mentions={m.mentions} /></div>
         )}
         {m.voice && <VoiceBubble threadId={threadId} m={m} />}
@@ -182,11 +252,16 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
             turned out the car was cancelled" — and hiding the answer button
             behind the message's state is what made a task the end of a
             conversation. */}
-        {canWrite && !picking && !tasking && (
+        {canWrite && !picking && !tasking && !editing && (
           <div className="msg-actions-row">
             <button className="msg-promote" type="button" onClick={() => onReply(m)}>
               Reply
             </button>
+            {mine && (
+              <button className="msg-promote" type="button" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
             {!m.doneAt && (
               <>
                 <button className="msg-promote" type="button" onClick={() => onDone(m.id, true)}>
@@ -242,8 +317,9 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
   );
 }
 
-function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply }) {
+function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, onEdit }) {
   const [superseding, setSuperseding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [replacement, setReplacement] = useState('');
   const [replacementType, setReplacementType] = useState(m.recordType);
   const hasAcked = m.acks.some((a) => a.userId === viewerId);
@@ -260,14 +336,27 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply }
       </div>
 
       {m.replyTo && <QuotedLine q={m.replyTo} />}
-      <div className="msg-record-body"><MentionText body={m.body} mentions={m.mentions} /></div>
+      {editing ? (
+        <EditMessage
+          m={m}
+          onCancel={() => setEditing(false)}
+          onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
+        />
+      ) : (
+        <div className="msg-record-body"><MentionText body={m.body} mentions={m.mentions} /></div>
+      )}
       {m.tasks?.map((t) => <TaskChip key={t.id} t={t} />)}
 
       <div className="msg-record-foot">
         {m.promotedFromId && (
-          <span className="msg-promoted">⤴ promoted from a note by {m.authorName}</span>
+          <span className="msg-promoted">
+            ⤴ promoted from a note by{' '}
+            <PersonName userId={m.authorId} name={m.authorName} viewerId={viewerId} />
+          </span>
         )}
-        {!m.promotedFromId && <span>by {m.authorName}</span>}
+        {!m.promotedFromId && (
+          <span>by <PersonName userId={m.authorId} name={m.authorName} viewerId={viewerId} /></span>
+        )}
         {m.promotedByName && <> · filed by {m.promotedByName}</>}
         {' · '}{timeLabel(m.createdAt)}
         {m.acks.length > 0 && <> · acknowledged by {m.acks.map((a) => a.name).join(', ')}</>}
@@ -284,6 +373,15 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply }
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => onReply(m)}>
             Reply
           </button>
+          {/* A record can be corrected right up until somebody acknowledges
+              it, and not one moment after. Before the lock it is a draft
+              nobody has agreed to; after it, the honest way to change it is
+              Supersede, which leaves both in the history. */}
+          {m.authorId === viewerId && !m.locked && !isSuperseded && (
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => setEditing((e) => !e)}>
+              {editing ? 'Never mind' : 'Edit'}
+            </button>
+          )}
           {!isSuperseded && !hasAcked && (
             <button className="btn btn-secondary btn-sm" type="button" onClick={() => onAck(m.id)}>
               Acknowledge
@@ -377,8 +475,13 @@ export default function ThreadView() {
       api.get(`/spaces/${d.thread.spaceId}`)
         .then((s) => setMembers([{ id: s.owner.id, name: s.owner.name }, ...s.members.map((m) => ({ id: m.userId, name: m.name }))]))
         .catch(() => {});
+      // Live work only, matching the chips on the messages themselves — a
+      // finished task leaves the conversation and lives on in My Tasks and on
+      // the space's list, which is where a completed thing belongs.
       api.get(`/tasks?spaceId=${d.thread.spaceId}`)
-        .then((r) => setTasks(r.tasks.filter((t) => t.sourceThreadId === threadId)))
+        .then((r) => setTasks(r.tasks.filter(
+          (t) => t.sourceThreadId === threadId && t.status !== 'done',
+        )))
         .catch(() => {});
     }).catch((err) => setError(err.message));
   }
@@ -499,6 +602,19 @@ export default function ThreadView() {
   const supersede = (id, replacementBody, replacementType) => act(() =>
     api.post(`/threads/${threadId}/messages/${id}/supersede`, { body: replacementBody, recordType: replacementType }));
   const makeTask = (payload) => act(() => api.post('/tasks', payload));
+  // Fixing what you already said. The server decides whether it is allowed —
+  // your own words, and not a record somebody has acknowledged — so a refusal
+  // arrives as prose in the banner rather than being second-guessed here.
+  // Not through act(): that swallows the failure, which would close the edit
+  // box over the top of somebody's typing and leave them re-writing it from
+  // memory. Rethrown so the box stays open with the words still in it.
+  async function editMessage(id, body) {
+    setError('');
+    try {
+      await api.patch(`/threads/${threadId}/messages/${id}`, { body });
+      load();
+    } catch (err) { setError(err.message); throw err; }
+  }
 
   /**
    * Answer this one.
@@ -573,10 +689,11 @@ export default function ThreadView() {
           {shown.map((m) => (
             m.register === 'record'
               ? <Record key={m.id} m={m} viewerId={data.viewerId} canWrite={data.canWrite}
-                  onAck={ack} onStatus={setStatus} onSupersede={supersede} onReply={startReply} />
+                  onAck={ack} onStatus={setStatus} onSupersede={supersede} onReply={startReply}
+                  onEdit={editMessage} />
               : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
                   viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask}
-                  onDone={markDone} onReply={startReply} />
+                  onDone={markDone} onReply={startReply} onEdit={editMessage} />
           ))}
           <div ref={endRef} />
           {/* Said rather than done. Somebody reading back through last Tuesday
@@ -590,7 +707,7 @@ export default function ThreadView() {
 
         {tasks.length > 0 && view === 'all' && (
           <>
-            <h3 style={{ marginTop: 8 }}>Tasks from this thread</h3>
+            <h3 style={{ marginTop: 8 }}>Still to do, from this thread</h3>
             <TaskList tasks={tasks} onChanged={load} />
           </>
         )}

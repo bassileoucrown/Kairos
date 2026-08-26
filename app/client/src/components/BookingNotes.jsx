@@ -13,6 +13,14 @@ import { api } from '../lib/api.js';
  * The default is the office's own, and that asymmetry is deliberate: a private
  * note shown by mistake is embarrassing and recoverable, a private note SENT
  * is neither.
+ *
+ * MINUTES ARE THE THIRD THING, AND THEY GET THEIR OWN BOX. A note is
+ * preparation and a shared note is a message; minutes are the account of what
+ * happened, written after, for a principal who was not in the room. Putting
+ * them in the same dropdown would mean the most consequential line an office
+ * writes — "he agreed to fund the second tranche" — is one mis-click away from
+ * being filed as "he prefers the corner table", and one further mis-click from
+ * being sent to him.
  */
 export default function BookingNotes({ ownerId, bookingId, onChanged }) {
   const [notes, setNotes] = useState(null);
@@ -43,12 +51,17 @@ export default function BookingNotes({ ownerId, bookingId, onChanged }) {
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
+  // Minutes live in their own box on the page — see components/BookingMinutes
+  // — so they are filtered out of this one rather than mixed in. Two registers
+  // is already the most this list can carry and stay readable.
+  const said = (notes || []).filter((n) => n.kind !== 'minute');
+
   return (
     <div className="booking-notes">
       {error && <div className="alert alert-error">{error}</div>}
       {notes === null && <p className="hint">Loading…</p>}
 
-      {notes?.map((n) => (
+      {said.map((n) => (
         <div key={n.id} className={`note-line is-${n.visibility}`}>
           <div className="note-who">
             {n.fromBooker ? 'From them' : (n.authorName || 'The office')}

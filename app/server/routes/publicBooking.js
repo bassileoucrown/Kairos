@@ -9,6 +9,7 @@ const { isValidTimeZone } = require('../lib/timezone');
 const { sendEmail } = require('../lib/email');
 const { formatForEmail, rangeForEmail } = require('../lib/format');
 const notes = require('../lib/bookingNotes');
+const { refuseIfOver, isOver } = require('../lib/bookingWindow');
 const { limit, clientIp } = require('../lib/rateLimit');
 
 const router = asyncRouter();
@@ -262,6 +263,10 @@ function serializeBookingDetail(b) {
   return {
     id: b.id,
     status: b.status,
+    // The booker is held to the same clock as the office. Sent so their page
+    // can stop offering Move and Cancel rather than offering them and being
+    // refused. See lib/bookingWindow.js.
+    over: isOver(b),
     startAt: b.start_at,
     endAt: b.end_at,
     bookerName: b.booker_name,
@@ -410,6 +415,11 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   if (booking.status === 'cancelled') {
     return res.json({ booking: serializeBookingDetail(booking) });
   }
+  // The same rule the office is held to, from the other side of the link. A
+  // booker cancelling a meeting they have already attended would tell the
+  // office it is not going ahead. See lib/bookingWindow.js.
+  const over = refuseIfOver(booking, 'cancel');
+  if (over) return res.status(over.status).json({ error: over.error });
   await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
   await events.record({
     bookingId: booking.id, ownerId: booking.owner_id, kind: events.KINDS.cancelled,
@@ -432,6 +442,8 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
   if (booking.status === 'cancelled') {
     return res.status(400).json({ error: 'This booking was cancelled — book a new time instead.' });
   }
+  const past = refuseIfOver(booking, 'move');
+  if (past) return res.status(past.status).json({ error: past.error });
 
   const { startAt } = req.body || {};
   const start = new Date(startAt);

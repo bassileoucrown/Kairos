@@ -15,15 +15,25 @@ const db = require('./db');
 const { sendEmail } = require('./email');
 const { rangeForEmail } = require('./format');
 const events = require('./bookingEvents');
+const { refuseIfOver } = require('./bookingWindow');
 
 /**
  * Cancel a booking and tell whoever made it.
  *
  * Idempotent: cancelling something already cancelled sends no second email, so
  * a double-tap on a phone does not write to somebody twice.
+ *
+ * Answers { ok } like the other two verbs rather than a bare boolean. It used
+ * to return false for "already cancelled" and true otherwise, which was fine
+ * while the only reason to decline was one nobody needed telling about — and
+ * stopped being fine the moment there was a refusal with something to say.
  */
 async function cancelBooking({ booking, cancelledByUserId = null, note = '' }) {
-  if (booking.status === 'cancelled') return false;
+  if (booking.status === 'cancelled') return { ok: true, already: true };
+  // You cannot call off a meeting that has already happened; the people who
+  // were there would be told it is not going ahead. See lib/bookingWindow.js.
+  const over = refuseIfOver(booking, 'cancel');
+  if (over) return over;
 
   await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
   await events.record({
@@ -51,7 +61,7 @@ async function cancelBooking({ booking, cancelledByUserId = null, note = '' }) {
       + `\n\nYou're welcome to pick another time: /book/${owner?.slug || ''}`,
   });
 
-  return true;
+  return { ok: true };
 }
 
 module.exports = { cancelBooking };

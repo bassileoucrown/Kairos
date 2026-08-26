@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell from '../components/AppShell.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
+import BookingMinutes from '../components/BookingMinutes.jsx';
 import VideoJoinLink from '../components/VideoJoinLink.jsx';
 import MoveAppointment from '../components/MoveAppointment.jsx';
 import QuickJot from '../components/QuickJot.jsx';
@@ -90,9 +91,21 @@ export default function BookingDetail() {
   }
 
   const status = booking ? (STATUS[booking.status] || STATUS.confirmed) : null;
-  // Cancelled is the end of the road: there is nothing left to move, lengthen
-  // or call off. The conversation stays open below, because it happened.
-  const live = booking?.status === 'confirmed' || booking?.status === 'pending';
+  /**
+   * Whether there is still an arrangement to change.
+   *
+   * TWO WAYS FOR AN APPOINTMENT TO BE FINISHED, and both close the same three
+   * verbs. Cancelled is a decision somebody made. Over is the clock — and
+   * `over` comes from the server (lib/bookingWindow.js) rather than being
+   * worked out here, because the server is what refuses these, and a screen
+   * that decides for itself will eventually offer a button that always fails.
+   *
+   * Everything below this card stays open on a past meeting. Notes, minutes and
+   * the trail are how an office says what happened, and most of that gets
+   * written afterwards.
+   */
+  const live = (booking?.status === 'confirmed' || booking?.status === 'pending')
+    && !booking?.over;
 
   return (
     <AppShell title="Appointment" active="today">
@@ -132,6 +145,19 @@ export default function BookingDetail() {
               </div>
             </div>
           </div>
+
+          {/* Said, not left blank. A card that simply vanishes reads as a
+              missing feature; one sentence turns it into a fact about the
+              meeting. */}
+          {booking.over && booking.status !== 'cancelled' && (
+            <div className="card">
+              <p className="hint" style={{ margin: 0 }}>
+                This appointment has already happened. It can no longer be moved,
+                lengthened or called off — but what was said about it still belongs
+                here, below.
+              </p>
+            </div>
+          )}
 
           {live && (
             <div className="card">
@@ -211,6 +237,15 @@ export default function BookingDetail() {
           <div className="card">
             <h2 className="section-head" style={{ marginTop: 0 }}>Notes</h2>
             <BookingNotes ownerId={ownerId} bookingId={bookingId} onChanged={load} />
+          </div>
+
+          {/* Above the pad and below the notes, because that is the order a
+              meeting actually goes in: prepare, attend, write it up, then
+              whatever it left you to do. */}
+          <div className="card">
+            <h2 className="section-head" style={{ marginTop: 0 }}>Minutes</h2>
+            <BookingMinutes ownerId={ownerId} bookingId={bookingId}
+              startAt={booking.startAt} timezone={zone} onChanged={load} />
           </div>
 
           {/* Not the same thing as a note on the appointment, and worth the

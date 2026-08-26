@@ -2839,3 +2839,65 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   0%, 55% { background: var(--accent-soft); }
   100% { background: transparent; }
 }
+
+/* --- Clicking a name ------------------------------------------------------ */
+/* Names are on every message, note and task in this product and none of them
+   used to do anything. The verbs belong where the thought happens. */
+.person-anchor { position: relative; display: inline-block; }
+.person-link {
+  border: none; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+  border-bottom: 1px dotted var(--text-muted);
+}
+.person-link:hover { border-bottom-color: var(--accent); color: var(--accent); }
+
+.person-menu {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
+  min-width: 270px; max-width: min(340px, 88vw);
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(28,33,39,0.13);
+  font-size: 0.85rem; text-align: left;
+  /* A menu opened on the last name in a room must not push the page sideways. */
+  white-space: normal;
+}
+.person-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+.person-name { font-weight: 600; }
+.person-handle { color: var(--text-muted); font-size: 0.8rem; }
+.person-relation { font-size: 0.66rem; }
+.person-remit { margin: 0 0 8px; }
+.person-said { margin: 0 0 8px; color: var(--accent-hover); }
+
+.person-between {
+  margin: 0 0 10px; padding: 8px 10px; list-style: none;
+  background: var(--bg); border-radius: 6px;
+  font-size: 0.8rem; color: var(--text-muted);
+}
+.person-between li + li { margin-top: 3px; }
+.person-between strong { color: var(--text); }
+
+.person-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.person-hand { margin-top: 10px; }
+.person-hand input { width: 100%; }
+.person-hand .hint { margin: 6px 0 8px; }
+
+/* --- Fixing what you already said ---------------------------------------- */
+.msg-edit { margin: 4px 0 6px; max-width: 60ch; }
+.msg-edit textarea { width: 100%; margin-bottom: 6px; }
+
+/* --- Minutes: the account of what happened -------------------------------- */
+/* Drawn apart from notes on purpose. "He agreed to fund the second tranche" and
+   "he prefers the corner table" are not the same kind of sentence, and a list
+   that renders them identically teaches people to skim both. */
+.minute-line {
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.minute-who { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; }
+.minute-when { font-weight: 400; }
+.minute-body { font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.booking-minutes textarea { width: 100%; }

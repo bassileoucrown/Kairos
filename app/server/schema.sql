@@ -111,6 +111,20 @@ CREATE TABLE IF NOT EXISTS booking_notes (
   owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   -- office | shared
   visibility   TEXT NOT NULL DEFAULT 'office',
+  -- note | minute.
+  --
+  -- A MINUTE IS NOT A LONGER NOTE. A note is preparation, written before: what
+  -- the principal needs walking in, which car, what was agreed internally. A
+  -- minute is the record of what actually happened, written after, by whoever
+  -- was in the room — usually the assistant, for a principal who was not.
+  -- Filing them as ordinary notes would bury "he agreed to fund the second
+  -- tranche" in a list that also contains "he prefers the corner table".
+  --
+  -- ALWAYS office visibility, enforced where minutes are written rather than
+  -- offered as a choice: minutes are the office's account of a meeting, often
+  -- candid about the person on the other side of it, and there is no version
+  -- of this feature where sending them to that person is what somebody meant.
+  kind         TEXT NOT NULL DEFAULT 'note',
   -- Who wrote it. author_user_id for anyone in the office; NULL when the
   -- booker wrote it, since they have no account and are identified by the
   -- booking itself.
@@ -310,12 +324,18 @@ CREATE TABLE IF NOT EXISTS spaces (
   -- the owner tunes it per space — role sets the opening position, not a
   -- ceiling. See docs/collaboration-spec.html section 03.
   auto_delegate_roles TEXT NOT NULL DEFAULT '',
-  -- standard | direct. The direct line is a space the app maintains rather
-  -- than one the owner made: exactly one per principal, membership mirrored
-  -- from memberships. Marking it means the app can find it without guessing
-  -- from the name, and the client can render it as a room rather than a
-  -- project workspace. See lib/directLine.js.
+  -- standard | direct | pair. The direct line is a space the app maintains
+  -- rather than one the owner made: exactly one per principal, membership
+  -- mirrored from memberships. A pair is a room for exactly two people. Both
+  -- are marked so the app can find them without guessing from the name, and so
+  -- the client can render them as rooms rather than project workspaces. See
+  -- lib/directLine.js and lib/pairLine.js.
   kind       TEXT NOT NULL DEFAULT 'standard',
+  -- The two people in a pair room, sorted and joined, NULL for every other
+  -- kind. UNIQUE because two people clicking each other's names at the same
+  -- moment must not end up with two rooms holding half a conversation each —
+  -- the database settles that race rather than the code hoping there isn't one.
+  pair_key   TEXT UNIQUE,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_spaces_owner ON spaces(owner_id);

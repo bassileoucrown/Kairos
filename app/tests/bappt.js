@@ -238,10 +238,14 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     const others = (await boss('GET', '/bookings')).d.bookings.filter((b) => b.id !== booking.id);
     for (const b of others) await boss('POST', `/bookings/${b.id}/cancel`, {});
 
-    // Put it on today so the day sheet actually carries it, at an hour that
-    // exists whenever this runs.
-    const todayKey = new Date().toISOString().slice(0, 10);
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: `${todayKey}T13:00:00.000Z` });
+    // Put it on today so the day sheet carries it — AHEAD OF NOW, not at a
+    // fixed hour. It used to be 13:00 UTC, which is fine in the morning and a
+    // guaranteed failure every afternoon: an appointment that has finished no
+    // longer offers Move, Length or Call it off, so the assertions below found
+    // no buttons and blamed the page. Ten minutes out is on today's sheet and
+    // still live at every hour of the day.
+    const soon = new Date(Date.now() + 10 * 60000);
+    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: soon.toISOString() });
     ok('it can be put on today to be clicked', r.s === 200, JSON.stringify(r.d).slice(0, 160));
 
     browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
