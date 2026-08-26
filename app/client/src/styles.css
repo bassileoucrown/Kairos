@@ -432,7 +432,16 @@ textarea { resize: vertical; min-height: 70px; }
 .task-band.is-overdue { color: var(--danger); }
 .task-band.is-soon { color: #8A5426; }
 
-.msg-actions-row { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
+/* Six verbs now hang off a picked message, and on a 360px phone the column
+   left after the avatar cannot hold them on one line — they ran 4px past the
+   stream and gave the page a sideways scroll. They wrap. The row is the one
+   place a phone genuinely needs two lines, and the alternative — scrolling
+   sideways for "Take it back" — hides a verb behind a gesture nobody knows
+   is there. */
+.msg-actions-row {
+  display: flex; flex-wrap: wrap; gap: 6px 12px;
+  align-items: center; margin-top: 4px; min-width: 0;
+}
 .msg-task-form {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   margin-top: 8px; padding: 9px;

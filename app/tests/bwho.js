@@ -505,15 +505,25 @@ function client() {
       (await p.locator('.line-chip.is-here').count()) === 1);
 
     // What was said privately must not have leaked into the general room.
-    ok('nothing from the private line is in the general one',
-      !/Between us/.test(await p.locator('.msg-stream').innerText()));
+    const general = await p.locator('.msg-stream').innerText();
+    ok('nothing from the private line is in the general one', !/Between us/.test(general));
 
     const otherChip = p.locator('.line-chip:not(.is-here)').first();
     await otherChip.click();
     await p.waitForFunction(
       (t) => window.location.pathname !== `/threads/${t}`, threadId, { timeout: 20000 },
     );
-    await p.waitForSelector('.msg-stream', { timeout: 20000 });
+    // WAIT FOR THE ROOM, NOT THE ELEMENT. The switcher changes the id under a
+    // mounted ThreadView, so .msg-stream is already on the page and
+    // waitForSelector returns on the OLD room's messages — which is how this
+    // read the general room and called it the private one. What has to settle
+    // is the content, so that is what is waited on. Not the same as waiting
+    // for the words being asserted: an empty stream, or a third room's
+    // messages, still ends this wait and still fails the check below.
+    await p.waitForFunction((before) => {
+      const el = document.querySelector('.msg-stream');
+      return el && el.innerText !== before;
+    }, general, { timeout: 20000 });
     ok('and switching lands in the other room',
       /Between us/.test(await p.locator('.msg-stream').innerText()),
       (await p.locator('.msg-stream').innerText()).slice(0, 120));

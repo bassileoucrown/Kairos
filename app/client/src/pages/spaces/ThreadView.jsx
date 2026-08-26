@@ -581,7 +581,26 @@ export default function ThreadView() {
       .catch(() => {});
   }, [threadId]);
 
-  useEffect(() => { load(); }, [threadId]);
+  /**
+   * Leave the old room before entering the new one.
+   *
+   * The switcher made this matter. Until it existed you arrived at a thread by
+   * loading the page, so there was never a previous room's state to inherit;
+   * now one tap changes the id under a mounted component, and React keeps
+   * everything until the fetch comes back. For the length of that request the
+   * screen showed the office room's messages beneath the private line's
+   * header — the exact confusion a pair room exists to prevent, and on a slow
+   * connection not brief.
+   *
+   * The half-written message goes too. It was addressed to whoever you were
+   * talking to, and carrying it into a room full of other people is one
+   * absent-minded Enter away from being the leak itself.
+   */
+  useEffect(() => {
+    setData(null); setMembers([]); setTasks([]);
+    setError(''); setReplyTo(null); setPicked(null); setBody('');
+    load();
+  }, [threadId]);
   // Escape puts a message down. Nothing else on this screen claims the key,
   // and a selection you cannot clear without hunting for the same words again
   // is a selection people leave on.
