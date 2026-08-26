@@ -47,11 +47,30 @@ export default function MoveAppointment({
     return () => { stale = true; };
   }, [ownerId, bookingId, date]);
 
+  /**
+   * Change which day is being looked at.
+   *
+   * CLEARS THE TIMES IN THE SAME BREATH AS THE DATE, and that pairing is the
+   * whole point of the function. Setting only the date left one frame in which
+   * the heading said Thursday while the buttons underneath were still
+   * Wednesday's free times — the effect below does clear them, but not until
+   * after that render. For a moment the picker offered times as free on a day
+   * it had not looked at yet, which is the one thing a picker must never do.
+   *
+   * Both setters land in one commit, so no frame can ever show a day's label
+   * above another day's times.
+   */
+  function goToDay(iso) {
+    setDate(iso);
+    setDay(null);
+    setChosen(null);
+    setTyped('');
+  }
+
   function shiftDay(n) {
     const d = new Date(`${date}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() + n);
-    setDate(d.toISOString().slice(0, 10));
-    setTyped('');
+    goToDay(d.toISOString().slice(0, 10));
   }
 
   const openings = day?.openings || [];
@@ -100,7 +119,7 @@ export default function MoveAppointment({
       <div className="move-day">
         <button className="btn btn-secondary btn-sm" type="button" onClick={() => shiftDay(-1)}>←</button>
         <input aria-label="Which day" type="date" value={date}
-          onChange={(e) => { setDate(e.target.value); setTyped(''); }} />
+          onChange={(e) => goToDay(e.target.value)} />
         <button className="btn btn-secondary btn-sm" type="button" onClick={() => shiftDay(1)}>→</button>
         <span className="hint" style={{ margin: 0 }}>{dayLabelInZone(`${date}T12:00:00Z`, 'UTC')}</span>
       </div>
