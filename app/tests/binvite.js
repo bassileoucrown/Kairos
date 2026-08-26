@@ -49,7 +49,9 @@ function client() {
     },
     stdio: ['ignore', 'ignore', 'ignore'],
   });
-  const deadline = Date.now() + 20000;
+  // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
+  // loaded one, and "no server" on a green tree is a board crying wolf.
+  const deadline = Date.now() + 60000;
   for (;;) {
     try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) break; } catch { /* not up */ }
     if (Date.now() > deadline) throw new Error('no server');

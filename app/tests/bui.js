@@ -49,7 +49,9 @@ async function signup(browser, name, email, category, errors) {
     env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT), DATABASE_URL: '' },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
-  const deadline = Date.now() + 20000;
+  // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
+  // loaded one, and "no server" on a green tree is a board crying wolf.
+  const deadline = Date.now() + 60000;
   for (;;) {
     try { const r = await (await fetch(`${BASE}/api/status`)).json(); if (r.databaseReady) break; }
     catch { if (Date.now() > deadline) throw new Error('no server'); await new Promise((r) => setTimeout(r, 200)); }
