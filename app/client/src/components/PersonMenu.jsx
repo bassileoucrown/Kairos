@@ -61,8 +61,18 @@ export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
   useEffect(() => {
     api.get(`/people/${userId}`)
       .then(setCard)
-      .catch((err) => setError(err.message));
-  }, [userId]);
+      .catch((err) => {
+        // "No such person" is the right answer to a stranger guessing at ids,
+        // and the wrong words entirely here: their name is on the screen you
+        // just tapped. What is actually true is that nothing links the two of
+        // you — you can both read this room, but they are not on your team and
+        // you have not connected — so there is nobody to message yet.
+        setError(/no such person/i.test(err.message)
+          ? `You and ${name} share this room, but nothing links your accounts — `
+            + 'so there is no line between you to open. Connections, under Account, is where that starts.'
+          : err.message);
+      });
+  }, [userId, name]);
 
   /**
    * Keep it on the screen.
@@ -230,14 +240,21 @@ export default function PersonMenu({ userId, name, ownerId = null, onClose }) {
  * your own name and for anybody with no account behind them. A name that looks
  * clickable and does nothing is worse than one that does not.
  */
-export function PersonName({ userId, name, viewerId = null, ownerId = null, className = '' }) {
+export function PersonName({
+  userId, name, viewerId = null, ownerId = null, className = '', title = undefined,
+}) {
   const [open, setOpen] = useState(false);
-  if (!userId || userId === viewerId) return <span className={className}>{name}</span>;
+  // Your own name is not a menu, and neither is a name with no account behind
+  // it. Both render exactly as they did before — same classes, same title — so
+  // dropping this in beside an existing label changes nothing about how it
+  // looks, only whether it answers.
+  if (!userId || userId === viewerId) return <span className={className} title={title}>{name}</span>;
   return (
     <span className="person-anchor">
       <button
         type="button"
         className={`person-link ${className}`.trim()}
+        title={title}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}

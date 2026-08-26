@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
+import { PersonName } from './PersonMenu.jsx';
 
 /**
  * @ on screen: two things, drawn so nobody confuses them.
@@ -19,7 +20,18 @@ function titleFor(m) {
   return `${m.name} — in your contacts, but you cannot reach them here`;
 }
 
-export function MentionText({ body, mentions = [] }) {
+/**
+ * @ IS THE MOST NATURAL PLACE TO CLICK A PERSON, and for a while it was the one
+ * place that did nothing. Author names above a message opened a menu; the
+ * "@seun" in the middle of "@seun can you confirm Thursday" — the moment
+ * somebody is actually thinking about that person — was inert text.
+ *
+ * Only a real account gets the menu. A contact resolves to a row in somebody's
+ * address book rather than a user, and an unmatched handle is not a person at
+ * all: both stay exactly as they were, because a name that looks clickable and
+ * does nothing is worse than one that never offered.
+ */
+export function MentionText({ body, mentions = [], viewerId = null }) {
   if (!body) return null;
   const byHandle = new Map(mentions.map((m) => [m.handle.toLowerCase(), m]));
   // The same lookbehind the server parses with, so what is drawn and what is
@@ -37,12 +49,24 @@ export function MentionText({ body, mentions = [] }) {
         // and worth naming, but nothing reached them — so they are drawn like
         // a mention rather than like an address, and say why.
         const reached = m.notified;
+        const look = `mention is-${reached ? m.kind : 'quiet'}`;
+        // The look is unchanged either way — an address still reads as an
+        // address and a quiet mention still reads as quiet. The only difference
+        // is whether it answers to a tap.
+        if (m.kind === 'person' && m.id) {
+          return (
+            <PersonName
+              key={`${part}-${i}`}
+              userId={m.id}
+              viewerId={viewerId}
+              name={`@${m.handle}`}
+              className={look}
+              title={titleFor(m)}
+            />
+          );
+        }
         return (
-          <span
-            key={`${part}-${i}`}
-            className={`mention is-${reached ? m.kind : 'quiet'}`}
-            title={titleFor(m)}
-          >
+          <span key={`${part}-${i}`} className={look} title={titleFor(m)}>
             @{m.handle}
           </span>
         );

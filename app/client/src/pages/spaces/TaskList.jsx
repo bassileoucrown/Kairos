@@ -31,7 +31,9 @@ function dueLabel(dueAt) {
   return new Date(dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export default function TaskList({ tasks, onChanged, showContext = false, emptyText = 'No tasks yet.' }) {
+export default function TaskList({
+  tasks, onChanged, showContext = false, emptyText = 'No tasks yet.', viewerId = null,
+}) {
   // Ticking a checkbox should feel instant. These controls are fully
   // controlled by server state, so without holding the intended value locally
   // the box springs back until the round-trip lands, which reads as broken.
@@ -73,7 +75,9 @@ export default function TaskList({ tasks, onChanged, showContext = false, emptyT
             />
 
             <div className="task-main">
-              <div className="task-title"><MentionText body={t.title} mentions={t.mentions} /></div>
+              <div className="task-title">
+                <MentionText body={t.title} mentions={t.mentions} viewerId={viewerId} />
+              </div>
               <div className="task-meta">
                 {showContext && (
                   <>

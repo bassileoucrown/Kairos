@@ -357,13 +357,84 @@ function client() {
       /half six/.test(await line.innerText()), (await line.innerText()).slice(0, 120));
     ok('with "edited" against it', /edited/.test(await line.innerText()));
 
+    head('An @ in the middle of a sentence:');
+    // THE MOST NATURAL PLACE TO CLICK A PERSON, and for a while the one place
+    // that did nothing: author names opened a menu, and "@seun can you confirm
+    // Thursday" — the moment somebody is actually thinking about that person —
+    // was inert text.
+    await boss('POST', `/threads/${threadId}/messages`,
+      { body: 'Can @ngozi-bello confirm the Thursday dinner?' });
+    await p.reload();
+    await p.waitForSelector('.msg-bubble', { timeout: 20000 });
+    const atMention = p.locator('.msg-bubble button.person-link.mention', { hasText: '@ngozi-bello' }).first();
+    ok('an @ of a real person is clickable', (await atMention.count()) === 1);
+    // The look must not change: an address still has to read as an address, or
+    // the distinction between "they were told" and "they were only named" is
+    // lost to make room for a menu.
+    ok('and still drawn as a mention rather than a link',
+      /\bmention\b/.test(await atMention.getAttribute('class') || ''),
+      await atMention.getAttribute('class'));
+    await atMention.click();
+    // Wait for the CARD, not just the box. The menu paints immediately with
+    // whatever label was clicked — "@ngozi-bello" from a mention — and fills in
+    // once the card lands; asserting on the name in between races the fetch.
+    await p.waitForSelector('.person-menu .person-handle', { timeout: 15000 });
+    ok('and opens the same card', /Ngozi Bello/.test(await p.locator('.person-menu').innerText()),
+      await p.locator('.person-menu').innerText());
+    await p.keyboard.press('Escape');
+    await p.waitForSelector('.person-menu', { state: 'detached', timeout: 10000 });
+
+    head('Somebody you share a room with but nothing else:');
+    // A REAL DEAD END WITHOUT THIS. Two people can sit in one project space with
+    // no membership and no connection between them — invited separately by a
+    // third party. The @ is clickable because they plainly exist; the card is
+    // refused because nothing links the accounts. "No such person" about a name
+    // the reader is looking at is the worst of both.
+    const joint = await boss('POST', '/spaces', { name: 'Joint venture', context: 'work' });
+    await boss('POST', `/spaces/${joint.d.space.id}/members`, { email: `chidi${ID}@x.com` });
+    const jointThread = await boss('POST', `/spaces/${joint.d.space.id}/threads`, { name: 'Room' });
+    const me = (await boss('GET', '/auth/me')).d.user;
+    await boss('POST', `/threads/${jointThread.d.thread.id}/messages`,
+      { body: `I, @${me.slug}, will sign it off once you are ready.` });
+
+    const outsider = await b.newPage();
+    await outsider.goto(`${BASE}/login`);
+    await outsider.fill('#email', `chidi${ID}@x.com`);
+    await outsider.fill('#password', PW);
+    await outsider.click('button:has-text("Log in")');
+    await outsider.waitForURL(/\/workspace|\/today/, { timeout: 20000 });
+    await outsider.goto(`${BASE}/threads/${jointThread.d.thread.id}`);
+    await outsider.waitForSelector('.msg-bubble', { timeout: 20000 });
+    // NOT VIA THE @ — that cannot dead-end, and it is worth saying why. Handle
+    // resolution is scoped to the reader: somebody who cannot reach a person
+    // does not resolve their handle either, so the mention stays plain text
+    // rather than becoming a name that opens nothing.
+    ok('an unreachable person\'s @ is left as plain text, not a dead link',
+      (await outsider.locator('.msg-bubble button.person-link').count()) === 0);
+
+    // The author's name is the path that DOES reach here: it carries the id
+    // straight from the message rather than resolving a handle, so it is
+    // clickable for anybody whose message you can read.
+    const strangerAt = outsider.locator('.msg-who button.person-link').first();
+    ok('but the author\'s name is clickable, because you are reading their message',
+      (await strangerAt.count()) === 1);
+    await strangerAt.click();
+    await outsider.waitForSelector('.person-menu .alert-error', { timeout: 15000 });
+    const refused = await outsider.locator('.person-menu').innerText();
+    ok('and it does not claim they do not exist',
+      !/no such person/i.test(refused), refused.slice(0, 140));
+    ok('it says what is actually true — nothing links the accounts',
+      /nothing links/i.test(refused), refused.slice(0, 200));
+    ok('and points at where that starts', /Connections/i.test(refused), refused.slice(0, 200));
+    await outsider.close();
+
     head('A name on a message:');
     // The assistant's name, not the principal's own — your own name is not a
     // menu, and the screen agrees with the server about that.
     const theirName = p.locator('.msg-who button.person-link', { hasText: 'Ngozi' }).first();
     ok('is clickable', (await theirName.count()) === 1);
     await theirName.click();
-    await p.waitForSelector('.person-menu', { timeout: 15000 });
+    await p.waitForSelector('.person-menu .person-handle', { timeout: 15000 });
     const menu = await p.locator('.person-menu').innerText();
     ok('and opens a card naming them', /Ngozi Bello/.test(menu), menu.slice(0, 120));
     ok('carrying their handle to copy', /@ngozi-bello/.test(menu), menu.slice(0, 160));

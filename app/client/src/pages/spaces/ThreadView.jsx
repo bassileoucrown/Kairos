@@ -222,7 +222,9 @@ function Note({ m, threadId, canWrite, members, viewerId, onPromote, onMakeTask,
             onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
           />
         ) : hasText && (
-          <div className="msg-bubble"><MentionText body={m.body} mentions={m.mentions} /></div>
+          <div className="msg-bubble">
+            <MentionText body={m.body} mentions={m.mentions} viewerId={viewerId} />
+          </div>
         )}
         {m.voice && <VoiceBubble threadId={threadId} m={m} />}
         {m.tasks?.map((t) => <TaskChip key={t.id} t={t} />)}
@@ -343,7 +345,9 @@ function Record({ m, viewerId, canWrite, onAck, onStatus, onSupersede, onReply, 
           onSave={async (text) => { await onEdit(m.id, text); setEditing(false); }}
         />
       ) : (
-        <div className="msg-record-body"><MentionText body={m.body} mentions={m.mentions} /></div>
+        <div className="msg-record-body">
+          <MentionText body={m.body} mentions={m.mentions} viewerId={viewerId} />
+        </div>
       )}
       {m.tasks?.map((t) => <TaskChip key={t.id} t={t} />)}
 
@@ -708,7 +712,7 @@ export default function ThreadView() {
         {tasks.length > 0 && view === 'all' && (
           <>
             <h3 style={{ marginTop: 8 }}>Still to do, from this thread</h3>
-            <TaskList tasks={tasks} onChanged={load} />
+            <TaskList tasks={tasks} onChanged={load} viewerId={data.viewerId} />
           </>
         )}
 
