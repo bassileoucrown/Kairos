@@ -412,7 +412,13 @@ textarea { resize: vertical; min-height: 70px; }
 .task-check { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
 .task-main { flex: 1; min-width: 0; }
 .task-title { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; }
-.task-meta { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
+/* The title already breaks anywhere; the meta line did not, so a long link or
+   an unbroken address in it ran out over the controls beside it. Same rule for
+   both, since they are the same column. */
+.task-meta {
+  font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;
+  overflow-wrap: anywhere;
+}
 .task-due.is-overdue  { color: var(--danger); font-weight: 600; }
 .task-due.is-due-soon { color: #8A5426; font-weight: 600; }
 .task-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
@@ -580,10 +586,32 @@ textarea { resize: vertical; min-height: 70px; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
 .card + .card { margin-top: 12px; }
+/* PROSE HAS A COMFORTABLE LENGTH WHATEVER ROOM IT IS GIVEN, and until now
+   nothing in this app said so. The body runs to 1100px on a laptop, so every
+   explanatory line stretched the whole way — the appointment page had a hint
+   running 125 characters, which is roughly double the width at which the eye
+   can still find the start of the next line. Applied to cards because that is
+   where the sentences are; rows of controls are not measure lines and are left
+   alone. On a phone it is a no-op, because there was never that much room. */
+.card p, .card .hint { max-width: 74ch; }
 
+/* WRAPPING IS NOT ENOUGH ON ITS OWN. This row wraps, but a flex child defaults
+   to min-width:auto — it will not shrink below its longest unbreakable run — so
+   a booker's email at averylongdomainname.com pushed the row 28px past the card
+   on a phone and took the card's own border with it. The two together are what
+   fixes it: the column may shrink, and its text may break. */
 .booking-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.booking-row > * { min-width: 0; }
 .booking-row .when { font-weight: 600; font-size: 0.95rem; }
-.booking-row .meta { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
+.booking-row .meta {
+  color: var(--text-muted); font-size: 0.85rem; margin-top: 2px;
+  overflow-wrap: anywhere;
+  /* A line of prose has a comfortable length whatever room it is given. On a
+     laptop this row is 1100px wide and the meeting type, the booker and their
+     address ran to 130 characters — long enough that the eye loses the start of
+     the next line. */
+  max-width: 70ch;
+}
 
 .empty-state { text-align: center; color: var(--text-muted); padding: 48px 20px; font-size: 0.92rem; }
 
