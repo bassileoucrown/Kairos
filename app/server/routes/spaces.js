@@ -7,8 +7,9 @@ const { resolveVisibleHandle } = require('../lib/handles');
 const { requireAuth } = require('../lib/auth');
 const {
   CONTEXTS, DEFAULT_DELEGATE_ROLES, ASSISTANT_ROLES, parseRoles, roleCanDelegate,
-  listVisibleSpaces, applyRoleDefaults, requireSpaceAccess,
+  listVisibleSpaces, applyRoleDefaults, requireSpaceAccess, unreadBySpace,
 } = require('../lib/spaceAccess');
+const { summariseMany } = require('../lib/threadSummary');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -34,10 +35,18 @@ router.get('/', async (req, res) => {
   `).all();
   const countBySpace = Object.fromEntries(counts.map((c) => [c.space_id, c.thread_count]));
 
+  // WHICH SPACE THE WAITING MESSAGES ARE IN. The rail could say "3 messages"
+  // and this screen was the next place to look — and it said nothing, so the
+  // only way to find them was to open rooms one at a time until the number
+  // went down. A count that tells you something is waiting but not where is
+  // half a notification.
+  const { bySpace } = await unreadBySpace(req.user.id);
+
   res.json({
     spaces: spaces.map((s) => ({
       ...serializeSpace(s),
       threadCount: countBySpace[s.id] || 0,
+      unread: bySpace.get(s.id) || 0,
     })),
   });
 });
@@ -71,6 +80,9 @@ router.get('/:spaceId', requireSpaceAccess, async (req, res) => {
     WHERE sm.space_id = ?
   `).all(req.space.id);
   const owner = await db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.space.owner_id);
+  // One pair of queries for the whole space, not two per room. See
+  // summariseMany in lib/threadSummary.js.
+  const summaries = await summariseMany(threads.map((t) => t.id), req.user.id);
 
   res.json({
     space: serializeSpace(req.space, req.access.role),
@@ -90,6 +102,11 @@ router.get('/:spaceId', requireSpaceAccess, async (req, res) => {
       id: t.id, name: t.name, kind: t.kind,
       archivedAt: t.archived_at || null,
       createdAt: t.created_at,
+      // What is in the room, rather than only when it was made. "Started 3
+      // June" is true of a thread forever and says nothing about whether
+      // anybody needs to open it; the last thing said and how much of it is
+      // unread is the whole reason a person is looking at this list.
+      ...(summaries.get(t.id) || { lastMessage: null, unread: 0 }),
     })),
   });
 });

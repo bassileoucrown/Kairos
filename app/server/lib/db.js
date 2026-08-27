@@ -421,6 +421,11 @@ function ready() {
       // it belongs to the principal directly, so there is nothing for it to
       // outlive. See kept_items in schema.sql for the case where that is false.
       await ensureColumn('essentials', 'archived_at', 'TEXT');
+      // Which week's report has already gone to this principal. A date rather
+      // than a timestamp, because the question the sweep asks is "have we
+      // covered this week" and not "when did we last send something". See
+      // sweepWeeklyReports in lib/reminders.js.
+      await ensureColumn('users', 'weekly_report_sent_for', 'TEXT');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

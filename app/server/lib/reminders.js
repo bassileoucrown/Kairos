@@ -2,6 +2,7 @@ const db = require('./db');
 const { knock } = require('./knock');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
+const { buildReport, weekWindow } = require('./weeklyReport');
 
 // Deadline reminders for tasks, project stages, appointments and expiring
 // documents.
@@ -319,12 +320,106 @@ async function sweepEssentials(now) {
   return sent;
 }
 
+/**
+ * The week just gone, to the principal, once.
+ *
+ * WHY IT RIDES ON THE SWEEP. There is no cron here — a free instance is
+ * stopped when nobody is looking at it, which is most of Sunday night — so
+ * anything that has to happen weekly has to happen on whatever pass the
+ * outside clock next makes. See routes/sweep.js.
+ *
+ * WHICH MEANS THE GUARD IS THE WHOLE DESIGN. The sweep may run every fifteen
+ * minutes or twice a day, so "is it Monday" is not a test: it would send the
+ * same report ninety times. What is stamped is WHICH WEEK has been reported,
+ * so the second pass of any Monday finds the week already done and says
+ * nothing. The stamp is the week's own start date rather than a timestamp,
+ * because "have we covered this week" is the actual question.
+ *
+ * A WEEK WITH NOTHING IN IT IS NOT REPORTED, and is still stamped. An office
+ * that was on holiday should hear nothing, and should not hear about it again
+ * on the next pass either — a mail saying "no activity" every Monday is how
+ * somebody learns to filter the one that matters.
+ */
+async function sweepWeeklyReports() {
+  // Only principals who actually have an office. A solo user has nobody to
+  // report on, and a weekly mail about the empty set is spam.
+  const owners = await db.prepare(`
+    SELECT DISTINCT u.id, u.name, u.timezone, u.weekly_report_sent_for
+    FROM users u
+    JOIN memberships m ON m.owner_id = u.id
+    WHERE m.status = 'active' AND m.member_user_id IS NOT NULL
+  `).all();
+
+  let sent = 0;
+  for (const owner of owners) {
+    const week = weekWindow(owner.timezone, 1);
+    if (owner.weekly_report_sent_for === week.startDate) continue;
+
+    const report = await buildReport(owner.id, { back: 1 });
+    const busy = (report?.people || []).filter((p) => !p.quiet);
+    const open = report?.stillOpen || {};
+    const anythingOpen = Object.values(open).some((n) => n > 0);
+
+    // Stamped whether or not anything is sent, so a quiet week is settled
+    // rather than reconsidered on every pass for the next seven days.
+    await db.prepare('UPDATE users SET weekly_report_sent_for = ? WHERE id = ?')
+      .run(week.startDate, owner.id);
+    if (!busy.length && !anythingOpen) continue;
+
+    const lines = busy.map((p) => `${p.name} (${p.roleLabel})\n${describe(p.counts)}`);
+    if (anythingOpen) {
+      const tail = [
+        open.approvalsWaiting ? `${open.approvalsWaiting} request(s) waiting on you` : null,
+        open.tasksOverdue ? `${open.tasksOverdue} task(s) past their date` : null,
+        open.recordsOpen ? `${open.recordsOpen} record(s) still open` : null,
+      ].filter(Boolean);
+      lines.push(`Still open right now:\n  ${tail.join('\n  ')}`);
+    }
+
+    await knock({
+      toUserId: owner.id,
+      ownerId: owner.id,
+      category: 'transactional',
+      subject: `Your office, ${week.startDate} to ${week.endDate}`,
+      line: `What the people working with you did last week.\n\n${lines.join('\n\n')}`,
+      url: '/report',
+      // One per week per principal: a second copy replaces the first rather
+      // than stacking under it.
+      tag: `report-${owner.id}-${week.startDate}`,
+    });
+    sent += 1;
+  }
+  return sent;
+}
+
+/** One person's week, as lines somebody can read in a mail client. */
+function describe(counts) {
+  const say = [
+    [counts.approved, 'request(s) approved'],
+    [counts.declined, 'declined'],
+    [counts.moved, 'meeting(s) moved'],
+    [counts.calledOff, 'called off'],
+    [counts.putIn, 'put in the diary'],
+    [counts.tasksDone, 'task(s) finished'],
+    [counts.tasksSet, 'task(s) handed out'],
+    [counts.records, 'record(s) filed'],
+    [counts.messages, 'message(s) written'],
+    [counts.documentsConfirmed, 'document(s) confirmed'],
+    [counts.documentsAdded, 'document(s) added'],
+    [counts.documentsRevealed, 'document(s) looked at'],
+    [counts.houseInstructions, 'instruction(s) to the house'],
+    [counts.keptToArchive, 'thing(s) kept to the archive'],
+  ].filter(([n]) => n > 0).map(([n, what]) => `  ${n} ${what}`);
+  return say.join('\n');
+}
+
 async function runReminderSweep(now = Date.now()) {
   return {
     tasks: await sweepTasks(now),
     stages: await sweepStages(now),
     appointments: await sweepAppointments(now),
     essentials: await sweepEssentials(now),
+    weeklyReports: await sweepWeeklyReports(),
   };
 }
 
@@ -339,7 +434,7 @@ async function startReminderSweep() {
 }
 
 module.exports = {
-  runReminderSweep, startReminderSweep, dueBand, expiryBand, leadFor,
+  runReminderSweep, startReminderSweep, sweepWeeklyReports, dueBand, expiryBand, leadFor,
   LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, BOOKER_LEAD_MS,
   DOC_SOON_DAYS, DOC_URGENT_DAYS,
 };

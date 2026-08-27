@@ -26,6 +26,7 @@ import Pad from './pages/Pad.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
 import Archive from './pages/Archive.jsx';
+import Report from './pages/Report.jsx';
 import Workspace from './pages/Workspace.jsx';
 import Connections from './pages/Connections.jsx';
 import Household from './pages/Household.jsx';
@@ -148,6 +149,7 @@ export default function App() {
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
       <Route path="/archive" element={<RequireAuth><Archive /></RequireAuth>} />
+      <Route path="/report" element={<RequireAuth><Report /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       {/* Whose diary it is travels in the path rather than in stored state:
           an assistant who mails this link to a colleague, or opens it in a

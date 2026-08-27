@@ -107,7 +107,11 @@ export default function SpacesHome() {
                 <span className="hint">{CONTEXT_BLURB[ctx]}</span>
               </div>
               {inContext.map((s) => (
-                <Link className="card space-card" key={s.id} to={`/spaces/${s.id}`}>
+                <Link
+                  className={'card space-card' + (s.unread ? ' has-unread' : '')}
+                  key={s.id}
+                  to={`/spaces/${s.id}`}
+                >
                   <div>
                     <div className="name">{s.name}</div>
                     <div className="meta">
@@ -115,6 +119,15 @@ export default function SpacesHome() {
                       {!s.isOwner && ' · shared with you'}
                     </div>
                   </div>
+                  {/* WHICH SPACE IT IS IN. The rail says a number and this was
+                      the next place to look; without this the only way to find
+                      the waiting messages was to open rooms until the number
+                      went down. */}
+                  {s.unread > 0 && (
+                    <span className="pill is-unread" title="Messages you have not read">
+                      {s.unread} new
+                    </span>
+                  )}
                   <span className={`ctx-chip ctx-${s.context}`}>{CONTEXT_LABELS[s.context]}</span>
                 </Link>
               ))}

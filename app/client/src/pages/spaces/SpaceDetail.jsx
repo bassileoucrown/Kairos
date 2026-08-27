@@ -233,11 +233,24 @@ export default function SpaceDetail() {
         <h3 style={{ marginTop: 30 }}>Threads</h3>
         {live.length === 0 && <div className="empty-state">No threads yet.</div>}
         {live.map((t) => (
-          <div className="card space-card" key={t.id}>
+          <div className={'card space-card' + (t.unread ? ' has-unread' : '')} key={t.id}>
             <Link to={`/threads/${t.id}`} style={{ flex: 1, minWidth: 0 }}>
               <div className="name">{t.name}</div>
-              <div className="meta">Started {new Date(t.createdAt).toLocaleDateString()}</div>
+              {/* THE LAST THING SAID, NOT THE DAY IT WAS MADE. "Started 3 June"
+                  is true of a room forever and answers no question anybody has
+                  while looking at this list. Which room has something new in
+                  it, and what it was, is the whole reason to be here. */}
+              <div className="meta thread-preview">
+                {t.lastMessage
+                  ? <><strong>{t.lastMessage.authorName}:</strong> {t.lastMessage.body}</>
+                  : `Started ${new Date(t.createdAt).toLocaleDateString()}`}
+              </div>
             </Link>
+            {t.unread > 0 && (
+              <span className="pill is-unread" title="Messages you have not read">
+                {t.unread} new
+              </span>
+            )}
             {data.canWrite && (
               <button className="btn btn-secondary btn-sm" type="button"
                 onClick={() => archive(t.id, true)}>Archive</button>

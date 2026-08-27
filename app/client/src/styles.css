@@ -3122,3 +3122,33 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    is the width where a non-wrapping row starts pushing its last button off the
    card — the same fault fixed in .task-row and the thread's verb row. */
 .kept-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+
+/* A room with something waiting in it.
+   The pill carries the count and the left edge carries the fact, because on a
+   list of eight rooms the eye finds a coloured edge before it reads a number
+   — and finding the right room is the whole job here. */
+.pill.is-unread { background: var(--accent); color: #fff; }
+.space-card.has-unread { border-left: 3px solid var(--accent); }
+.space-card.has-unread .name { font-weight: 700; }
+
+/* One line of it, and no more. A preview that wraps to three lines turns a
+   scannable list into a page of paragraphs, which is the opposite of what a
+   list of rooms is for. */
+.thread-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Weekly report ---- */
+.report-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.report-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.report-open { margin-bottom: 16px; }
+.report-person { margin-bottom: 12px; }
+.report-who { font-weight: 600; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+/* Columns where there is room and a stack where there is not. Three headings
+   side by side is the readable shape on a desk and an unreadable one at 360px. */
+.report-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.report-group h4 { margin: 0 0 6px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.report-line { display: flex; gap: 8px; align-items: baseline; font-size: 0.9rem; }
+.report-n { font-weight: 700; min-width: 1.6em; text-align: right; }

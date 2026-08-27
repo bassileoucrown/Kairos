@@ -65,6 +65,11 @@ const NAV = [
   // One door to the whole desk. What used to be four rail entries is four tabs
   // behind this one, which is where they already were.
   { group: 'desk', to: '/pa?tab=approvals', match: '/pa', label: 'Desk', icon: '☰', principalScoped: true, badge: 'approvals' },
+  // Shown to assistants as well as principals, and it shows them their own
+  // week rather than the office's — see mayRead's cousin in routes/report.js.
+  // Hiding it from them would mean the people the report is about are the only
+  // people who cannot see what it says.
+  { group: 'desk', to: '/report', label: 'Weekly report', icon: '▦', principalScoped: true },
 
   { group: 'work', to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
   { group: 'work', to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },

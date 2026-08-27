@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('./db');
+const { summariseMany } = require('./threadSummary');
 
 // Access resolution for the collaboration layer. Every read and write of a
 // space, thread, or message goes through here — there is deliberately no
@@ -127,20 +128,53 @@ const VISIBLE_SPACE_IDS = `
  * mark against their own name for it, and a rail that lit up when you spoke
  * would be lit permanently for the people who use the product most.
  */
-async function unreadMessageCount(userId) {
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS n
-    FROM messages m
-    JOIN threads t ON t.id = m.thread_id
-    LEFT JOIN thread_reads r ON r.thread_id = t.id AND r.user_id = ?
+/**
+ * Every live room this person can reach, and which space each belongs to.
+ *
+ * A finished room is not here. Archiving is how somebody says "this is done";
+ * carrying on counting it would make the act pointless.
+ */
+async function visibleThreads(userId) {
+  return db.prepare(`
+    SELECT t.id, t.space_id
+    FROM threads t
     WHERE t.space_id IN (${VISIBLE_SPACE_IDS})
-      AND m.author_id != ?
-      -- A finished room does not badge. Archiving is how somebody says "this
-      -- is done"; carrying on counting it would make the act pointless.
       AND t.archived_at IS NULL
-      AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
-  `).get(userId, userId, userId, userId, userId);
-  return Number(row?.n || 0);
+  `).all(userId, userId, userId);
+}
+
+/**
+ * Unread, totalled and broken down by space.
+ *
+ * ONE COUNT, COUNTED ONCE. The rail's total used to be its own SQL, with the
+ * predicate for "unread" written out a second time beside the one in
+ * threadSummary. Both were right, which is exactly why that arrangement is
+ * dangerous: nothing fails until somebody changes one of them, and then two
+ * places in the app disagree about the same number. That has already happened
+ * here once — the chip on a room kept its 1 after the rail went quiet — and it
+ * is the bug the user sees, not the one the tests catch.
+ *
+ * So the rail's total is now the sum of the same per-thread numbers the space
+ * list and the thread rows show. If they are ever wrong they are wrong
+ * together, which is a bug you can find.
+ */
+async function unreadBySpace(userId) {
+  const threads = await visibleThreads(userId);
+  const summaries = await summariseMany(threads.map((t) => t.id), userId);
+
+  const bySpace = new Map();
+  let total = 0;
+  for (const t of threads) {
+    const n = summaries.get(t.id)?.unread || 0;
+    if (!n) continue;
+    bySpace.set(t.space_id, (bySpace.get(t.space_id) || 0) + n);
+    total += n;
+  }
+  return { bySpace, total };
+}
+
+async function unreadMessageCount(userId) {
+  return (await unreadBySpace(userId)).total;
 }
 
 /**
@@ -227,6 +261,8 @@ module.exports = {
   spaceAudience,
   listVisibleSpaces,
   unreadMessageCount,
+  unreadBySpace,
+  visibleThreads,
   markThreadRead,
   applyRoleDefaults,
   requireSpaceAccess,
