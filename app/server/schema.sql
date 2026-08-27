@@ -503,7 +503,12 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id, status);
 CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
+-- idx_tasks_parent is NOT here, and the omission is deliberate. parent_task_id
+-- arrives by migration on every database that existed before steps did, and on
+-- those this file's CREATE TABLE IF NOT EXISTS does nothing — so an index over
+-- that column, written here, runs BEFORE the column is added and takes the
+-- whole migration down with "column parent_task_id does not exist". It lives in
+-- ready() in lib/db.js, immediately after the ensureColumn that adds it.
 
 CREATE TABLE IF NOT EXISTS message_acks (
   id         TEXT PRIMARY KEY,
