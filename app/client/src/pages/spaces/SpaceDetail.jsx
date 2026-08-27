@@ -142,6 +142,8 @@ export default function SpaceDetail() {
   // attention without ceasing to exist.
   const live = threads.filter((t) => !t.archivedAt);
   const archived = threads.filter((t) => t.archivedAt);
+  const liveProjects = projects.filter((p) => p.status !== 'archived');
+  const archivedProjects = projects.filter((p) => p.status === 'archived');
   const isPrivate = space.context === 'private';
 
   return (
@@ -176,8 +178,8 @@ export default function SpaceDetail() {
         )}
 
         <h3 style={{ marginTop: 8 }}>Projects</h3>
-        {projects.length === 0 && <div className="empty-state">No projects yet.</div>}
-        {projects.map((p) => (
+        {liveProjects.length === 0 && <div className="empty-state">No projects yet.</div>}
+        {liveProjects.map((p) => (
           <Link className="card space-card" key={p.id} to={`/projects/${p.id}`}>
             <div>
               <div className="name">{p.name}</div>
@@ -191,6 +193,27 @@ export default function SpaceDetail() {
               : <span className="pill">{p.status}</span>}
           </Link>
         ))}
+
+        {/* Same treatment as an archived conversation: out of the live list,
+            under its own heading, and still one tap from being read. Taking it
+            back out is on the project's own page, where the person deciding
+            can see what is in it. */}
+        {archivedProjects.length > 0 && (
+          <>
+            <h4 style={{ marginTop: 18, marginBottom: 6 }}>Archived projects</h4>
+            {archivedProjects.map((p) => (
+              <Link className="card space-card is-archived" key={p.id} to={`/projects/${p.id}`}>
+                <div>
+                  <div className="name">{p.name}</div>
+                  <div className="meta">
+                    {p.doneCount} of {p.stageCount} stage{p.stageCount === 1 ? '' : 's'} done
+                  </div>
+                </div>
+                <span className="pill is-off">Archived</span>
+              </Link>
+            ))}
+          </>
+        )}
 
         {data.canWrite && (
           <form onSubmit={addProject} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

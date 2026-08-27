@@ -29,6 +29,7 @@
 //   empty, which looks exactly like data loss because it is.
 const ROOT = require('path').join(__dirname, '..', '..');
 const { spawn } = require('child_process');
+const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4587, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
@@ -68,6 +69,7 @@ function client() {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
 
+  let browser = null;
   try {
     for (;;) {
       try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) break; }
@@ -227,10 +229,89 @@ function client() {
     ok('and it is gone', (await boss('GET', `/spaces/${workId}`)).s === 404);
     ok('taking its conversations with it',
       (await boss('GET', `/threads/${threadId}/messages`)).s === 404);
+    // ---- A project, on the screen that shows one -------------------------
+    //
+    // THE API TOOK BOTH ALL ALONG. PATCH /projects/:id has accepted a name and
+    // a status of active|done|archived since projects were built, and the
+    // screen offered neither — so a project kept whatever it was called in a
+    // hurry, and a finished one sat on the space's list looking live forever.
+    // Nothing refused it; there was no way in. That is why this part is driven
+    // through the page rather than the API: the API was never the gap.
+    head('A project can be renamed and put away, from the screen that shows it:');
+    const home = await boss('POST', '/spaces', { name: `Office ${ID}`, context: 'work' });
+    const homeId = home.d.space.id;
+    const proj = await boss('POST', `/spaces/${homeId}/projects`, { name: 'Lagos office move' });
+    const projectId = proj.d.project.id;
+    await boss('POST', `/projects/${projectId}/stages`, { name: 'Lease' });
+
+    const login = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: `ada${ID}@x.com`, password: PW }),
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+    });
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const [ck, cv] = cookie.split('=');
+    await ctx.addCookies([{ name: ck, value: cv, domain: '127.0.0.1', path: '/' }]);
+    const page = await ctx.newPage();
+    const errs = [];
+    page.on('pageerror', (e) => errs.push(e.message));
+
+    await page.goto(`${BASE}/projects/${projectId}`);
+    await page.waitForSelector('.stage-row', { timeout: 20000 });
+    ok('there is a way to rename it',
+      (await page.locator('button:has-text("Rename")').count()) === 1);
+
+    page.once('dialog', (d) => d.accept('Lagos office move — phase two'));
+    await page.click('button:has-text("Rename")');
+    await page.waitForFunction(
+      () => /phase two/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('and renaming it works end to end', true);
+    ok('and the new name is what the space is told',
+      (await boss('GET', `/spaces/${homeId}/projects`)).d.projects
+        .some((p) => p.name === 'Lagos office move — phase two'));
+
+    await page.click('button:has-text("Archive")');
+    await page.waitForFunction(
+      () => /is archived/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('it can be archived from the same place', true);
+    ok('and the page says so rather than looking identical',
+      /left the space's live list/.test(await page.locator('body').innerText()));
+    // Archived, not deleted — the whole reason to offer this instead of a
+    // delete button.
+    ok('while everything in it is still there',
+      (await boss('GET', `/projects/${projectId}`)).d.stages.length === 1);
+
+    await page.goto(`${BASE}/spaces/${homeId}`);
+    await page.waitForSelector('.space-card', { timeout: 20000 });
+    const spaceText = await page.locator('body').innerText();
+    ok('the space files it under Archived rather than losing it',
+      /Archived projects/.test(spaceText), spaceText.slice(0, 300));
+    ok('and it is out of the live list',
+      (await page.locator('h3:has-text("Projects") ~ .space-card:not(.is-archived)')
+        .filter({ hasText: 'phase two' }).count()) === 0);
+
+    await page.goto(`${BASE}/projects/${projectId}`);
+    await page.waitForSelector('button:has-text("Take out of the archive")', { timeout: 20000 });
+    ok('and it offers the way back rather than a dead end', true);
+    await page.click('button:has-text("Take out of the archive")');
+    await page.waitForFunction(
+      () => !/is archived/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('which puts it back on the live list',
+      (await boss('GET', `/spaces/${homeId}/projects`)).d.projects
+        .find((p) => p.id === projectId)?.status === 'active');
+    ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
+    if (browser) await browser.close().catch(() => {});
     proc.kill();
   }
 

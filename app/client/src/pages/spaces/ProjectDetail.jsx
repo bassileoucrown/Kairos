@@ -68,6 +68,27 @@ export default function ProjectDetail() {
     });
   }
 
+  /**
+   * Renaming and putting a project away.
+   *
+   * The API has taken both since projects were built — PATCH accepts a name
+   * and a status of active, done or archived — and this screen offered
+   * neither, so a project kept the name it was given in a hurry and a finished
+   * one sat on the space's list looking live forever. Nothing was refusing it;
+   * there was simply no way in.
+   *
+   * ARCHIVE RATHER THAN DELETE, the same answer as a thread and for the same
+   * reason: a project is a spine of decisions somebody may be asked about in a
+   * year, and tidying a list is not worth losing it. Reversible in one tap.
+   */
+  async function rename() {
+    const next = window.prompt('What should this project be called?', data.project.name);
+    if (next === null || !next.trim() || next.trim() === data.project.name) return;
+    await act(() => api.patch(`/projects/${projectId}`, { name: next.trim() }));
+  }
+
+  const setProjectStatus = (status) => act(() => api.patch(`/projects/${projectId}`, { status }));
+
   const setStatus = (id, status) => act(() => api.patch(`/projects/stages/${id}`, { status }));
   const move = (id, direction) => act(() => api.post(`/projects/stages/${id}/move`, { direction }));
   const removeStage = (id) => act(() => api.del(`/projects/stages/${id}`));
@@ -103,7 +124,23 @@ export default function ProjectDetail() {
     <AppShell
       title={project.name}
       active="spaces"
-      actions={<span className="pill">{doneCount} of {stages.length} stages done</span>}
+      actions={(
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="pill">{doneCount} of {stages.length} stages done</span>
+          {canWrite && (project.status === 'archived' ? (
+            <button className="btn btn-secondary btn-sm" type="button"
+              onClick={() => setProjectStatus('active')}>Take out of the archive</button>
+          ) : (
+            <>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={rename}>
+                Rename
+              </button>
+              <button className="btn btn-secondary btn-sm" type="button"
+                onClick={() => setProjectStatus('archived')}>Archive</button>
+            </>
+          ))}
+        </span>
+      )}
     >
         <p className="tz-note" style={{ marginBottom: 4 }}>
           <Link to={`/spaces/${space.id}`}>{space.name}</Link>
@@ -111,6 +148,13 @@ export default function ProjectDetail() {
           <span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>
         </p>
         {error && <div className="alert alert-error">{error}</div>}
+
+        {project.status === 'archived' && (
+          <div className="alert" style={{ marginTop: 8 }}>
+            This project is archived — it has left the space's live list and everything
+            in it is still here to read. Take it out of the archive to carry on.
+          </div>
+        )}
 
         <p className="tz-note" style={{ marginBottom: 16 }}>
           Each stage has its own thread. Filing a <strong>Blocker</strong> there marks the stage
