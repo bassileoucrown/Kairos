@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/AuthContext.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import VideoJoinLink from '../../components/VideoJoinLink.jsx';
 import FormatChoice from '../../components/FormatChoice.jsx';
+import SlotItIn from '../../components/SlotItIn.jsx';
 
 const SCOPES = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -123,6 +124,12 @@ export default function BookingsTab({ ownerId = null, timezone = null }) {
 
   return (
     <div>
+      {/* Above the list, because the commonest reason to be on this screen with
+          something to add is that a meeting was just agreed on the phone. */}
+      <div style={{ marginBottom: 12 }}>
+        <SlotItIn ownerId={ownerId} onAdded={() => load(scope, query)} />
+      </div>
+
       <div className="tabs" style={{ borderBottom: 'none', marginBottom: 12 }}>
         {SCOPES.map((s) => (
           <button

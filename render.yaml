@@ -72,6 +72,38 @@ services:
       # app; leave unset to use the default `public` schema.
       - key: DATABASE_SCHEMA
         sync: false
+      # Lets a scheduler somewhere else run the reminder sweep.
+      #
+      # WHY IT IS NEEDED ON THIS PLAN. The sweep that announces a meeting half
+      # an hour out, or a task falling due, runs on a timer inside the process
+      # — and a free instance is STOPPED after about fifteen idle minutes, with
+      # no processes and no timers. So a four o'clock meeting can go
+      # unannounced because nobody touched Kairos between 3:15 and 3:30, and it
+      # will not arrive late either: the next sweep after wake-up sees the
+      # meeting is already inside its own warning window and skips it.
+      #
+      # Messages and mentions are unaffected — those are sent by the request
+      # that creates them, which is by definition waking the server.
+      #
+      # SET IT TO A LONG RANDOM STRING, generated the same way as the
+      # encryption key:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      #
+      # Then point any free scheduler (cron-job.org, UptimeRobot, GitHub
+      # Actions on a schedule) at the service every 15 minutes:
+      #   POST https://YOUR-APP.onrender.com/api/sweep
+      #   Authorization: Bearer <the value>
+      #
+      # A scheduler that cannot send headers can use the URL form instead,
+      # which is weaker because it ends up in logs:
+      #   https://YOUR-APP.onrender.com/api/sweep?key=<the value>
+      #
+      # Leave it unset and the endpoint does not exist — a deployment with no
+      # secret should look like one with no such door, rather than advertising
+      # one and inviting attempts at the key. Unset is the right answer on a
+      # paid instance, which never sleeps and sweeps on its own.
+      - key: SWEEP_SECRET
+        sync: false
       # SIGNUP_ACCESS_CODE is gone. It guarded account creation, which turned
       # out to be the wrong door: an account on its own reaches nothing —
       # every screen is scoped to a principal, and a stranger who signs up

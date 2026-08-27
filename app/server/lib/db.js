@@ -399,6 +399,9 @@ function ready() {
         LEFT JOIN handle_history h ON h.user_id = u.id AND h.handle = u.slug
         WHERE u.slug IS NOT NULL AND u.slug != '' AND h.id IS NULL
       `).run();
+      // Public, or the one the app keeps so the office can slot something into
+      // the diary directly. See lib/internalBooking.js.
+      await ensureColumn('meeting_types', 'kind', "TEXT NOT NULL DEFAULT 'public'");
       // Whether the "starts in half an hour" nudge has gone for a booking.
       // Nothing swept appointments at all before this: the office knew the
       // meeting was at four and never said so out loud. See lib/reminders.js.

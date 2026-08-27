@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS meeting_types (
   access_tier            INTEGER NOT NULL DEFAULT 1,
   color                  TEXT NOT NULL DEFAULT '#3E6357',
   is_active              INTEGER NOT NULL DEFAULT 1,
+  -- 'public' is a type the owner made and a stranger can book against.
+  -- 'internal' is the one the app maintains so the office can put something
+  -- straight in the diary — a meeting agreed on the phone, a call slotted
+  -- between two others — without inventing a bookable link for it. Internal
+  -- types are hidden from the public page AND from the owner's own list of
+  -- meeting types, because neither is a thing anybody chose to have. See
+  -- lib/internalBooking.js.
+  kind                   TEXT NOT NULL DEFAULT 'public',
   created_at             TEXT NOT NULL,
   UNIQUE(owner_id, slug)
 );

@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { dateKeyInZone, timeLabelInZone } from '../../lib/timezones.js';
 import VideoJoinLink from '../../components/VideoJoinLink.jsx';
+import SlotItIn from '../../components/SlotItIn.jsx';
 import { KIND_ICON, KIND_LABEL } from '../Today.jsx';
 
 // How much diary to look at.
@@ -165,6 +166,10 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
   const subjectId = ownerId || user?.id;
   const first = period.days[0];
   const last = period.days[period.days.length - 1];
+  // Bumped when something is added to the diary from this screen, so the day
+  // it landed on redraws without a reload. The range effect is keyed on the
+  // dates rather than on a function, so there is no load() to call.
+  const [addedAt, setAddedAt] = useState(0);
   useEffect(() => {
     if (!subjectId) return undefined;
     let live = true;
@@ -174,7 +179,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
       .then((d) => { if (live) setEntries(d.days); })
       .catch((err) => { if (live) setError(err.message); });
     return () => { live = false; };
-  }, [subjectId, first, last]);
+  }, [subjectId, first, last, addedAt]);
 
   const byDay = useMemo(() => {
     const map = new Map();
@@ -272,6 +277,13 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
           </h3>
           {selectedEntries.length === 0 && <p className="hint">Nothing on this day.</p>}
           {selectedEntries.map((b) => <Row key={b.id} entry={b} zone={zone} />)}
+          {/* Pre-filled with the day already open, because somebody who has
+              clicked a day and is now adding something means THAT day, and
+              retyping the date they just chose is the kind of small friction
+              that sends people back to a paper diary. */}
+          <div style={{ marginTop: 12 }}>
+            <SlotItIn ownerId={ownerId} defaultDate={selectedDay} onAdded={() => setAddedAt(Date.now())} />
+          </div>
         </div>
       )}
     </div>

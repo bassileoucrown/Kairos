@@ -422,6 +422,13 @@ textarea { resize: vertical; min-height: 70px; }
 .push-checklist { list-style: none; margin: 10px 0 0; padding: 0; }
 .push-checklist li { margin: 2px 0; }
 
+/* Putting something in the diary by hand. Four fields on one line where there
+   is room, stacking on a phone — the whole point is that this gets used
+   standing in a corridor, so it must not need a laptop. */
+.slot-it-in-fields { display: flex; gap: 8px; flex-wrap: wrap; }
+.slot-it-in-fields input,
+.slot-it-in-fields select { flex: 1 1 140px; min-width: 0; }
+
 /* --- Steps inside a task ---------------------------------------------------
    Below the row, never beside it. .task-row is a flex line, so a third child
    would sit as a second column of work — which is the reading this whole

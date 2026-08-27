@@ -29,6 +29,7 @@ const todayRouter = require('./routes/today');
 const workspaceRouter = require('./routes/workspace');
 const securityRouter = require('./routes/security');
 const { router: essentialsRouter } = require('./routes/essentials');
+const sweepRouter = require('./routes/sweep');
 const connectionsRouter = require('./routes/connections');
 const householdRouter = require('./routes/household');
 const announcementsRouter = require('./routes/announcements');
@@ -136,6 +137,8 @@ app.use('/api/household', householdRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/errors', errorsRouter);
 app.use('/api/mentions', mentionsRouter);
+// Driven by an outside clock when this deployment sleeps. See routes/sweep.js.
+app.use('/api/sweep', sweepRouter);
 app.use('/api/attention', attentionRouter);
 app.use('/api/rhythm', rhythmRouter);
 app.use('/api/access-codes', accessCodesRouter);

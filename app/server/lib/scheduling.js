@@ -233,7 +233,12 @@ function normalizeTier(accessTier) {
 }
 
 async function listMeetingTypes(ownerId) {
-  return (await db.prepare('SELECT * FROM meeting_types WHERE owner_id = ? ORDER BY created_at')
+  // Internal types are excluded here as well as from the public page. The
+  // owner did not make it and cannot usefully edit it — showing it would put a
+  // row called "In the diary" in a list of things they chose, which reads as
+  // clutter at best and as something to delete at worst. See
+  // lib/internalBooking.js.
+  return (await db.prepare("SELECT * FROM meeting_types WHERE owner_id = ? AND kind = 'public' ORDER BY created_at")
     .all(ownerId)).map(serializeMeetingType);
 }
 

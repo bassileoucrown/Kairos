@@ -7,6 +7,9 @@ const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
 const { openingsFor } = require('../lib/dayOpenings');
 const notes = require('../lib/bookingNotes');
+const internal = require('../lib/internalBooking');
+const { sendEmail } = require('../lib/email');
+const { formatForEmail } = require('../lib/format');
 
 // A principal's own bookings. The delegated equivalent is in routes/pa.js and
 // both go through lib/bookingHistory.js, so the two lists cannot disagree
@@ -20,6 +23,64 @@ router.get('/', async (req, res) => {
       scope: req.query.scope, q: req.query.q, from: req.query.from, to: req.query.to,
     }),
   });
+});
+
+/**
+ * Put something in the diary directly.
+ *
+ * ?ownerId= names whose diary, defaulting to your own. A PA has to have the
+ * scheduling remit — the same one that lets them move and cancel — because
+ * putting a meeting IN somebody's day is no smaller a power than taking one
+ * out of it, and a delegate who was given the vault but not the diary must not
+ * get there by a side door.
+ *
+ * See lib/internalBooking.js for what this deliberately does NOT check:
+ * published hours, approval tiers, and whether the time has already passed.
+ */
+router.post('/', async (req, res) => {
+  const ownerId = String(req.body?.ownerId || req.user.id);
+  if (ownerId !== req.user.id) {
+    const membership = await db.prepare(`
+      SELECT * FROM memberships
+      WHERE owner_id = ? AND member_user_id = ? AND status = 'active'
+    `).get(ownerId, req.user.id);
+    // 404 rather than 403 for somebody with no relationship at all: whether a
+    // given person has a Kairos account is not a fact this confirms.
+    if (!membership) return res.status(404).json({ error: 'No such diary.' });
+    if (!membership.can_manage_scheduling) {
+      return res.status(403).json({ error: 'Your remit here does not cover the diary.' });
+    }
+  }
+
+  const result = await internal.place(ownerId, req.body || {});
+  if (result.problem) {
+    // 409 for a clash specifically, because the caller can retry the same
+    // request with allowOverlap and it will work — which is a different thing
+    // from a request that was malformed.
+    return res.status(result.clashes ? 409 : 400)
+      .json({ error: result.problem, clashes: result.clashes });
+  }
+
+  const booking = await db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.id);
+
+  // Only when asked. "Slot it in" is about the diary, not about
+  // correspondence, and an unexpected confirmation to a board member because
+  // an assistant was tidying the calendar is the worse failure.
+  if (result.notify) {
+    const owner = await db.prepare('SELECT name, timezone FROM users WHERE id = ?').get(ownerId);
+    await sendEmail({
+      ownerId,
+      sentByUserId: req.user.id,
+      toEmail: booking.booker_email,
+      category: 'transactional',
+      subject: `Confirmed: ${formatForEmail(booking.start_at, booking.booker_timezone)}`,
+      body: `This is to confirm your meeting with ${owner?.name}.\n\n`
+        + `When: ${formatForEmail(booking.start_at, booking.booker_timezone)} `
+        + `(${booking.booker_timezone})`,
+    }).catch(() => { /* a diary entry does not fail over its mail */ });
+  }
+
+  res.status(201).json({ booking: { id: booking.id, startAt: booking.start_at, endAt: booking.end_at } });
 });
 
 router.get('/:id/trail', async (req, res) => {
