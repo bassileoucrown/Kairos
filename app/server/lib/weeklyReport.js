@@ -1,5 +1,6 @@
 const db = require('./db');
 const { todayInZone, addCalendarDays, dayOfWeek, zonedTimeToUtc } = require('./timezone');
+const { isAssistantRole, roleLabel } = require('./roles');
 
 // What the office did last week.
 //
@@ -29,15 +30,11 @@ const { todayInZone, addCalendarDays, dayOfWeek, zonedTimeToUtc } = require('./t
 // of any such table, and a product that encourages a principal to read it that
 // way is a product that makes offices worse.
 
-/** The three roles this report is about, plus the narrower remit beside them. */
-const ASSISTANT_ROLES = new Set(['pa', 'ea', 'chief_of_staff', 'delegate']);
-
-const ROLE_LABELS = {
-  pa: 'PA',
-  ea: 'EA',
-  chief_of_staff: 'Chief of Staff',
-  delegate: 'Delegate',
-};
+// Titles come from lib/roles.js, which is where they are defined for the
+// invite form, the members list and onboarding. This file briefly kept its own
+// copy of the same four labels — which is the drift shape this codebase keeps
+// getting bitten by, and would have shown a principal one title on the Team
+// screen and a different one in the report the first time a label was edited.
 
 /**
  * The week that just ended, in the principal's own timezone.
@@ -81,7 +78,7 @@ async function officeOf(ownerId) {
     WHERE m.owner_id = ? AND m.status = 'active' AND m.member_user_id IS NOT NULL
     ORDER BY u.name
   `).all(ownerId);
-  return rows.filter((r) => ASSISTANT_ROLES.has(r.role));
+  return rows.filter((r) => isAssistantRole(r.role));
 }
 
 /** One number per person, from a query that returns { who, n }. */
@@ -245,7 +242,7 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
       id: m.id,
       name: m.name,
       role: m.role,
-      roleLabel: ROLE_LABELS[m.role] || m.role,
+      roleLabel: roleLabel(m.role),
       counts,
       // Said explicitly rather than left to the screen to work out by summing:
       // "nothing recorded" and "a quiet week" read differently, and only the
@@ -288,4 +285,4 @@ async function stillOpen(ownerId) {
   return { approvalsWaiting: waiting, tasksOverdue: overdue, recordsOpen: unanswered };
 }
 
-module.exports = { buildReport, weekWindow, officeOf, ROLE_LABELS, ASSISTANT_ROLES };
+module.exports = { buildReport, weekWindow, officeOf };
