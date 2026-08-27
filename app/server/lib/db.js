@@ -399,6 +399,10 @@ function ready() {
         LEFT JOIN handle_history h ON h.user_id = u.id AND h.handle = u.slug
         WHERE u.slug IS NOT NULL AND u.slug != '' AND h.id IS NULL
       `).run();
+      // Whether the "starts in half an hour" nudge has gone for a booking.
+      // Nothing swept appointments at all before this: the office knew the
+      // meeting was at four and never said so out loud. See lib/reminders.js.
+      await ensureColumn('bookings', 'reminder_stage', 'TEXT');
       // Steps inside a task. See the column in schema.sql for why a step is a
       // task rather than a lighter checklist row.
       await ensureColumn('tasks', 'parent_task_id', 'TEXT');

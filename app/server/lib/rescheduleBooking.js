@@ -92,7 +92,10 @@ async function rescheduleBooking({ booking, owner, startAt, movedByUserId = null
     toValue: start.toISOString(),
     note,
   });
-  await db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
+  // The half-hour warning goes back in its box: a meeting that has moved
+  // deserves a fresh one, and a stamp left behind means the new time passes in
+  // silence because the old time was already announced.
+  await db.prepare('UPDATE bookings SET start_at = ?, end_at = ?, reminder_stage = NULL WHERE id = ?')
     .run(start.toISOString(), end.toISOString(), booking.id);
 
   // The booker is told, always. Their diary is as real as the principal's, and

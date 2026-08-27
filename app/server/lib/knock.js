@@ -27,6 +27,15 @@ const webPush = require('./webPush');
  * phone, and in this product the message is quite likely to be about where a
  * principal will be at three o'clock.
  *
+ * AN AUTHOR IS OPTIONAL, and that is what lets the reminder sweep come through
+ * here too. Most knocks are one person reaching another — a mention, a note
+ * handed over — and the line reads "Ngozi Bello wrote to you in the office".
+ * A deadline has nobody behind it: the app noticed the clock. Those knocks
+ * carry the sentence alone. Before this, reminders went straight to sendEmail
+ * and so reached an inbox and never a phone, which is the drift this file was
+ * written to stop, happening in the one place it matters most: the whole point
+ * of a deadline reminder is reaching somebody who is busy with something else.
+ *
  * NEVER THROWS. Every caller is in the middle of something that has already
  * succeeded. A mail server or a push service having a bad afternoon must not
  * undo a message that is saved.
@@ -34,27 +43,38 @@ const webPush = require('./webPush');
 async function knock({
   toUserId,
   ownerId,
-  author,
+  // The person behind this, or null when it is the app noticing a clock.
+  author = null,
   subject,
-  // The email's sentence: "<author.name> <line>".
+  // The email's sentence: "<author.name> <line>", or just the line when
+  // nobody is behind it.
   line,
   // Where in Kairos this is, so tapping the notification lands on it rather
   // than on the front door.
   url = '/today',
   category = 'mention',
+  // One line per thing rather than a stack. A phone that has been in a pocket
+  // should show the latest state of a deadline, not every time it was checked.
+  tag = undefined,
 }) {
   try {
-    if (!toUserId || !author || toUserId === author.id) return;
+    if (!toUserId) return;
+    // Nobody needs telling about their own doing. Only ever a guard against a
+    // person knocking on themselves — the app noticing a deadline is not that.
+    if (author && toUserId === author.id) return;
     const to = await db.prepare('SELECT email FROM users WHERE id = ?').get(toUserId);
+    const sentence = author ? `${author.name} ${line}` : line;
 
     if (to?.email) {
       await sendEmail({
         ownerId,
-        sentByUserId: author.id,
+        sentByUserId: author?.id,
         toEmail: to.email,
         category,
         subject,
-        body: `${author.name} ${line}\n\nOpen Kairos to read it and reply.`,
+        body: author
+          ? `${sentence}\n\nOpen Kairos to read it and reply.`
+          : `${sentence}\n\nOpen Kairos to deal with it.`,
       });
     }
 
@@ -63,8 +83,9 @@ async function knock({
     // none has — must not be the only attempt that was made.
     await webPush.notify(toUserId, {
       title: subject,
-      body: `${author.name} ${line}`,
+      body: sentence,
       url,
+      tag,
     });
   } catch { /* Something already saved does not fail over its notification. */ }
 }

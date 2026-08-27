@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS bookings (
   -- declined: PA rejected a pending request; slot is freed.
   status           TEXT NOT NULL DEFAULT 'confirmed',
   video_room       TEXT, -- Jitsi room name, set for video-format meeting types
+  -- null until the "starts in half an hour" nudge has gone, so it fires once
+  -- rather than on every sweep. Rescheduling clears it, because a meeting that
+  -- has moved deserves a fresh warning. See lib/reminders.js.
+  reminder_stage   TEXT,
   created_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_owner_time ON bookings(owner_id, start_at);
