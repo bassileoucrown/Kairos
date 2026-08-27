@@ -242,7 +242,7 @@ router.post('/:id/task', loadItem, async (req, res) => {
   if (req.item.task_id) {
     return res.status(400).json({ error: 'That note is already a task.' });
   }
-  const { spaceId, projectId, dueAt, assigneeId } = req.body || {};
+  const { spaceId, projectId, dueAt, assigneeId, threadId } = req.body || {};
   if (!spaceId) return res.status(400).json({ error: 'Which space does it belong in?' });
 
   const access = await resolveAccess(spaceId, req.user.id);
@@ -263,11 +263,52 @@ router.post('/:id/task', loadItem, async (req, res) => {
     return res.status(400).json({ error: "That person doesn't have access to this space." });
   }
 
+  /**
+   * THE ROOM THE WORK LANDS IN.
+   *
+   * A task promoted from the pad used to carry no source message, which meant
+   * it appeared on the space's task list and in nobody's conversation. So work
+   * handed to an office arrived somewhere only a person already looking for it
+   * would find — the exact failure the pad exists to prevent, moved one step
+   * along.
+   *
+   * NOT THE SAME QUESTION AS HANDING A LINE TO A PERSON. That one deliberately
+   * posts nothing (see the note on /thread below): the direct line holds the
+   * principal AND every assistant, so auto-posting a private errand would put
+   * it in front of the whole office. This is different in the way that
+   * matters — the task is already IN this space, visible on its list to
+   * exactly these people. Saying so in the room discloses nothing new; it
+   * only stops the room being the last place to hear about its own work.
+   *
+   * The office's own room first, then the oldest room in the space. A space
+   * with no room at all gets no message and still gets its task: inventing a
+   * conversation nobody asked for would be worse than a task filed quietly.
+   */
+  const room = threadId
+    ? await db.prepare('SELECT * FROM threads WHERE id = ? AND space_id = ?')
+      .get(threadId, spaceId)
+    : await db.prepare(`
+        SELECT * FROM threads
+        WHERE space_id = ? AND archived_at IS NULL AND stage_id IS NULL
+        ORDER BY CASE WHEN kind = 'dm' THEN 0 ELSE 1 END, created_at ASC
+        LIMIT 1
+      `).get(spaceId);
+  if (threadId && !room) return res.status(404).json({ error: 'Thread not found.' });
+
+  let landedOn = null;
+  if (room) {
+    landedOn = crypto.randomUUID();
+    await db.prepare(`
+      INSERT INTO messages (id, thread_id, author_id, body, register, created_at)
+      VALUES (?, ?, ?, ?, 'note', ?)
+    `).run(landedOn, room.id, req.user.id, title, new Date().toISOString());
+  }
+
   await db.prepare(`
     INSERT INTO tasks (id, space_id, project_id, stage_id, source_message_id, title,
                        assignee_id, created_by, due_at, priority, status, created_at)
-    VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, 'normal', 'open', ?)
-  `).run(taskId, spaceId, projectId || null, title, assignee, req.user.id,
+    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'normal', 'open', ?)
+  `).run(taskId, spaceId, projectId || null, landedOn, title, assignee, req.user.id,
     // A line you asked to be reminded of already carries a date. Carrying it
     // across means the reminder survives the promotion instead of being
     // quietly dropped on the way.
@@ -291,7 +332,13 @@ router.post('/:id/task', loadItem, async (req, res) => {
   });
 
   const row = await db.prepare(`${pad.SELECT} WHERE p.id = ?`).get(req.item.id);
-  res.status(201).json({ item: await pad.present(row, req.user.id), taskId });
+  res.status(201).json({
+    item: await pad.present(row, req.user.id),
+    taskId,
+    // Where it turned up, so the screen can say so rather than leaving
+    // somebody to go and check.
+    threadId: room?.id || null,
+  });
 });
 
 /**

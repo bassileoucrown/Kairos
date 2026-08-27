@@ -399,6 +399,8 @@ function ready() {
         LEFT JOIN handle_history h ON h.user_id = u.id AND h.handle = u.slug
         WHERE u.slug IS NOT NULL AND u.slug != '' AND h.id IS NULL
       `).run();
+      // Finished with, but kept. See the column in schema.sql.
+      await ensureColumn('threads', 'archived_at', 'TEXT');
       // Public, or the one the app keeps so the office can slot something into
       // the diary directly. See lib/internalBooking.js.
       await ensureColumn('meeting_types', 'kind', "TEXT NOT NULL DEFAULT 'public'");

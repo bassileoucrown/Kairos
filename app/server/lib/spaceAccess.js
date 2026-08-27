@@ -135,6 +135,9 @@ async function unreadMessageCount(userId) {
     LEFT JOIN thread_reads r ON r.thread_id = t.id AND r.user_id = ?
     WHERE t.space_id IN (${VISIBLE_SPACE_IDS})
       AND m.author_id != ?
+      -- A finished room does not badge. Archiving is how somebody says "this
+      -- is done"; carrying on counting it would make the act pointless.
+      AND t.archived_at IS NULL
       AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
   `).get(userId, userId, userId, userId, userId);
   return Number(row?.n || 0);

@@ -70,6 +70,59 @@ export default function SpaceDetail() {
     } catch (err) { setError(err.message); }
   }
 
+  async function archive(threadId, on) {
+    setError('');
+    try {
+      if (on) await api.post(`/threads/${threadId}/archive`);
+      else await api.del(`/threads/${threadId}/archive`);
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function rename() {
+    const next = window.prompt('What should this space be called?', data.space.name);
+    if (next === null || !next.trim() || next.trim() === data.space.name) return;
+    setError('');
+    try {
+      await api.patch(`/spaces/${spaceId}`, { name: next.trim() });
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  /**
+   * Closing the space, with what it costs said out loud first.
+   *
+   * The counts come from the server rather than from what happens to be on
+   * screen — this page shows threads and projects, not how many records or
+   * messages are inside them, and "12 threads" is not the number that makes
+   * somebody stop and think. The name has to be typed, and the server checks
+   * it too: a guard only the screen enforces is decoration.
+   */
+  async function closeSpace() {
+    setError('');
+    let contents;
+    try {
+      contents = (await api.get(`/spaces/${spaceId}/contents`)).contents;
+    } catch (err) { setError(err.message); return; }
+    const held = [
+      `${contents.threads} thread${contents.threads === 1 ? '' : 's'}`,
+      `${contents.messages} message${contents.messages === 1 ? '' : 's'}`,
+      `${contents.records} record${contents.records === 1 ? '' : 's'}`,
+      `${contents.projects} project${contents.projects === 1 ? '' : 's'}`,
+      `${contents.tasks} task${contents.tasks === 1 ? '' : 's'}`,
+    ].join(', ');
+    const typed = window.prompt(
+      `Closing "${data.space.name}" deletes ${held}. There is no undo.\n\n`
+      + 'If you may want to look any of it up later, archive the threads instead.\n\n'
+      + `Type the space's name to close it:`,
+    );
+    if (typed === null) return;
+    try {
+      await api.del(`/spaces/${spaceId}`, { confirmName: typed.trim() });
+      navigate('/spaces');
+    } catch (err) { setError(err.message); }
+  }
+
   async function toggleRole(role) {
     setError('');
     const current = data.space.autoDelegateRoles;
@@ -84,13 +137,33 @@ export default function SpaceDetail() {
   if (!data) return <div className="spinner-page">Loading…</div>;
 
   const { space, members, threads, owner, canManageMembers } = data;
+  // Live and put-away, kept apart on the screen for the same reason they are
+  // kept apart in the data: a finished room should stop competing for
+  // attention without ceasing to exist.
+  const live = threads.filter((t) => !t.archivedAt);
+  const archived = threads.filter((t) => t.archivedAt);
   const isPrivate = space.context === 'private';
 
   return (
     <AppShell
       title={space.name}
       active="spaces"
-      actions={<span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>}
+      actions={(
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>
+          {space.isOwner && (space.kind || 'standard') === 'standard' && (
+            <>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={rename}>
+                Rename
+              </button>
+              {/* Last, and the only danger-styled thing on the page. */}
+              <button className="btn btn-danger btn-sm" type="button" onClick={closeSpace}>
+                Close space
+              </button>
+            </>
+          )}
+        </span>
+      )}
     >
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -135,16 +208,47 @@ export default function SpaceDetail() {
         )}
 
         <h3 style={{ marginTop: 30 }}>Threads</h3>
-        {threads.length === 0 && <div className="empty-state">No threads yet.</div>}
-        {threads.map((t) => (
-          <Link className="card space-card" key={t.id} to={`/threads/${t.id}`}>
-            <div>
+        {live.length === 0 && <div className="empty-state">No threads yet.</div>}
+        {live.map((t) => (
+          <div className="card space-card" key={t.id}>
+            <Link to={`/threads/${t.id}`} style={{ flex: 1, minWidth: 0 }}>
               <div className="name">{t.name}</div>
               <div className="meta">Started {new Date(t.createdAt).toLocaleDateString()}</div>
-            </div>
-            <span className="pill">Open</span>
-          </Link>
+            </Link>
+            {data.canWrite && (
+              <button className="btn btn-secondary btn-sm" type="button"
+                onClick={() => archive(t.id, true)}>Archive</button>
+            )}
+          </div>
         ))}
+
+        {/* PUT AWAY, NOT THROWN AWAY. Kept under its own heading rather than
+            mixed back into the list: the point of archiving is that the room
+            stops competing for attention while every word in it stays there to
+            be looked up. */}
+        {archived.length > 0 && (
+          <>
+            <h3 style={{ marginTop: 26 }}>Archived</h3>
+            <p className="hint" style={{ marginBottom: 8 }}>
+              Readable in full, and closed to new messages. Take one out of the
+              archive to carry on in it.
+            </p>
+            {archived.map((t) => (
+              <div className="card space-card is-archived" key={t.id}>
+                <Link to={`/threads/${t.id}`} style={{ flex: 1, minWidth: 0 }}>
+                  <div className="name">{t.name}</div>
+                  <div className="meta">
+                    Archived {new Date(t.archivedAt).toLocaleDateString()}
+                  </div>
+                </Link>
+                {data.canWrite && (
+                  <button className="btn btn-secondary btn-sm" type="button"
+                    onClick={() => archive(t.id, false)}>Take out</button>
+                )}
+              </div>
+            ))}
+          </>
+        )}
 
         {data.canWrite && (
           <form onSubmit={addThread} className="card" style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>

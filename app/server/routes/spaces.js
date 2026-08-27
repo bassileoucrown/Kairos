@@ -86,7 +86,11 @@ router.get('/:spaceId', requireSpaceAccess, async (req, res) => {
       role: m.role,
       canDelegate: !!m.can_delegate,
     })),
-    threads: threads.map((t) => ({ id: t.id, name: t.name, kind: t.kind, createdAt: t.created_at })),
+    threads: threads.map((t) => ({
+      id: t.id, name: t.name, kind: t.kind,
+      archivedAt: t.archived_at || null,
+      createdAt: t.created_at,
+    })),
   });
 });
 
@@ -94,13 +98,18 @@ router.get('/:spaceId', requireSpaceAccess, async (req, res) => {
 // "principal adjusts per space" half of role-sets-the-default.
 router.patch('/:spaceId', requireSpaceAccess, async (req, res) => {
   if (req.access.role !== 'owner') {
-    return res.status(403).json({ error: 'Only the space owner can change delegation.' });
-  }
-  if (req.space.context === 'private') {
-    return res.status(400).json({ error: 'Private spaces cannot be delegated to anyone.' });
+    return res.status(403).json({ error: 'Only the space owner can change this.' });
   }
 
   const { autoDelegateRoles, name } = req.body || {};
+
+  // The private guard belongs to delegation and nothing else. It used to sit
+  // at the top of this handler, so renaming a private space was refused with a
+  // sentence about delegating it — which is both wrong and confusing, since a
+  // private space is the one most likely to have been named in a hurry.
+  if (autoDelegateRoles !== undefined && req.space.context === 'private') {
+    return res.status(400).json({ error: 'Private spaces cannot be delegated to anyone.' });
+  }
   const updates = [];
   const values = [];
 
@@ -123,6 +132,76 @@ router.patch('/:spaceId', requireSpaceAccess, async (req, res) => {
   const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.space.id);
   await applyRoleDefaults(space); // newly-included roles gain access immediately
   res.json({ space: serializeSpace(space, 'owner') });
+});
+
+/**
+ * Closing a space for good.
+ *
+ * WHY THE NAME HAS TO BE TYPED. This takes every thread, message, record,
+ * project, stage and task in the space with it, by cascade, and there is no
+ * undo — a confirm dialog is one mis-tap on a phone, and this is a product
+ * used on phones between meetings. Typing the name is the cheapest guard that
+ * cannot be passed by accident, and it is checked HERE rather than only on the
+ * screen, because a guard the server does not enforce is decoration.
+ *
+ * WHAT IS COUNTED FIRST. The refusal and the confirmation both name what would
+ * go, so nobody deletes a space to tidy up a list and finds out afterwards
+ * that a year of decisions went with it. Archiving a thread is the other
+ * answer, and the one to reach for when the words might be wanted again.
+ *
+ * ROOMS THE APP MAINTAINS ARE NOT DELETABLE. The direct line and a pair room
+ * exist because two people have a relationship, not because somebody made a
+ * workspace; deleting one would leave the app to recreate it on the next
+ * request, emptied, which looks exactly like data loss because it is.
+ */
+router.get('/:spaceId/contents', requireSpaceAccess, async (req, res) => {
+  res.json({ contents: await spaceContents(req.space.id) });
+});
+
+async function spaceContents(spaceId) {
+  const row = await db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM threads WHERE space_id = ?) AS threads,
+      (SELECT COUNT(*) FROM threads WHERE space_id = ? AND archived_at IS NOT NULL) AS archived,
+      (SELECT COUNT(*) FROM messages m JOIN threads t ON t.id = m.thread_id
+        WHERE t.space_id = ?) AS messages,
+      (SELECT COUNT(*) FROM messages m JOIN threads t ON t.id = m.thread_id
+        WHERE t.space_id = ? AND m.register = 'record') AS records,
+      (SELECT COUNT(*) FROM projects WHERE space_id = ?) AS projects,
+      (SELECT COUNT(*) FROM tasks WHERE space_id = ?) AS tasks
+  `).get(spaceId, spaceId, spaceId, spaceId, spaceId, spaceId);
+  return {
+    threads: Number(row?.threads || 0),
+    archivedThreads: Number(row?.archived || 0),
+    messages: Number(row?.messages || 0),
+    records: Number(row?.records || 0),
+    projects: Number(row?.projects || 0),
+    tasks: Number(row?.tasks || 0),
+  };
+}
+
+router.delete('/:spaceId', requireSpaceAccess, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can close it.' });
+  }
+  if ((req.space.kind || 'standard') !== 'standard') {
+    return res.status(400).json({
+      error: 'This room is kept by Kairos because of who is in it, not as a workspace. '
+        + 'Archive the conversation instead.',
+    });
+  }
+
+  const contents = await spaceContents(req.space.id);
+  const typed = String(req.body?.confirmName || '').trim();
+  if (typed !== req.space.name) {
+    return res.status(400).json({
+      error: `Type the space's name to close it: "${req.space.name}".`,
+      contents,
+    });
+  }
+
+  await db.prepare('DELETE FROM spaces WHERE id = ?').run(req.space.id);
+  res.json({ ok: true, closed: contents });
 });
 
 router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {

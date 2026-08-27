@@ -794,6 +794,10 @@ export default function ThreadView() {
 
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
+  // An archived room is readable and closed. The composer goes rather than
+  // being offered and then refused — see refuseIfArchived in routes/threads.js
+  // for the server side of the same rule.
+  const archived = !!data.thread.archivedAt;
 
   const shown = view === 'records'
     ? data.messages.filter((m) => m.register === 'record')
@@ -868,7 +872,15 @@ export default function ThreadView() {
           </>
         )}
 
-        {data.canWrite && (
+        {archived && (
+          <div className="alert" style={{ marginTop: 12 }}>
+            This conversation is archived — every word above stays here to be read,
+            and nothing new can be added. Take it out of the archive on the space
+            to carry on in it.
+          </div>
+        )}
+
+        {data.canWrite && !archived && (
           <form className="msg-compose" onSubmit={send}>
             {/* What the next thing said will be pinned to, and a way out of
                 it. Shown rather than implied: a reply that silently attaches

@@ -429,6 +429,10 @@ textarea { resize: vertical; min-height: 70px; }
 .slot-it-in-fields input,
 .slot-it-in-fields select { flex: 1 1 140px; min-width: 0; }
 
+/* A room that has been put away. Quieter than a live one and still plainly
+   there — the whole promise of archiving is that it did not disappear. */
+.space-card.is-archived { opacity: 0.72; border-style: dashed; }
+
 /* --- Steps inside a task ---------------------------------------------------
    Below the row, never beside it. .task-row is a flex line, so a third child
    would sit as a second column of work — which is the reading this whole

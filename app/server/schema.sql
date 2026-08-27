@@ -409,6 +409,12 @@ CREATE TABLE IF NOT EXISTS threads (
   stage_id   TEXT REFERENCES project_stages(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL DEFAULT 'group', -- group | dm | stage
+  -- Put away rather than thrown away. An archived thread leaves the space's
+  -- live list and stops accepting new messages, and every word in it stays
+  -- readable — which is the state an office actually wants when a piece of
+  -- work is finished but might be asked about in a year. Reversible, because
+  -- "finished" is a judgement and judgements get revisited.
+  archived_at TEXT,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_threads_space ON threads(space_id);

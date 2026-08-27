@@ -36,6 +36,27 @@ async function loadThread(req, res, next) {
 }
 
 /**
+ * An archived room is readable and closed.
+ *
+ * ONE GUARD, EVERY WAY IN. There are nine ways to put something into a thread
+ * — typed, spoken, promoted, acknowledged, edited, taken back, made into a
+ * task — and a rule enforced on some of them is not a rule. "Archived" would
+ * otherwise mean "hidden from the list", which is a promise the app could not
+ * keep the first time somebody deep-linked into an old room and carried on.
+ *
+ * READING is untouched, deliberately: the whole point of archiving rather than
+ * deleting is that every word stays there to be looked up.
+ */
+function refuseIfArchived(req, res) {
+  if (!req.thread.archived_at) return false;
+  res.status(409).json({
+    error: 'This conversation is archived. Take it out of the archive to add to it.',
+    archivedAt: req.thread.archived_at,
+  });
+  return true;
+}
+
+/**
  * What a reply is answering, as a stub rather than the whole message.
  *
  * Enough to recognise the line without loading it twice — the full message is
@@ -101,6 +122,37 @@ function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tas
     doneByName: m.done_by_name || null,
   };
 }
+
+/**
+ * Put a conversation away, or take it back out.
+ *
+ * WHAT ARCHIVING IS FOR. A piece of work finishes and its room stops being
+ * live — but the office may be asked about it in a year, and deleting it to
+ * tidy a list is how a decision trail disappears. An archived thread leaves
+ * the space's live list, accepts no new messages, and stays readable in full.
+ *
+ * REVERSIBLE, because "finished" is a judgement and judgements get revisited.
+ * That is also what makes this the thing to reach for instead of deleting: the
+ * cost of being wrong is one tap, not a year of records.
+ *
+ * WHOEVER CAN WRITE HERE CAN CLOSE IT. Not owner-only: the point is that the
+ * person who finishes the work can put the room away when they finish it, and
+ * a rule that sends them to find the principal first is a rule that leaves
+ * every finished room open forever.
+ */
+router.post('/:threadId/archive', loadThread, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (req.thread.archived_at) return res.json({ archivedAt: req.thread.archived_at });
+  const at = new Date().toISOString();
+  await db.prepare('UPDATE threads SET archived_at = ? WHERE id = ?').run(at, req.thread.id);
+  res.json({ archivedAt: at });
+});
+
+router.delete('/:threadId/archive', loadThread, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  await db.prepare('UPDATE threads SET archived_at = NULL WHERE id = ?').run(req.thread.id);
+  res.json({ archivedAt: null });
+});
 
 router.get('/:threadId/messages', loadThread, async (req, res) => {
   // Opening a thread is what reading it means. Stamped before the rows are
@@ -179,7 +231,12 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
   );
 
   res.json({
-    thread: { id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id },
+    thread: {
+      id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id,
+      // Said at the top so the screen can close the composer and say why,
+      // rather than offering a box whose every submission is refused.
+      archivedAt: req.thread.archived_at || null,
+    },
     stage: stage && {
       id: stage.id, name: stage.name, status: stage.status, dueAt: stage.due_at,
       projectId: stage.project_id, projectName: stage.project_name,
@@ -297,6 +354,7 @@ async function nextRecordSeq(threadId) {
 
 router.post('/:threadId/messages', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (refuseIfArchived(req, res)) return;
 
   const { body, register, recordType, replyToId } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write something first.' });
@@ -357,6 +415,7 @@ const audioBody = express.json({ limit: '4mb' });
 
 router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (refuseIfArchived(req, res)) return;
   if (!voice.isAvailable()) return res.status(503).json({ error: voice.UNAVAILABLE });
 
   const { audio, mimeType, durationMs, body, replyToId } = req.body || {};
@@ -432,6 +491,7 @@ router.get('/:threadId/messages/:messageId/audio', loadThread, async (req, res) 
 // use, not a loophole.
 router.post('/:threadId/messages/:messageId/promote', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (refuseIfArchived(req, res)) return;
 
   const note = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
@@ -476,6 +536,7 @@ router.post('/:threadId/messages/:messageId/promote', loadThread, async (req, re
 // changed by superseding it, so what people agreed to can't be edited out from
 // under them.
 router.post('/:threadId/messages/:messageId/ack', loadThread, async (req, res) => {
+  if (refuseIfArchived(req, res)) return;
   const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
@@ -512,6 +573,7 @@ router.post('/:threadId/messages/:messageId/ack', loadThread, async (req, res) =
 // is reversible, because "done" gets pressed on the wrong line.
 
 router.post('/:threadId/messages/:messageId/done', loadThread, async (req, res) => {
+  if (refuseIfArchived(req, res)) return;
   const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
@@ -529,6 +591,7 @@ router.post('/:threadId/messages/:messageId/done', loadThread, async (req, res) 
 });
 
 router.delete('/:threadId/messages/:messageId/done', loadThread, async (req, res) => {
+  if (refuseIfArchived(req, res)) return;
   const message = await db.prepare('SELECT id FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
@@ -537,6 +600,7 @@ router.delete('/:threadId/messages/:messageId/done', loadThread, async (req, res
 });
 
 router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {
+  if (refuseIfArchived(req, res)) return;
   const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
@@ -603,6 +667,7 @@ router.patch('/:threadId/messages/:messageId', loadThread, async (req, res) => {
  * changes.
  */
 router.delete('/:threadId/messages/:messageId', loadThread, async (req, res) => {
+  if (refuseIfArchived(req, res)) return;
   const message = await db.prepare('SELECT * FROM messages WHERE id = ? AND thread_id = ?')
     .get(req.params.messageId, req.thread.id);
   if (!message) return res.status(404).json({ error: 'Message not found.' });
@@ -651,6 +716,7 @@ router.delete('/:threadId/messages/:messageId', loadThread, async (req, res) => 
 
 router.post('/:threadId/messages/:messageId/supersede', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (refuseIfArchived(req, res)) return;
 
   const old = await db.prepare("SELECT * FROM messages WHERE id = ? AND thread_id = ? AND register = 'record'")
     .get(req.params.messageId, req.thread.id);
@@ -683,6 +749,7 @@ router.post('/:threadId/messages/:messageId/supersede', loadThread, async (req, 
 
 router.post('/:threadId/messages/:messageId/status', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (refuseIfArchived(req, res)) return;
   const { status } = req.body || {};
   // 'resolved' exists for Blockers, where "accepted" and "declined" are both
   // the wrong word for the thing that actually happens to them.

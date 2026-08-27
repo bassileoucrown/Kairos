@@ -73,7 +73,9 @@ async function linesFor(viewerId) {
     SELECT s.id, s.name, s.kind, s.owner_id, t.id AS thread_id, t.name AS thread_name
       FROM space_members sm
       JOIN spaces s ON s.id = sm.space_id
-      JOIN threads t ON t.space_id = s.id AND t.kind = 'dm'
+      -- Archived rooms are readable but finished, so they do not belong in a
+      -- switcher whose whole job is "where should I go next".
+      JOIN threads t ON t.space_id = s.id AND t.kind = 'dm' AND t.archived_at IS NULL
      WHERE sm.user_id = ? AND s.kind IN (${holes})
   `).all(viewerId, ...LINE_KINDS);
 
