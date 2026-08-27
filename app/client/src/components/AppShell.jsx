@@ -68,6 +68,12 @@ const NAV = [
 
   { group: 'work', to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
   { group: 'work', to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },
+  // Gated the same way a passport is, and for the same reason: what ends up in
+  // an archive is whatever somebody saved out of a room that was closing, and
+  // it arrives stripped of the space membership that used to protect it. A
+  // scheduling-only remit could not open the room; it does not get the archive
+  // of it either. See mayRead in server/routes/archive.js.
+  { group: 'work', to: '/archive', label: 'Archive', icon: '⌸', principalScoped: true, fullAccessOnly: true },
 
   { group: 'house', to: '/household', label: 'Household', icon: '⌂', principalScoped: true, fullAccessOnly: true, notForStaff: true },
   { group: 'house', to: '/instructions', label: 'Instructions', icon: '➜', householdOnly: true },

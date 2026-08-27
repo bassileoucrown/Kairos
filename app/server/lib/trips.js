@@ -182,7 +182,8 @@ const SIX_MONTHS_DAYS = 180;
 async function documentWarnings(ownerId, trip) {
   const rows = await db.prepare(`
     SELECT id, field, label, expires_on, sensitivity FROM essentials
-    WHERE owner_id = ? AND expires_on IS NOT NULL AND category IN ('travel_identity', 'protection')
+    WHERE owner_id = ? AND expires_on IS NOT NULL AND archived_at IS NULL
+      AND category IN ('travel_identity', 'protection')
   `).all(ownerId);
 
   const end = Date.parse(`${trip.endsOn}T00:00:00Z`);

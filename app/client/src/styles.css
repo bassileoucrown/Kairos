@@ -3090,3 +3090,29 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   min-width: 18px; padding: 0 5px; border-radius: 999px;
   font-size: 0.7rem; font-weight: 700; text-align: center;
 }
+
+/* Kept in the archive. Marked on the button rather than only in the archive:
+   the useful question at a message is "did anyone already save this?", and
+   answering it costs nothing here and a trip to another screen otherwise. */
+.msg-promote.is-kept { color: var(--text-muted); }
+
+.kept-card { display: flex; flex-direction: column; gap: 6px; }
+/* The words, set apart from the provenance around them. An archive is read by
+   somebody who was not there, so what was said has to be visibly the content
+   and everything else visibly the label. */
+.kept-body {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.kept-note {
+  font-style: italic;
+  color: var(--text-muted);
+  padding-left: 13px;
+}
+.kept-meta { overflow-wrap: anywhere; }
+/* Wraps, like every other button row in here. Three verbs and a link at 360px
+   is the width where a non-wrapping row starts pushing its last button off the
+   card — the same fault fixed in .task-row and the thread's verb row. */
+.kept-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }

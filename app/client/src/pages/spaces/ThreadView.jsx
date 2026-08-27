@@ -236,8 +236,8 @@ function VoiceBubble({ threadId, m }) {
 }
 
 function Note({
-  m, threadId, canWrite, members, viewerId,
-  onPromote, onMakeTask, onDone, onReply, onEdit, onWithdraw,
+  m, threadId, canWrite, members, viewerId, archived,
+  onPromote, onMakeTask, onDone, onReply, onEdit, onWithdraw, onKeep,
   selected, onSelect,
 }) {
   const [picking, setPicking] = useState(false);
@@ -307,6 +307,12 @@ function Note({
             is when it is there, not where. */}
         {canWrite && selected && !picking && !tasking && !editing && (
           <div className="msg-actions-row">
+            {/* ONLY WHAT AN ARCHIVED ROOM STILL ACCEPTS. Everything else here
+                is refused by the server the moment a thread is archived, and a
+                button that always fails is worse than no button — it reads as
+                a broken app rather than as a closed room. Keep survives
+                deliberately: putting a finished matter away and then saving the
+                things inside it is the order people actually do this in. */}
             <button className="msg-promote" type="button" onClick={() => onReply(m)}>
               Reply
             </button>
@@ -314,18 +320,32 @@ function Note({
               onClick={() => copyText(hasText ? m.body : '')}>
               Copy
             </button>
-            {mine && (
+            {/* Take one line out and keep it. Not a copy of the room, and not
+                a delete — the archive is where something goes when the
+                conversation around it is about to end but the thing itself
+                still matters. */}
+            <button
+              className={'msg-promote' + (m.kept ? ' is-kept' : '')}
+              type="button"
+              onClick={() => onKeep(m.id, !m.kept)}
+              title={m.kept
+                ? 'In the archive. Press to take it out again.'
+                : 'Keep this in the archive — it survives the conversation being deleted.'}
+            >
+              {m.kept ? '★ Kept' : 'Keep'}
+            </button>
+            {mine && !archived && (
               <button className="msg-promote" type="button" onClick={() => setEditing(true)}>
                 Edit
               </button>
             )}
-            {mine && (
+            {mine && !archived && (
               <button className="msg-promote is-danger" type="button"
                 onClick={() => onWithdraw(m.id)}>
                 Take it back
               </button>
             )}
-            {!m.doneAt && (
+            {!m.doneAt && !archived && (
               <>
                 <button className="msg-promote" type="button" onClick={() => onDone(m.id, true)}>
                   Mark done
@@ -792,6 +812,23 @@ export default function ThreadView() {
     } catch (err) { setError(err.message); }
   }
 
+  /**
+   * Put one line in the archive, or take it back out.
+   *
+   * Reloads rather than patching the message in place: the server is the one
+   * that knows whether this is already kept — the same line can be kept by a
+   * colleague on another screen — and a star drawn from local state would be
+   * the second answer to a question that already has one.
+   */
+  async function keepMessage(id, want) {
+    setError('');
+    try {
+      if (want) await api.post(`/threads/${threadId}/messages/${id}/keep`, {});
+      else await api.del(`/threads/${threadId}/messages/${id}/keep`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
   // An archived room is readable and closed. The composer goes rather than
@@ -852,7 +889,8 @@ export default function ThreadView() {
               : <Note key={m.id} m={m} threadId={threadId} canWrite={data.canWrite} members={members}
                   viewerId={data.viewerId} onPromote={promote} onMakeTask={makeTask}
                   onDone={markDone} onReply={startReply} onEdit={editMessage}
-                  onWithdraw={withdraw} selected={picked === m.id} onSelect={setPicked} />
+                  onWithdraw={withdraw} onKeep={keepMessage} archived={archived}
+                  selected={picked === m.id} onSelect={setPicked} />
           ))}
           <div ref={endRef} />
           {/* Said rather than done. Somebody reading back through last Tuesday
@@ -876,7 +914,9 @@ export default function ThreadView() {
           <div className="alert" style={{ marginTop: 12 }}>
             This conversation is archived — every word above stays here to be read,
             and nothing new can be added. Take it out of the archive on the space
-            to carry on in it.
+            to carry on in it. You can still tap any line and <strong>Keep</strong> it,
+            which saves it to <a href="/archive">the archive</a> — where it stays even
+            if this conversation is later deleted.
           </div>
         )}
 

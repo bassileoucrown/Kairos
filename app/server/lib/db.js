@@ -415,6 +415,12 @@ function ready() {
       // The two people in a room for two. See lib/pairLine.js.
       await ensureColumn('spaces', 'pair_key', 'TEXT');
       await ensureIndex('idx_spaces_pair', 'spaces(pair_key)');
+      // A document put away: out of the live vault, out of the expiry nudges,
+      // still readable. Unlike a kept message this really is a flag on the
+      // row, and the difference is that nothing cascades an essential away —
+      // it belongs to the principal directly, so there is nothing for it to
+      // outlive. See kept_items in schema.sql for the case where that is false.
+      await ensureColumn('essentials', 'archived_at', 'TEXT');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

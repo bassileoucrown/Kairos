@@ -133,6 +133,20 @@ export default function EssentialsTab({ ownerId }) {
     catch (err) { setError(err.message); }
   }
 
+  // The old passport, the visa for a trip already taken, the policy that
+  // lapsed when the broker changed. Deleting them is wrong — a superseded
+  // passport number is exactly what a form asks for when it wants travel
+  // history — but two passport numbers side by side, one of them dead, is how
+  // the wrong one gets read out at a check-in desk.
+  async function archive(id) {
+    setError('');
+    try {
+      await api.post(`/essentials/${ownerId}/${id}/archive`, {});
+      setNotice('Put away. It has left this list and the renewal reminders, and is in the Archive.');
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   async function copyTravelBlock() {
     setError('');
     let d = null;
@@ -316,6 +330,13 @@ export default function EssentialsTab({ ownerId }) {
                 <button className="btn btn-sm" type="button" onClick={() => confirmStill(e.id)}>
                   Still correct
                 </button>
+                {/* Offered BEFORE Delete, deliberately. For a document that has
+                    been superseded rather than mistaken, putting it away is
+                    almost always what was meant, and a screen whose only exit
+                    is Delete teaches people to delete. */}
+                <button className="btn btn-sm" type="button" onClick={() => archive(e.id)}>
+                  Archive
+                </button>
                 <button className="btn btn-danger btn-sm" type="button" onClick={() => remove(e.id)}>
                   Delete
                 </button>
@@ -328,6 +349,15 @@ export default function EssentialsTab({ ownerId }) {
       <div className="code-actions" style={{ marginTop: 12 }}>
         <SoonButton feature="document_scans" />
       </div>
+
+      {data.archivedCount > 0 && (
+        <p className="hint" style={{ marginTop: 16 }}>
+          {data.archivedCount === 1
+            ? '1 document is put away'
+            : `${data.archivedCount} documents are put away`}
+          {' '}— read them or bring them back in <a href="/archive">the Archive</a>.
+        </p>
+      )}
 
       {!data.canSeeSensitive && (
         <p className="hint" style={{ marginTop: 16 }}>

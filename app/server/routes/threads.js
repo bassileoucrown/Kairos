@@ -8,6 +8,7 @@ const { syncStageFromRecords } = require('../lib/stageStatus');
 const voice = require('../lib/voiceNotes');
 const mentions = require('../lib/mentions');
 const webPush = require('../lib/webPush');
+const keep = require('../lib/keep');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -80,10 +81,14 @@ function replyStub(m) {
   };
 }
 
-function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tasksByMessage) {
+function serializeMessage(m, acks, voiceByMessage, mentionsForMessage, byId, tasksByMessage, keptIds) {
   return {
     id: m.id,
     body: m.body,
+    // Already taken out and kept. Said on the message so the screen offers
+    // "Keep" once and "Kept" thereafter, rather than a button whose second
+    // press appears to do nothing.
+    kept: !!keptIds?.has(m.id),
     // The line this one is answering. Present on any format — a note, a
     // record, a recording — because the point of replies is that none of them
     // is a dead end.
@@ -230,6 +235,8 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
     { viewerId: req.user.id, ownerId: req.access.space.owner_id, audience },
   );
 
+  const keptIds = await keep.keptIdsInThread(req.thread.id);
+
   res.json({
     thread: {
       id: req.thread.id, name: req.thread.name, spaceId: req.thread.space_id,
@@ -252,7 +259,7 @@ router.get('/:threadId/messages', loadThread, async (req, res) => {
       retentionDays: voice.RETENTION_DAYS,
     },
     messages: rows.map((m, i) => serializeMessage(
-      m, acks, voiceByMessage, mentionsPerMessage[i], byId, tasksByMessage,
+      m, acks, voiceByMessage, mentionsPerMessage[i], byId, tasksByMessage, keptIds,
     )),
   });
 });
@@ -712,6 +719,57 @@ router.delete('/:threadId/messages/:messageId', loadThread, async (req, res) => 
   await db.prepare('DELETE FROM messages WHERE id = ?').run(message.id);
 
   res.json({ ok: true });
+});
+
+/**
+ * Take one line out of a conversation and keep it.
+ *
+ * THIS IS NOT refuseIfArchived's BUSINESS, and the omission is the feature.
+ * Every other verb on a message is refused once the room is archived, because
+ * an archived room does not change. Keeping changes nothing here — it writes a
+ * copy somewhere else — and it is needed precisely when a room is on its way
+ * out. Blocking it on an archived thread would mean the one moment you most
+ * want to save something is the one moment you cannot: you archive a finished
+ * matter, then come to close it, and the sensitive things inside are stranded.
+ *
+ * WHOEVER CAN WRITE HERE CAN KEEP. Reading it is already permitted, so copying
+ * it into the principal's own archive escalates nothing. The bar is
+ * participation rather than ownership for the same reason archiving a thread
+ * has that bar: the person closing the work is the person who knows what in it
+ * mattered, and sending them to find the principal first means nothing gets
+ * kept at all.
+ */
+router.post('/:threadId/messages/:messageId/keep', loadThread, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  const message = await db.prepare(`
+    SELECT m.*, u.name AS author_name FROM messages m
+    JOIN users u ON u.id = m.author_id
+    WHERE m.id = ? AND m.thread_id = ?
+  `).get(req.params.messageId, req.thread.id);
+  if (!message) return res.status(404).json({ error: 'Message not found.' });
+
+  const { item } = await keep.keepMessage({
+    message,
+    thread: req.thread,
+    space: req.access.space,
+    keeper: req.user,
+    note: req.body?.note,
+  });
+  res.json({ kept: true, keptId: item.id });
+});
+
+/**
+ * Changed your mind about keeping it.
+ *
+ * Addressed by the message rather than by the archive entry, because that is
+ * where the button is. The archive has its own way to remove an item, which is
+ * the only one left once the room is gone.
+ */
+router.delete('/:threadId/messages/:messageId/keep', loadThread, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  await db.prepare('DELETE FROM kept_items WHERE owner_id = ? AND source_message_id = ?')
+    .run(req.access.space.owner_id, req.params.messageId);
+  res.json({ kept: false });
 });
 
 router.post('/:threadId/messages/:messageId/supersede', loadThread, async (req, res) => {

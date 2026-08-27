@@ -1231,3 +1231,52 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   last_error  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- Things taken out of a conversation and kept.
+--
+-- WHY THIS IS A COPY AND NOT A FLAG. The obvious build is archived_at on
+-- messages, the same as threads. It does not work, and it fails at exactly the
+-- moment it is needed. Messages hang off threads with ON DELETE CASCADE, so a
+-- flag on the row dies with the room — and the reason anybody asked for this
+-- was "before deleting a space, let me move the sensitive things somewhere
+-- safe". An archive that is deleted by the deletion it exists to survive is
+-- not an archive. So keeping something copies it out, into a store the
+-- principal owns, which the thread, the project and the space can all be
+-- destroyed around.
+--
+-- WHICH MEANS THE PROVENANCE IS TEXT, NOT FOREIGN KEYS. source_message_id and
+-- the two ids beside it point at rows that are expected to disappear, so they
+-- are deliberately unconstrained — a real REFERENCES here would restore the
+-- cascade this table exists to escape. The names are captured at keep time for
+-- the same reason: "Kept from Legal — Q3 filing" has to still read that way
+-- after Legal is gone, and a JOIN would have nothing left to join to.
+--
+-- A KEPT ITEM IS A SNAPSHOT, and says so on its face. If the original is later
+-- edited, this still holds the words as they were when somebody decided they
+-- mattered — which is what an archive is for and the opposite of a bug. The
+-- screen shows the date it was kept beside the words so the two are never
+-- confused.
+CREATE TABLE IF NOT EXISTS kept_items (
+  id           TEXT PRIMARY KEY,
+  -- Whose archive. The space's owner, not whoever pressed the button: an
+  -- office keeps one archive, and a PA filing something is filing it into
+  -- their principal's.
+  owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL DEFAULT 'message',
+  body         TEXT NOT NULL DEFAULT '',
+  -- Why this was worth keeping, in the keeper's words. An archive of
+  -- unexplained fragments is a pile, not a record.
+  note         TEXT NOT NULL DEFAULT '',
+  source_message_id TEXT,
+  source_thread_id  TEXT,
+  source_space_id   TEXT,
+  said_by_name TEXT NOT NULL DEFAULT '',
+  said_at      TEXT,
+  thread_name  TEXT NOT NULL DEFAULT '',
+  space_name   TEXT NOT NULL DEFAULT '',
+  kept_by      TEXT REFERENCES users(id) ON DELETE SET NULL,
+  kept_by_name TEXT NOT NULL DEFAULT '',
+  kept_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kept_owner ON kept_items(owner_id, kept_at);
+CREATE INDEX IF NOT EXISTS idx_kept_source ON kept_items(source_message_id);

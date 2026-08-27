@@ -86,8 +86,9 @@ router.get('/catalogue', async (req, res) => {
 
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const ctx = viewerContext(req);
-  const rows = await db.prepare(`${SELECT} WHERE e.owner_id = ? ORDER BY e.category, e.label`)
-    .all(req.principal.id);
+  const rows = await db.prepare(
+    `${SELECT} WHERE e.owner_id = ? AND e.archived_at IS NULL ORDER BY e.category, e.label`,
+  ).all(req.principal.id);
 
   // A delegate is not told that a passport exists and is being withheld —
   // it simply is not in the response. Same reasoning as spaces returning 404
@@ -102,7 +103,91 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     // than prompting for a password and then discovering it wanted a code.
     stepUpFactor: await factorFor(req.user.id),
     essentials: visible.map((r) => serialize(r)),
+    // Said here so the live list can offer the way through to them. A count
+    // rather than the rows: an archived document is still a passport number,
+    // and shipping every one of them to a screen that only wants to say
+    // "3 archived" would put them on the wire for nothing.
+    archivedCount: await countArchived(req.principal.id, ctx),
   });
+});
+
+/** How many put-away documents this viewer is allowed to know about. */
+async function countArchived(ownerId, ctx) {
+  const rows = await db.prepare(
+    'SELECT sensitivity FROM essentials WHERE owner_id = ? AND archived_at IS NOT NULL',
+  ).all(ownerId);
+  return rows.filter((r) => canSee(r.sensitivity, ctx)).length;
+}
+
+/**
+ * The documents put away.
+ *
+ * Served by the same route as the live ones, through the same serializer and
+ * the same sensitivity filter, because an archived passport is not a less
+ * sensitive passport. Reading a value here still costs a step-up and is still
+ * logged: /reveal does not ask whether a row is archived, which is exactly
+ * the property that makes this safe to add.
+ */
+router.get('/:ownerId/archived', requirePaAccess, async (req, res) => {
+  const ctx = viewerContext(req);
+  const rows = await db.prepare(
+    `${SELECT} WHERE e.owner_id = ? AND e.archived_at IS NOT NULL ORDER BY e.archived_at DESC`,
+  ).all(req.principal.id);
+
+  res.json({
+    principal: { id: req.principal.id, name: req.principal.name },
+    canSeeSensitive: canSee('sensitive', ctx),
+    stepUpFactor: await factorFor(req.user.id),
+    essentials: rows
+      .filter((r) => canSee(r.sensitivity, ctx))
+      .map((r) => ({ ...serialize(r), archivedAt: r.archived_at })),
+  });
+});
+
+/**
+ * Put a document away, or take it back out.
+ *
+ * WHAT THIS IS FOR. The old passport, the visa for a country already visited,
+ * the policy that lapsed when the broker changed. Deleting them is wrong —
+ * a superseded passport number is exactly what a form asks for when it wants
+ * your travel history — but leaving them in the live list is worse than
+ * clutter: two passport numbers side by side, one of them dead, is how the
+ * wrong one gets read out at a check-in desk.
+ *
+ * SO IT ALSO STOPS THE NUDGES. An archived document leaves the expiry sweep,
+ * Today's "about to lapse" list, and the travel warnings on a trip. Otherwise
+ * putting away an expired passport would buy silence on the screen and a
+ * monthly email about renewing something nobody intends to renew — and an
+ * office that learns to ignore expiry mail is an office that misses the one
+ * that mattered.
+ */
+router.post('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
+  const ctx = viewerContext(req);
+  const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.principal.id);
+  if (!row || !canSee(row.sensitivity, ctx)) return res.status(404).json({ error: 'Not found.' });
+
+  const at = row.archived_at || new Date().toISOString();
+  await db.prepare('UPDATE essentials SET archived_at = ? WHERE id = ?').run(at, row.id);
+  await logAccess({
+    actorId: req.user.id, ownerId: req.principal.id, essentialId: row.id,
+    action: 'archive', field: row.field,
+  });
+  res.json({ archivedAt: at });
+});
+
+router.delete('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
+  const ctx = viewerContext(req);
+  const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.principal.id);
+  if (!row || !canSee(row.sensitivity, ctx)) return res.status(404).json({ error: 'Not found.' });
+
+  // The expiry ladder resets with it. A document that sat archived through its
+  // own expiry has already had whatever nudges it was going to get; brought
+  // back, it is live again and the office should be told about it again.
+  await db.prepare('UPDATE essentials SET archived_at = NULL, reminder_stage = NULL WHERE id = ?')
+    .run(row.id);
+  res.json({ archivedAt: null });
 });
 
 // Adding is gated; reading is not. A principal who drops a plan keeps every

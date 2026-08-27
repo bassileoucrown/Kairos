@@ -186,7 +186,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const expiring = (await db.prepare(`
     SELECT id, label, field, expires_on, sensitivity
     FROM essentials
-    WHERE owner_id = ? AND expires_on IS NOT NULL
+    WHERE owner_id = ? AND expires_on IS NOT NULL AND archived_at IS NULL
     ORDER BY expires_on ASC
   `).all(req.principal.id))
     .filter((e) => canSee(e.sensitivity, viewerCtx))

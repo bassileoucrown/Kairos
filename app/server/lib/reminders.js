@@ -285,6 +285,10 @@ async function sweepEssentials(now) {
     JOIN users u ON u.id = e.owner_id
     LEFT JOIN contacts c ON c.id = e.subject_contact_id
     WHERE e.expires_on IS NOT NULL AND e.expires_on != ''
+      -- Put away deliberately. See POST /:id/archive in routes/essentials.js:
+      -- nudging about a passport somebody has already retired is how an office
+      -- learns to ignore expiry mail.
+      AND e.archived_at IS NULL
   `).all();
 
   let sent = 0;

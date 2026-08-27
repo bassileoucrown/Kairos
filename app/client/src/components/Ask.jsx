@@ -24,10 +24,15 @@ import PasswordField from './PasswordField.jsx';
 function AskDialog({ request, onAnswer }) {
   const [value, setValue] = useState('');
   const inputRef = useRef(null);
-  const { title, label, hint, secret, multiline, optional, confirmLabel } = request;
+  const { title, label, hint, secret, multiline, optional, confirmLabel, initial } = request;
 
   useEffect(() => {
-    setValue('');
+    // Prefilled where the caller has something to edit rather than something
+    // to supply. Editing a note you cannot see is not editing — it is retyping
+    // from memory, and the note exists precisely because nobody remembers.
+    // Never for a secret: a password field that arrives full is a password
+    // sitting on screen.
+    setValue(secret ? '' : (initial || ''));
     // Focus on open: this is a question, and a question that needs a click
     // before it can be answered is a question asked badly. The secret case
     // focuses itself, since PasswordField owns its input.
