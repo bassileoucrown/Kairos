@@ -244,9 +244,24 @@ const mins = (b) => Math.round((Date.parse(b.endAt) - Date.parse(b.startAt)) / 6
     // fixed hour. It used to be 13:00 UTC, which is fine in the morning and a
     // guaranteed failure every afternoon: an appointment that has finished no
     // longer offers Move, Length or Call it off, so the assertions below found
-    // no buttons and blamed the page. Ten minutes out is on today's sheet and
-    // still live at every hour of the day.
+    // no buttons and blamed the page.
     const soon = new Date(Date.now() + 10 * 60000);
+
+    // AND STOP THE WALL CLOCK DECIDING WHICH DAY THIS IS. "Ten minutes out"
+    // fixed the afternoon and left midnight: run this at 23:59 and the
+    // appointment lands on TOMORROW's sheet, so Today is empty and the failure
+    // reads as a page that will not draw an appointment. It did exactly that.
+    //
+    // The day sheet is rendered in the principal's zone, so rather than hunt
+    // for an hour that works everywhere, the principal is moved to a zone
+    // where this instant is mid-morning. Ten minutes ago is the same local day
+    // as ten minutes from now at 10am in a way it never is at midnight, and
+    // that holds whatever the machine's clock says.
+    const ahead = ((10 - soon.getUTCHours()) + 24) % 24;
+    const zone = ahead === 0 ? 'UTC'
+      : ahead <= 14 ? `Etc/GMT-${ahead}` : `Etc/GMT+${24 - ahead}`;
+    ok('the principal can be put in a zone where this is mid-morning',
+      (await boss('PATCH', '/profile', { timezone: zone })).s === 200, zone);
     r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: soon.toISOString() });
     ok('it can be put on today to be clicked', r.s === 200, JSON.stringify(r.d).slice(0, 160));
 
