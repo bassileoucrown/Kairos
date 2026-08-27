@@ -302,6 +302,15 @@ const iso = (ms) => new Date(ms).toISOString();
     ok('the meeting on the calendar is a way in, not just a label', true);
     await link.click();
     await page.waitForURL('**/appointments/**', { timeout: 20000 });
+    // WAIT FOR THE APPOINTMENT, NOT FOR A CARD. `.card` is on screen while the
+    // page still says "Loading…", so waiting on it read the DOM one render too
+    // early — and the check below it then reported the verbs missing from a
+    // page that had not drawn them yet. The assertion above survived only
+    // because "Appointment" is in the header of the empty state too, which is
+    // the tell: a check that passes on a loading screen is checking nothing.
+    await page.waitForFunction(
+      () => !/Loading…/.test(document.body.innerText), null, { timeout: 20000 },
+    );
     await page.waitForSelector('.card', { timeout: 20000 });
     const detail = await page.locator('body').innerText();
     ok('and it lands on the appointment', /Appointment/i.test(detail), detail.slice(0, 120));
