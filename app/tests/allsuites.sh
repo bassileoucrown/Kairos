@@ -40,7 +40,16 @@ for f in b*.js; do
   last=$(grep -v ExperimentalWarning "/tmp/out-$s.log" | grep -v 'trace-warnings' | tail -1)
   if [ $rc -eq 0 ]; then pass=$((pass+1)); echo "ok   $last";
   elif [ $rc -eq 99 ]; then skip=$((skip+1)); skipped="$skipped $s"; echo "skip $last";
-  else fail=$((fail+1)); failed="$failed $s"; echo "FAIL[$rc] $last"; fi
+  else
+    fail=$((fail+1)); failed="$failed $s"; echo "FAIL[$rc] $last"
+    # KEEP THE EVIDENCE. /tmp/out-$s.log is overwritten by the next run of the
+    # same suite — and the usual way this board is used is SQLite then
+    # Postgres, back to back, so a suite that fails on the first board has its
+    # log clobbered by the second board's passing run before anybody reads it.
+    # That has now cost two diagnoses: a red with no evidence is a red nobody
+    # can act on, and acting on a red is the entire point.
+    cp "/tmp/out-$s.log" "/tmp/fail-$s-$(date +%H%M%S).log" 2>/dev/null || true
+  fi
 done
 
 echo "---- $pass passed, $fail failed, $skip skipped"
