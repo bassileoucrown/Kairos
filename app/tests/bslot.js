@@ -27,6 +27,7 @@
 //   cannot be in two places and only the office knows when both are real.
 const ROOT = require('path').join(__dirname, '..', '..');
 const { spawn } = require('child_process');
+const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4585, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
@@ -77,6 +78,7 @@ const iso = (ms) => new Date(ms).toISOString();
   });
 
   const db = require(`${ROOT}/app/server/lib/db`);
+  let browser = null;
 
   try {
     for (;;) {
@@ -143,10 +145,10 @@ const iso = (ms) => new Date(ms).toISOString();
       !(types.d.meetingTypes || []).some((t) => t.name === 'In the diary'),
       JSON.stringify((types.d.meetingTypes || []).map((t) => t.name)));
     const handle = (await boss('GET', '/auth/me')).d.user.slug;
-    const page = await anon('GET', `/public/${handle}`);
+    const publicPage = await anon('GET', `/public/${handle}`);
     ok('nor on the public booking page',
-      !(page.d.meetingTypes || []).some((t) => t.name === 'In the diary'),
-      JSON.stringify((page.d.meetingTypes || []).map((t) => t.name)));
+      !(publicPage.d.meetingTypes || []).some((t) => t.name === 'In the diary'),
+      JSON.stringify((publicPage.d.meetingTypes || []).map((t) => t.name)));
     // One per office, not one per booking.
     await boss('POST', '/bookings',
       { startAt: iso(when + 3 * 60 * 60 * 1000), durationMinutes: 30, name: 'Tunde Bakare' });
@@ -255,10 +257,63 @@ const iso = (ms) => new Date(ms).toISOString();
       .get(near.d.booking.id);
     ok('and marks it so it is not announced twice',
       stamped.reminder_stage === 'soon', String(stamped.reminder_stage));
+    // ---- And it can be acted on where it was added ------------------------
+    //
+    // THE CALENDAR'S ROWS HAVE NEVER BEEN OPENABLE. The day sheet's lead to
+    // the appointment and the calendar's did not, so anything seen there could
+    // be read and not acted on — no move, no change of length, no cancelling.
+    // Harmless while the calendar was only a view; the moment the diary could
+    // be written to from that very screen, people added something and had
+    // nowhere to go with it. Reported as "an appointment booked from the app
+    // doesn't have the edit or cancel feature".
+    head('An appointment added on the calendar can be opened from the calendar:');
+    const day = new Date(when).toISOString().slice(0, 10);
+    const login = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: `ada${ID}@x.com`, password: PW }),
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+    });
+    const calCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const [ck, cv] = cookie.split('=');
+    await calCtx.addCookies([{ name: ck, value: cv, domain: '127.0.0.1', path: '/' }]);
+    const page = await calCtx.newPage();
+    const errs = [];
+    page.on('pageerror', (e) => errs.push(e.message));
+
+    // The view is remembered in localStorage, so it is set rather than assumed
+    // — a suite that depends on whatever the last person picked is a suite
+    // that fails for a reason unrelated to what it is checking.
+    await page.addInitScript(() => {
+      try { localStorage.setItem('kairos_calendar_view', 'month'); } catch { /* private window */ }
+    });
+    await page.goto(`${BASE}/dashboard?tab=calendar`);
+    await page.waitForSelector('.cal-cell', { timeout: 20000 });
+    // The cell for the day the meeting is on: matched on the day number and
+    // excluding the neighbouring months' spill, which repeats those numbers.
+    const dom = String(Number(day.slice(8, 10)));
+    await page.locator('.cal-cell:not(.is-outside)')
+      .filter({ has: page.locator('.cal-dom', { hasText: new RegExp(`^${dom}$`) }) })
+      .first().click();
+    const link = page.locator('.sched-title-link').first();
+    await link.waitFor({ timeout: 20000 });
+    ok('the meeting on the calendar is a way in, not just a label', true);
+    await link.click();
+    await page.waitForURL('**/appointments/**', { timeout: 20000 });
+    await page.waitForSelector('.card', { timeout: 20000 });
+    const detail = await page.locator('body').innerText();
+    ok('and it lands on the appointment', /Appointment/i.test(detail), detail.slice(0, 120));
+    ok('with the three verbs on it, exactly like one booked through a link',
+      /Move it|Move this/.test(detail) && /Change the length/.test(detail)
+      && /Call it off/.test(detail), detail.slice(0, 300));
+    ok('nothing threw on the way', errs.length === 0, errs.join(' | '));
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
+    if (browser) await browser.close().catch(() => {});
     proc.kill();
   }
 

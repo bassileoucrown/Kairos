@@ -116,9 +116,9 @@ async function directLineFor(principalId, viewerId) {
   // Through lib/threadSummary.js, which is also what the switcher and the
   // rail read. Three copies of "what was said last and how much is waiting"
   // would eventually disagree about the same room.
-  const { lastMessage, unanswered } = await summarise(thread.id, viewerId);
+  const { lastMessage, unread } = await summarise(thread.id, viewerId);
 
-  return { spaceId: space.id, threadId: thread.id, lastMessage, unanswered };
+  return { spaceId: space.id, threadId: thread.id, lastMessage, unread };
 }
 
 module.exports = { ensureDirectLine, directLineFor, findDirectSpace };

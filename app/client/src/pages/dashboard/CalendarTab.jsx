@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import { dateKeyInZone, timeLabelInZone } from '../../lib/timezones.js';
@@ -276,7 +277,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
             {label(selectedDay, { weekday: 'long', day: 'numeric', month: 'long' })}
           </h3>
           {selectedEntries.length === 0 && <p className="hint">Nothing on this day.</p>}
-          {selectedEntries.map((b) => <Row key={b.id} entry={b} zone={zone} />)}
+          {selectedEntries.map((b) => <Row key={b.id} entry={b} zone={zone} subjectId={subjectId} />)}
           {/* Pre-filled with the day already open, because somebody who has
               clicked a day and is now adding something means THAT day, and
               retyping the date they just chose is the kind of small friction
@@ -293,7 +294,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
 // One line of a day, whether it came from the booking page or from the person
 // building the day. A booking's second line is who booked it; everything
 // else's is where it is and what it is.
-function Row({ entry: b, zone }) {
+function Row({ entry: b, zone, subjectId }) {
   const isBooking = b.source === 'booking';
   const color = isBooking
     ? (b.meetingTypeColor || KIND_COLOR.meeting)
@@ -306,7 +307,21 @@ function Row({ entry: b, zone }) {
           {timeLabelInZone(b.startAt, zone)}
           {b.endLabel ? ` – ${b.endLabel}` : ''}
           {' · '}
-          {isBooking ? b.meetingTypeName : b.title}
+          {/* A WAY IN, which this row has never had. The day sheet's rows lead
+              to the appointment and the calendar's did not, so anything seen
+              here could be read and not acted on — no move, no change of
+              length, no cancelling. That became obvious the moment the diary
+              could be written to from this very screen: people added something
+              and then had nowhere to go with it. The id arrives prefixed
+              ("booking:...") because the range endpoint merges two sources. */}
+          {isBooking && subjectId ? (
+            <Link
+              className="sched-title-link"
+              to={`/appointments/${subjectId}/${String(b.id).replace(/^booking:/, '')}`}
+            >
+              {b.meetingTypeName}
+            </Link>
+          ) : (isBooking ? b.meetingTypeName : b.title)}
           {b.status === 'pending' && <span className="pill is-off" style={{ marginLeft: 8 }}>Held</span>}
           {b.status === 'proposed' && <span className="pill is-warn" style={{ marginLeft: 8 }}>Waiting</span>}
           {b.status === 'draft' && <span className="pill is-off" style={{ marginLeft: 8 }}>Draft</span>}
@@ -373,7 +388,7 @@ function DayView({ day, entries, zone }) {
         <div className="cal-hour" key={h}>
           <span className="cal-hour-label">{pad(h)}:00</span>
           <div className="cal-hour-body">
-            {(byHour.get(h) || []).map((b) => <Row key={b.id} entry={b} zone={zone} />)}
+            {(byHour.get(h) || []).map((b) => <Row key={b.id} entry={b} zone={zone} subjectId={subjectId} />)}
           </div>
         </div>
       ))}

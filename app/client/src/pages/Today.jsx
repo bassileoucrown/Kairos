@@ -200,7 +200,7 @@ export function DirectLine({ line, isSelf, principalName }) {
           ? <><strong>{line.lastMessage.authorName}:</strong> {line.lastMessage.body}</>
           : <span className="hint">No messages yet — say something quick.</span>}
       </span>
-      {line.unanswered > 0 && <span className="count-pill">{line.unanswered}</span>}
+      {line.unread > 0 && <span className="count-pill">{line.unread}</span>}
     </Link>
   );
 }

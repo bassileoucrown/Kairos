@@ -75,7 +75,7 @@ async function signUp(call, name, email, category) {
     const line = today.body.directLine;
     ok('the principal has a direct line the moment somebody accepts', !!line?.threadId,
       JSON.stringify(line));
-    ok('it starts empty', line && line.lastMessage === null && line.unanswered === 0);
+    ok('it starts empty', line && line.lastMessage === null && line.unread === 0);
 
     const ws = await ben('GET', '/workspace');
     const benLine = ws.body.principals?.[0]?.directLine;
@@ -90,18 +90,29 @@ async function signUp(call, name, email, category) {
     today = await ada('GET', `/today/${adaId}`);
     ok('the principal sees the last message', today.body.directLine?.lastMessage?.body === 'Car is outside.',
       JSON.stringify(today.body.directLine?.lastMessage));
-    ok('and it counts as unanswered', today.body.directLine?.unanswered === 1,
-      String(today.body.directLine?.unanswered));
+    ok('and it counts as unread', today.body.directLine?.unread === 1,
+      String(today.body.directLine?.unread));
+
+    // READING IS WHAT CLEARS IT, and that is a correction. The count used to
+    // be what you had not ANSWERED, which never moved until you replied — so
+    // somebody who read a message watched the rail go quiet while the room
+    // kept its 1. Two numbers for one question, disagreeing in the way most
+    // likely to be noticed. Opening the thread is what reading means, and it
+    // is the same stamp the rail has always used.
+    await ada('GET', `/threads/${line.threadId}/messages`);
+    today = await ada('GET', `/today/${adaId}`);
+    ok('and reading it clears the count, without a word being said back',
+      today.body.directLine?.unread === 0, String(today.body.directLine?.unread));
 
     const reply = await ada('POST', `/threads/${line.threadId}/messages`, { body: 'On my way down.' });
     ok('the principal can reply', reply.status === 201, JSON.stringify(reply.body));
 
     today = await ada('GET', `/today/${adaId}`);
-    ok('answering clears the principal\'s count', today.body.directLine?.unanswered === 0,
-      String(today.body.directLine?.unanswered));
+    ok('answering leaves it clear', today.body.directLine?.unread === 0,
+      String(today.body.directLine?.unread));
     const ws2 = await ben('GET', '/workspace');
-    ok('and raises the assistant\'s', ws2.body.principals[0].directLine.unanswered === 1,
-      String(ws2.body.principals[0].directLine.unanswered));
+    ok('and raises the assistant\'s', ws2.body.principals[0].directLine.unread === 1,
+      String(ws2.body.principals[0].directLine.unread));
 
     // --- A second assistant joins the same room ---
     const inv2 = await ada('POST', '/members', { email: `cara${ID}@x.com`, role: 'ea' });

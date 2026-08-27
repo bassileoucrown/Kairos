@@ -199,6 +199,26 @@ const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
     ok('and it can be booked', booked.s === 201, JSON.stringify(booked.d).slice(0, 160));
     const bookingId = booked.d.booking.id;
 
+    // A DAY OUT FIRST, AND IT IS THE BOOKER WHO IS TOLD. Somebody coming to
+    // see a principal may have to travel; half an hour is no use to them, and
+    // the office was told while the person with further to come was not.
+    const dayOut = now + 20 * 60 * 60 * 1000;
+    await db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
+      .run(iso(dayOut), iso(dayOut + 30 * 60 * 1000), bookingId);
+    let mailed = (await boss('GET', '/emails')).d.emails.length;
+    buzzed.length = 0;
+    swept = await reminders.runReminderSweep(now);
+    ok('a day out, the booker is reminded', swept.appointments === 1, JSON.stringify(swept));
+    const toBooker = (await boss('GET', '/emails')).d.emails;
+    ok('by email, since they have no account here',
+      toBooker.length === mailed + 1, `${mailed} -> ${toBooker.length}`);
+    ok('carrying the way to move or cancel it rather than "write and ask"',
+      /book\/manage\//.test(JSON.stringify(toBooker[0] || {})),
+      JSON.stringify(toBooker[0] || {}).slice(0, 200));
+    // Not the principal's phone: their own diary is the day-ahead view.
+    ok('and the principal is not buzzed a day ahead',
+      !buzzed.some((b) => b.userId === bossId), JSON.stringify(buzzed));
+
     const soon = now + 20 * 60 * 1000;
     await db.prepare('UPDATE bookings SET start_at = ?, end_at = ? WHERE id = ?')
       .run(iso(soon), iso(soon + 30 * 60 * 1000), bookingId);

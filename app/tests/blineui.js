@@ -112,7 +112,7 @@ async function onboard(p, name, email, roleLabel) {
     const bar = await pa.locator('.direct-line').innerText();
     ok('the principal sees the message on Today',
       bar.includes('Ben Reed') && bar.includes('Car is outside.'), bar);
-    ok('with an unanswered count', (await pa.locator('.direct-line .count-pill').innerText()) === '1');
+    ok('with an unread count', (await pa.locator('.direct-line .count-pill').innerText()) === '1');
 
     await pa.click('.direct-line');
     await pa.waitForURL('**/threads/**', { timeout: 15000 });

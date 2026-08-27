@@ -85,7 +85,7 @@ async function linesFor(viewerId) {
     // offering it would be offering a dead end.
     if (room.kind !== 'direct' && people.length === 0) continue;
 
-    const { lastMessage, unanswered } = await summarise(room.thread_id, viewerId);
+    const { lastMessage, unread } = await summarise(room.thread_id, viewerId);
     out.push({
       threadId: room.thread_id,
       spaceId: room.id,
@@ -97,7 +97,7 @@ async function linesFor(viewerId) {
       isPrivate: room.kind !== 'direct',
       people: people.map((p) => ({ id: p.id, name: p.name })),
       lastMessage,
-      unanswered,
+      unread,
     });
   }
 

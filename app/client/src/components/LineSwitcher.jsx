@@ -53,8 +53,8 @@ export default function LineSwitcher({ threadId }) {
             <span className="line-chip-name">{l.name}</span>
             {/* Only ever what is UNANSWERED — see lib/threadSummary.js for why
                 that is a different and more useful number than unread. */}
-            {l.unanswered > 0 && !here && (
-              <span className="line-chip-count">{l.unanswered}</span>
+            {l.unread > 0 && !here && (
+              <span className="line-chip-count">{l.unread}</span>
             )}
           </button>
         );

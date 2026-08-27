@@ -368,7 +368,7 @@ router.post('/:threadId/voice', loadThread, audioBody, async (req, res) => {
   if (answers === false) return res.status(400).json({ error: 'That message is not in this conversation.' });
 
   // A voice note is an ordinary message that happens to carry a recording, so
-  // everything already built on messages — the direct line, unanswered counts,
+  // everything already built on messages — the direct line, unread counts,
   // tasks from a message — keeps working without knowing voice exists. Any
   // text the sender typed alongside becomes the body; an empty body is what a
   // recording with no transcript honestly looks like until one arrives.

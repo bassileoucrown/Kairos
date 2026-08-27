@@ -5,18 +5,30 @@ const db = require('./db');
  * of it is waiting on you.
  *
  * ONE ANSWER, THREE CALLERS. Today shows the direct line, the switcher on a
- * thread shows every line you have, and the rail counts what is unanswered.
+ * thread shows every line you have, and the rail counts what is unread.
  * Those were about to be three copies of the same three queries, and this
  * codebase has been bitten by that shape often enough to know how it ends —
  * one of them learns about voice notes and the others do not, or one counts
  * from a different moment and two rooms disagree about the same number.
  *
- * "UNANSWERED" IS DELIBERATELY NOT "UNREAD". There is no read-receipt table,
- * and adding one would answer a question nobody asks — you can read "which
- * car?" on a bus and it is still your answer that is missing. Counting what
- * has been said by other people since the last thing YOU said is the number
- * that matters to somebody glancing at a list: has anything happened here that
- * I have not answered.
+ * IT COUNTS WHAT YOU HAVE NOT READ, and that is a correction.
+ *
+ * This used to count what you had not ANSWERED — everything said by other
+ * people since the last thing you said — on the argument that you can read
+ * "which car?" on a bus and it is still your answer that is missing. The
+ * argument is sound and the number was still wrong, for a reason that beats
+ * it: the app already had a second count, on the rail, built on thread_reads
+ * and cleared by opening the room. So two numbers claimed to say how much was
+ * waiting in the same room, and they disagreed in the way most likely to be
+ * noticed — you read a message, the rail went quiet, and the chip on the room
+ * kept its 1. Reported as "after messages are read, it still stays unread",
+ * which is exactly what it looked like.
+ *
+ * This codebase has been bitten by two pieces of code answering one question
+ * often enough to know how it ends. So there is one answer now, and it is the
+ * one a number on a chip universally means: things you have not seen. It reads
+ * from thread_reads, the same table the rail reads, stamped by the same act of
+ * opening the thread.
  */
 
 /**
@@ -35,7 +47,7 @@ function preview(last) {
   return `Voice note · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 }
 
-/** { lastMessage, unanswered } for one thread, as one person sees it. */
+/** { lastMessage, unread } for one thread, as one person sees it. */
 async function summarise(threadId, viewerId) {
   const last = await db.prepare(`
     SELECT m.id, m.body, m.created_at, u.name AS author_name, v.duration_ms
@@ -46,15 +58,17 @@ async function summarise(threadId, viewerId) {
     ORDER BY m.created_at DESC LIMIT 1
   `).get(threadId);
 
-  const mine = await db.prepare(`
-    SELECT created_at FROM messages WHERE thread_id = ? AND author_id = ?
-    ORDER BY created_at DESC LIMIT 1
-  `).get(threadId, viewerId);
-
+  // Never your own words: nobody has unread messages they wrote themselves.
+  // A room never opened has no row here, and everything in it counts — which
+  // is right, and is why the join is LEFT.
   const since = await db.prepare(`
-    SELECT COUNT(*) AS n FROM messages
-    WHERE thread_id = ? AND author_id != ? AND created_at > ?
-  `).get(threadId, viewerId, mine?.created_at || '');
+    SELECT COUNT(*) AS n
+    FROM messages m
+    LEFT JOIN thread_reads r ON r.thread_id = m.thread_id AND r.user_id = ?
+    WHERE m.thread_id = ?
+      AND m.author_id != ?
+      AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
+  `).get(viewerId, threadId, viewerId);
 
   return {
     lastMessage: last ? {
@@ -63,7 +77,7 @@ async function summarise(threadId, viewerId) {
       authorName: last.author_name,
       at: last.created_at,
     } : null,
-    unanswered: Number(since?.n || 0),
+    unread: Number(since?.n || 0),
   };
 }
 

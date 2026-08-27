@@ -146,8 +146,8 @@ export default function Workspace() {
                           </span>
                         )
                         : <span className="hint">Say something quick</span>}
-                      {p.directLine.unanswered > 0 && (
-                        <span className="count-pill">{p.directLine.unanswered}</span>
+                      {p.directLine.unread > 0 && (
+                        <span className="count-pill">{p.directLine.unread}</span>
                       )}
                     </Link>
                   )}

@@ -1,5 +1,6 @@
 const db = require('./db');
 const { knock } = require('./knock');
+const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
 
 // Deadline reminders for tasks, project stages, appointments and expiring
@@ -154,19 +155,31 @@ async function sweepStages(now) {
  * — which is the exact case a scheduling product exists to cover. The office
  * knew the meeting was at four and never once said so out loud.
  *
- * ONE NUDGE, THIRTY MINUTES OUT, and both halves of that are deliberate. A
- * meeting has no "overdue": telling somebody their four o'clock started an
- * hour ago is a report of a failure. And thirty minutes is the last moment the
- * warning is still worth acting on — long enough to wind up what you are
- * doing and be somewhere, short enough that it is not forgotten again by the
- * time it matters. When somebody has to travel, the itinerary's own cascade
- * already carries that; this is about the meeting, not the journey.
+ * TWO RUNGS, FOR TWO DIFFERENT PEOPLE, and that is the point of the split.
  *
- * The principal only. Their assistants have the same appointment on their own
- * screens, and buzzing three people for one four o'clock is how an office
+ *   A DAY AHEAD, THE BOOKER. Somebody coming to see a principal has to plan
+ *   around it, and may have to travel — a warning half an hour out is no use
+ *   to them at all. They have no Kairos account, so this is email, and it
+ *   carries the link that lets them move or cancel rather than making them
+ *   write and ask. This was missing entirely: the office was told and the
+ *   person coming was not, which is the wrong way round for the party with
+ *   further to come.
+ *
+ *   HALF AN HOUR OUT, THE PRINCIPAL. The last moment the warning is still
+ *   worth acting on — long enough to wind up what you are doing and be
+ *   somewhere, short enough not to be forgotten again by the time it matters.
+ *   Their own diary is the day-ahead view; they do not need an email about it.
+ *
+ * A meeting has no "overdue" rung: telling somebody their four o'clock started
+ * an hour ago is a report of a failure rather than a chance to prevent one.
+ *
+ * The principal only, not their assistants — the same appointment is on their
+ * screens too, and buzzing three people for one four o'clock is how an office
  * learns to ignore the buzz.
  */
 const APPOINTMENT_LEAD_MS = 30 * 60 * 1000;
+const BOOKER_LEAD_MS = 24 * 60 * 60 * 1000;
+const APPOINTMENT_LADDER = ['day', 'soon'];
 
 async function sweepAppointments(now) {
   const rows = await db.prepare(`
@@ -175,29 +188,60 @@ async function sweepAppointments(now) {
     FROM bookings b
     JOIN users u ON u.id = b.owner_id
     LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id
-    WHERE b.status = 'confirmed' AND b.reminder_stage IS NULL
+    WHERE b.status = 'confirmed'
+      AND (b.reminder_stage IS NULL OR b.reminder_stage != 'soon')
   `).all();
 
   let sent = 0;
   for (const b of rows) {
     const start = new Date(b.start_at).getTime();
     if (Number.isNaN(start)) continue;
-    // Not yet worth saying, or already begun — a booking created after its own
-    // start time (a PA writing up what happened) must not buzz about it.
-    if (start - now > APPOINTMENT_LEAD_MS || start <= now) continue;
+    // Already begun — a booking written up after the fact (a PA recording what
+    // happened this morning) must not announce itself.
+    if (start <= now) continue;
+    const until = start - now;
 
-    const mins = Math.max(1, Math.round((start - now) / 60000));
-    await knock({
-      toUserId: b.owner_id,
-      ownerId: b.owner_id,
-      category: 'transactional',
-      subject: `In ${mins} minutes: ${b.meeting_name || 'appointment'}`,
-      line: `${b.meeting_name || 'An appointment'} with ${b.booker_name} starts at `
-        + `${formatForEmail(b.start_at, b.owner_timezone || 'UTC')}.`,
-      url: `/appointments/${b.owner_id}/${b.id}`,
-      tag: `booking-${b.id}`,
-    });
-    await db.prepare('UPDATE bookings SET reminder_stage = ? WHERE id = ?').run('soon', b.id);
+    const band = until <= APPOINTMENT_LEAD_MS ? 'soon'
+      : until <= BOOKER_LEAD_MS ? 'day'
+        : null;
+    if (!shouldSend(band, b.reminder_stage, APPOINTMENT_LADDER)) continue;
+
+    if (band === 'day') {
+      // The person coming, not the office. No account, so email only — and it
+      // carries the way to move or cancel, because "reply to ask" is how a
+      // clashing diary becomes a no-show.
+      if (!String(b.booker_email || '').trim()) {
+        // Nobody to tell. Still stamped, or every sweep for the next
+        // twenty-three hours reconsiders a booking with nowhere to send.
+        await db.prepare('UPDATE bookings SET reminder_stage = ? WHERE id = ?').run('day', b.id);
+        continue;
+      }
+      await sendEmail({
+        ownerId: b.owner_id,
+        toEmail: b.booker_email,
+        category: 'transactional',
+        subject: `Tomorrow: your meeting with ${b.owner_name}`,
+        body: `Hi ${b.booker_name},\n\nThis is a reminder of your meeting with `
+          + `${b.owner_name}.\n\nWhen: `
+          + `${formatForEmail(b.start_at, b.booker_timezone || 'UTC')} `
+          + `(${b.booker_timezone || 'UTC'})\n\n`
+          + `Move or cancel it: /book/manage/${b.id}`,
+      });
+    } else {
+      const mins = Math.max(1, Math.round(until / 60000));
+      await knock({
+        toUserId: b.owner_id,
+        ownerId: b.owner_id,
+        category: 'transactional',
+        subject: `In ${mins} minutes: ${b.meeting_name || 'appointment'}`,
+        line: `${b.meeting_name || 'An appointment'} with ${b.booker_name} starts at `
+          + `${formatForEmail(b.start_at, b.owner_timezone || 'UTC')}.`,
+        url: `/appointments/${b.owner_id}/${b.id}`,
+        tag: `booking-${b.id}`,
+      });
+    }
+
+    await db.prepare('UPDATE bookings SET reminder_stage = ? WHERE id = ?').run(band, b.id);
     sent += 1;
   }
   return sent;
@@ -292,5 +336,6 @@ async function startReminderSweep() {
 
 module.exports = {
   runReminderSweep, startReminderSweep, dueBand, expiryBand, leadFor,
-  LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, DOC_SOON_DAYS, DOC_URGENT_DAYS,
+  LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, BOOKER_LEAD_MS,
+  DOC_SOON_DAYS, DOC_URGENT_DAYS,
 };
