@@ -1233,7 +1233,13 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 /* A masked value should look withheld, not merely small. */
 .ess-value.is-masked { color: var(--text-muted); letter-spacing: 0.08em; }
 .ess-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; }
-.ess-buttons { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
+/* Deliberately NOT flex-shrink: 0, which is what it used to be.
+   flex-wrap here is useless while the column is locked against shrinking: a
+   flex item that cannot shrink is sized at max-content — all four verbs on one
+   line — so it is never narrow enough for its own wrap to fire. It fit at 360px
+   with three verbs and spilled 18px the moment Archive became the fourth.
+   Letting it shrink is what lets it wrap; nothing on .ess-row needed to change. */
+.ess-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .ess-secret {
   background: var(--bg);
   border: 1px solid var(--border);
