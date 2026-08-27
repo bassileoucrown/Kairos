@@ -222,7 +222,7 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
 
       {/* ---- A day, hour by hour ---- */}
       {entries !== null && view === 'day' && (
-        <DayView day={anchor} entries={byDay.get(anchor) || []} zone={zone} />
+        <DayView day={anchor} entries={byDay.get(anchor) || []} zone={zone} subjectId={subjectId} />
       )}
 
       {/* ---- A week: seven columns with room, seven sections without ---- */}
@@ -346,7 +346,7 @@ function Row({ entry: b, zone, subjectId }) {
  * midnight to midnight: twenty-four rows to show two meetings is a scroll
  * nobody asked for.
  */
-function DayView({ day, entries, zone }) {
+function DayView({ day, entries, zone, subjectId }) {
   const hours = useMemo(() => {
     let first = 8;
     let last = 18;
