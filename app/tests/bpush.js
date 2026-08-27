@@ -20,6 +20,7 @@
 const ROOT = require('path').join(__dirname, '..', '..');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4573, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
@@ -212,6 +213,7 @@ function client() {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
 
+  let browserUI = null;
   try {
     for (;;) {
       try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) break; }
@@ -309,10 +311,69 @@ function client() {
     ok('the message still lands', sent.s === 201, JSON.stringify(sent.d));
     ok('and is readable', (await pa('GET', `/threads/${threadId}/messages`))
       .d.messages.some((m) => m.body === "Car's outside."));
+
+    // ---- The screen somebody actually goes looking for -------------------
+    //
+    // WHY THIS IS HERE. Everything above proves Kairos can reach a pocket. It
+    // proves nothing about whether a person can FIND the switch — and the card
+    // used to return null whenever the browser reported no support, so
+    // somebody who had set the keys, installed the app and gone looking for
+    // notifications found an empty space where the setting should be. Nothing
+    // distinguishes that from a feature that was never built.
+    //
+    // Worse, the early return sat in front of the iOS explanation: Safari in a
+    // tab has no Notification object at all, so the words written for exactly
+    // those people could never be reached by them.
+    head('The notifications setting is findable, whatever the browser can do:');
+    const login = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: `ada${ID}@x.com`, password: PW }),
+    });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    browserUI = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+    });
+    const ctx = await browserUI.newContext({ viewport: { width: 390, height: 844 } });
+    const [ck, cv] = cookie.split('=');
+    await ctx.addCookies([{ name: ck, value: cv, domain: '127.0.0.1', path: '/' }]);
+
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/dashboard?tab=settings`);
+    await page.waitForSelector('.card', { timeout: 20000 });
+    const settings = await page.locator('body').innerText();
+    // The word people search a settings screen for. "Alerts" is accurate and
+    // is not what anybody scans for.
+    ok('the card is on the settings screen, by the name people look for',
+      /Notifications on this device/.test(settings), settings.slice(0, 300));
+    // Three conditions have to be true and only one of them is the browser's.
+    // "Notifications are off" is a useless answer; which one is missing is not.
+    ok('and says which of the conditions is not met yet',
+      /Keys set on this deployment/.test(settings)
+      && /Opened from the installed app/.test(settings)
+      && /allowed to notify/.test(settings), settings.slice(0, 400));
+
+    // THE REGRESSION THIS EXISTS FOR. A browser with no Push API is exactly
+    // what an iPhone looks like before the app is on the home screen.
+    const blind = await ctx.newPage();
+    await blind.addInitScript(() => {
+      delete window.PushManager;
+      delete window.Notification;
+    });
+    await blind.goto(`${BASE}/dashboard?tab=settings`);
+    await blind.waitForSelector('.card', { timeout: 20000 });
+    const blindText = await blind.locator('body').innerText();
+    ok('a browser that cannot do it still SEES the setting rather than a gap',
+      /Notifications on this device/.test(blindText), blindText.slice(0, 300));
+    ok('and is told why, instead of being left to guess',
+      /cannot receive notifications/.test(blindText), blindText.slice(0, 400));
+    ok('and is told it is not their account that is wrong',
+      /Nothing is wrong with your account/.test(blindText));
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
+    if (browserUI) await browserUI.close().catch(() => {});
     proc.kill();
   }
 

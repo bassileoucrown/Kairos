@@ -22,6 +22,19 @@ import { BRAND_SHORT } from '../lib/brand.js';
  * database; see lib/push.js. This card asks the browser every time it renders,
  * so somebody who revokes permission in their browser settings finds this card
  * agreeing with them rather than insisting.
+ *
+ * IT NEVER DISAPPEARS, and that is a correction. This used to return null when
+ * the browser reported no support, which produced the worst possible screen: a
+ * person who had set the keys, installed the app and come looking for
+ * notifications found NOTHING WHERE NOTIFICATIONS SHOULD BE, and no way to
+ * tell a missing feature from an unmet condition. It also made the iOS message
+ * below unreachable — Safari in a tab has no Notification object at all, so
+ * the check for "add it to the home screen first" sat behind an early return
+ * that fired first, every time, for exactly the people it was written for.
+ *
+ * Push is the one feature here whose failure is completely silent: nothing
+ * arriving looks exactly like nothing happening. A card that hides itself is
+ * that same silence one level up.
  */
 export default function PushSetup() {
   const [state, setState] = useState(() => pushState());
@@ -84,18 +97,21 @@ export default function PushSetup() {
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
 
-  if (state === 'unsupported') return null;
-
   const on = state === 'granted' && subscribed;
   // iOS grants nothing to a page in a tab: notifications there require the app
   // to have been added to the home screen first. Offering the button anyway
-  // produces a silent failure that looks like a bug in Kairos.
+  // produces a silent failure that looks like a bug in Kairos. Checked BEFORE
+  // support, because on iOS "no support" and "not installed yet" are the same
+  // observation and only one of them is worth telling somebody about.
   const iosNeedsInstall = isIos() && !isInstalled();
 
   return (
     <div className="card">
+      {/* "Notifications" is the word people come looking for. It used to say
+          only "Alerts", which is accurate and is not what anybody searches a
+          settings screen for. */}
       <div className="name">
-        Alerts on this device{' '}
+        Notifications on this device{' '}
         {on
           ? <span className="pill">On</span>
           : <span className="pill is-off">Off</span>}
@@ -112,7 +128,20 @@ export default function PushSetup() {
       {iosNeedsInstall ? (
         <p className="hint">
           On iPhone and iPad, notifications only work once {BRAND_SHORT} has been added to
-          the home screen. Add it first — the card above says how — then come back here.
+          the home screen <strong>and opened from that icon</strong> rather than from a
+          browser tab. Add it first — the card above says how — then open {BRAND_SHORT} from
+          the home screen and come back here.
+        </p>
+      ) : state === 'unsupported' ? (
+        // Said rather than hidden. Everything that lands here is a browser
+        // genuinely missing a piece — a desktop browser too old for the Push
+        // API, a webview, a private window on some builds — and a person who
+        // came to this screen deserves the reason rather than a gap.
+        <p className="hint">
+          This browser cannot receive notifications — it is missing the parts
+          {' '}{BRAND_SHORT} needs (a service worker, the Push API, and permission to
+          notify). Opening {BRAND_SHORT} in Chrome, Edge, Firefox, or Safari on an
+          up-to-date phone will offer it. Nothing is wrong with your account.
         </p>
       ) : config && !config.configured ? (
         <p className="hint">
@@ -143,6 +172,22 @@ export default function PushSetup() {
             ? 'One device on this account is set to receive alerts.'
             : `${config.devices.length} devices on this account are set to receive alerts.`}
         </p>
+      )}
+
+      {/* THE THREE THINGS THAT ALL HAVE TO BE TRUE, each said plainly.
+          Getting a phone to buzz depends on a deployment setting, an install
+          step and a browser permission, and when it does not work the useless
+          answer is "notifications are off". This says WHICH one is missing, so
+          the next move is obvious rather than a hunt. */}
+      {!on && (
+        <ul className="hint push-checklist">
+          <li>{config?.configured ? '✓' : '·'} Keys set on this deployment
+            {config?.configured ? '' : ' — generated under Security'}</li>
+          <li>{isInstalled() ? '✓' : '·'} Opened from the installed app
+            {isInstalled() ? '' : ' — not a browser tab'}</li>
+          <li>{state === 'granted' ? '✓' : '·'} This browser allowed to notify
+            {state === 'denied' ? ' — refused; change it in the browser’s own settings for this address' : ''}</li>
+        </ul>
       )}
     </div>
   );

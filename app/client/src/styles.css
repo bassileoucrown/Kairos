@@ -416,6 +416,12 @@ textarea { resize: vertical; min-height: 70px; }
 .task-row.is-done .task-title { text-decoration: line-through; }
 .task-check { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
 
+/* The three conditions a phone alert depends on, listed rather than summarised.
+   A tick and a dot rather than colour alone: this is read at a glance on a
+   phone, and "which one is missing" must survive a greyscale screenshot. */
+.push-checklist { list-style: none; margin: 10px 0 0; padding: 0; }
+.push-checklist li { margin: 2px 0; }
+
 /* --- Steps inside a task ---------------------------------------------------
    Below the row, never beside it. .task-row is a flex line, so a third child
    would sit as a second column of work — which is the reading this whole
