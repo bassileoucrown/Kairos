@@ -476,6 +476,20 @@ CREATE TABLE IF NOT EXISTS tasks (
   project_id        TEXT REFERENCES projects(id) ON DELETE CASCADE,
   stage_id          TEXT REFERENCES project_stages(id) ON DELETE CASCADE,
   source_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  -- A step inside another task, and the reason this is a task rather than a
+  -- checklist row: a step still gets given to somebody and still falls due. A
+  -- separate lighter table would have meant either duplicating the assignee,
+  -- the date and the reminder ladder, or telling people their steps could not
+  -- have any — and "email the surveyor by Thursday, Ngozi" is the most ordinary
+  -- sentence in this product.
+  --
+  -- ONE LEVEL, enforced in routes/tasks.js: a subtask cannot itself have
+  -- subtasks. Depth beyond one is a project with stages, which this app already
+  -- has, and an unbounded tree is a thing nobody can see the shape of.
+  --
+  -- Cascade rather than SET NULL: a step exists only as part of its task, and
+  -- deleting the task must not leave orphans loose in the space's list.
+  parent_task_id    TEXT REFERENCES tasks(id) ON DELETE CASCADE,
   title             TEXT NOT NULL,
   assignee_id       TEXT REFERENCES users(id),
   created_by        TEXT NOT NULL REFERENCES users(id),
@@ -489,6 +503,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_space ON tasks(space_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id, status);
 CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 
 CREATE TABLE IF NOT EXISTS message_acks (
   id         TEXT PRIMARY KEY,

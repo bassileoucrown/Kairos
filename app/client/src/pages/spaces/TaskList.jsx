@@ -31,8 +31,115 @@ function dueLabel(dueAt) {
   return new Date(dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/**
+ * The steps inside one task.
+ *
+ * A STEP IS A TASK, not a checklist row, because a step still gets given to
+ * somebody and still falls due — "email the surveyor by Thursday, Ngozi" is
+ * the most ordinary sentence in this product. So the same @ that hands over a
+ * task hands over a step, resolved on the server exactly the same way.
+ *
+ * Drawn much lighter than its parent all the same. A step carries no priority
+ * and no status dropdown: four controls per step turns a task with five of
+ * them into thirty things to look at, and the point of breaking a task up is
+ * to see it more clearly, not less.
+ */
+function Steps({ task, onChanged, viewerId, canWrite }) {
+  const [adding, setAdding] = useState('');
+  const [busy, setBusy] = useState(false);
+  // Same rule as the tasks above, and for the same reason: these boxes are
+  // fully controlled by server state, so without holding the intended value
+  // locally the tick springs back until the round-trip lands — which reads as
+  // a checkbox that does not work.
+  const [pending, setPending] = useState({});
+  const steps = (task.subtasks || []).map((k) => ({ ...k, ...(pending[k.id] || {}) }));
+  const total = steps.length;
+  const done = steps.filter((k) => k.status === 'done').length;
+
+  async function add(e) {
+    e.preventDefault();
+    if (!adding.trim() || busy) return;
+    setBusy(true);
+    try {
+      await api.post('/tasks', { parentTaskId: task.id, title: adding });
+      setAdding('');
+      await onChanged();
+    } finally { setBusy(false); }
+  }
+
+  async function tick(step, isDone) {
+    const status = isDone ? 'done' : 'open';
+    setPending((p) => ({ ...p, [step.id]: { status } }));
+    try {
+      await api.patch(`/tasks/${step.id}`, { status });
+      await onChanged();
+    } finally {
+      setPending((p) => { const next = { ...p }; delete next[step.id]; return next; });
+    }
+  }
+
+  return (
+    <div className="task-steps">
+      {total > 0 && (
+        <div className="task-steps-count">
+          {done} of {total} step{total === 1 ? '' : 's'} done
+        </div>
+      )}
+      <ul className="task-step-list">
+        {steps.map((k) => {
+          const due = dueState(k.dueAt, k.status);
+          return (
+            <li key={k.id} className={`task-step${k.status === 'done' ? ' is-done' : ''}`}>
+              <input
+                type="checkbox"
+                className="task-check"
+                checked={k.status === 'done'}
+                aria-label={`Mark step ${k.title} done`}
+                onChange={(e) => tick(k, e.target.checked)}
+              />
+              <span className="task-step-title">
+                <MentionText body={k.title} mentions={k.mentions} viewerId={viewerId} />
+              </span>
+              <span className="task-step-meta">
+                {k.assigneeName || 'Unassigned'}
+                {k.dueAt && (
+                  <span className={due ? ` task-due is-${due}` : ' task-due'}>
+                    {' · '}{due === 'overdue' ? 'Overdue ' : 'Due '}{dueLabel(k.dueAt)}
+                  </span>
+                )}
+              </span>
+              {canWrite && (
+                <button
+                  className="btn btn-danger btn-sm" type="button"
+                  aria-label={`Delete step ${k.title}`}
+                  onClick={async () => { await api.del(`/tasks/${k.id}`); await onChanged(); }}
+                >×</button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {canWrite && (
+        <form className="task-step-add" onSubmit={add}>
+          <input
+            type="text"
+            value={adding}
+            onChange={(e) => setAdding(e.target.value)}
+            placeholder="Add a step — @ to name someone"
+            aria-label={`Add a step to ${task.title}`}
+          />
+          <button className="btn btn-secondary btn-sm" type="submit" disabled={!adding.trim() || busy}>
+            Add step
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 export default function TaskList({
   tasks, onChanged, showContext = false, emptyText = 'No tasks yet.', viewerId = null,
+  canWrite = false, stages = null, onMoveStage = null,
 }) {
   // Ticking a checkbox should feel instant. These controls are fully
   // controlled by server state, so without holding the intended value locally
@@ -88,7 +195,13 @@ export default function TaskList({
                   </>
                 )}
                 {t.stageName && <>{t.stageName} · </>}
+                {/* A step read outside its task is a sentence with its subject
+                    missing, and My Tasks shows steps flat on purpose. */}
+                {t.parentTitle && <>part of “{t.parentTitle}” · </>}
                 {t.assigneeName ? `${t.assigneeName}` : 'Unassigned'}
+                {t.steps?.total > 0 && (
+                  <> · {t.steps.done} of {t.steps.total} steps</>
+                )}
                 {t.dueAt && (
                   <span className={due ? ` task-due is-${due}` : ' task-due'}>
                     {' · '}{due === 'overdue' ? 'Overdue ' : 'Due '}{dueLabel(t.dueAt)}
@@ -131,9 +244,31 @@ export default function TaskList({
               >
                 {PRIORITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
+              {/* Only where a caller hands over the stages — the project screen.
+                  My Tasks spans every space at once, and a dropdown of one
+                  project's stages beside a task from another would be a way to
+                  file work somewhere it does not belong. */}
+              {stages && onMoveStage && (
+                <select
+                  aria-label={`Stage for ${t.title}`}
+                  value={t.stageId || ''}
+                  onChange={(e) => onMoveStage(t.id, e.target.value || null)}
+                  style={{ width: 'auto', fontSize: '0.78rem', padding: '4px 6px' }}
+                >
+                  <option value="">No stage</option>
+                  {stages.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+                </select>
+              )}
               <button className="btn btn-danger btn-sm" type="button"
                 aria-label={`Delete ${t.title}`} onClick={() => remove(t.id)}>×</button>
             </div>
+
+            {/* Below the row rather than beside it: the steps belong to this
+                task and reading them as a second column of work is exactly the
+                confusion that made a five-step task look like five. */}
+            {(canWrite || (t.subtasks || []).length > 0) && (
+              <Steps task={t} onChanged={onChanged} viewerId={viewerId} canWrite={canWrite} />
+            )}
           </li>
         );
       })}

@@ -20,6 +20,10 @@ export default function ProjectDetail() {
   const [stageDue, setStageDue] = useState('');
   const [tasks, setTasks] = useState([]);
   const [taskTitle, setTaskTitle] = useState('');
+  // Which stage the next task goes on. Defaulted below to the first stage that
+  // is actually being worked on, because "no stage" was the old behaviour and
+  // it is the one answer that put the task nowhere.
+  const [taskStage, setTaskStage] = useState('');
   const taskRef = useRef(null);
 
   function load() {
@@ -34,7 +38,13 @@ export default function ProjectDetail() {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/tasks', { spaceId: data.space.id, projectId, title: taskTitle });
+      // stageId rather than projectId: the stage names its own project, so
+      // sending both is two answers to one question. Sending NEITHER is what
+      // this box used to do, which is how tasks added on the screen that shows
+      // the stages ended up belonging to none of them.
+      await api.post('/tasks', taskStage
+        ? { stageId: taskStage, title: taskTitle }
+        : { spaceId: data.space.id, projectId, title: taskTitle });
       setTaskTitle('');
       load();
     } catch (err) { setError(err.message); }
@@ -67,6 +77,27 @@ export default function ProjectDetail() {
 
   const { project, space, stages, canWrite } = data;
   const doneCount = stages.filter((s) => s.status === 'done').length;
+
+  /**
+   * The project's work, filed under the stage it belongs to.
+   *
+   * This screen used to draw the stages in one box and then EVERY task in a
+   * second flat one, so nothing on it showed a task belonging to a stage —
+   * which is what made a stage look like a thing that stands on its own. It is
+   * not: a stage is a phase of the work, and the work is these tasks.
+   *
+   * The leftovers keep their own heading rather than being hidden or forced
+   * onto a stage. Tasks made from a message in the project's own thread have
+   * no stage, and pretending otherwise would file somebody's work by guess.
+   */
+  const byStage = new Map(stages.map((s) => [s.id, []]));
+  const unplaced = [];
+  for (const t of tasks) {
+    if (t.stageId && byStage.has(t.stageId)) byStage.get(t.stageId).push(t);
+    else unplaced.push(t);
+  }
+  const moveStage = (taskId, stageId) => act(() => api.patch(`/tasks/${taskId}`, { stageId }));
+  const stagePicker = canWrite ? stages : null;
 
   return (
     <AppShell
@@ -140,12 +171,40 @@ export default function ProjectDetail() {
                   </>
                 )}
               </div>
+
+              {/* The stage's own work, under the stage. */}
+              <div className="stage-tasks">
+                <TaskList
+                  tasks={byStage.get(s.id) || []}
+                  onChanged={load}
+                  canWrite={canWrite}
+                  stages={stagePicker}
+                  onMoveStage={moveStage}
+                  emptyText="Nothing on this stage yet."
+                />
+              </div>
             </li>
           ))}
         </ol>
 
-        <h3 style={{ marginTop: 30 }}>Tasks</h3>
-        <TaskList tasks={tasks} onChanged={load} emptyText="No tasks on this project yet." />
+        {/* NOT HIDDEN AND NOT GUESSED ONTO A STAGE. A task made from a message
+            in the project's thread arrives with no stage, and the honest place
+            for it is a heading of its own with the picker right there. */}
+        {unplaced.length > 0 && (
+          <>
+            <h3 style={{ marginTop: 30 }}>Not yet on a stage</h3>
+            <TaskList
+              tasks={unplaced}
+              onChanged={load}
+              canWrite={canWrite}
+              stages={stagePicker}
+              onMoveStage={moveStage}
+              emptyText="Nothing waiting to be placed."
+            />
+          </>
+        )}
+
+        <h3 style={{ marginTop: 30 }}>Add a task</h3>
         {canWrite && (
           <form onSubmit={addTask} className="card" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
             <div className="mention-anchor" style={{ flex: 1, minWidth: 200 }}>
@@ -166,6 +225,15 @@ export default function ProjectDetail() {
                 textareaRef={taskRef}
               />
             </div>
+            <select
+              aria-label="Stage for the new task"
+              value={taskStage}
+              onChange={(e) => setTaskStage(e.target.value)}
+              style={{ width: 'auto' }}
+            >
+              <option value="">No stage yet</option>
+              {stages.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+            </select>
             <button className="btn btn-primary btn-sm" type="submit">Add task</button>
           </form>
         )}

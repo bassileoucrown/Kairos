@@ -17,6 +17,7 @@ const SELECT_TASK = `
          s.name AS space_name, s.context AS space_context,
          p.name AS project_name, st.name AS stage_name,
          th.id AS source_thread_id,
+         pt.title AS parent_title,
          pi.id AS source_pad_item_id
   FROM tasks t
   LEFT JOIN users u ON u.id = t.assignee_id
@@ -26,6 +27,9 @@ const SELECT_TASK = `
   LEFT JOIN project_stages st ON st.id = t.stage_id
   LEFT JOIN messages msg ON msg.id = t.source_message_id
   LEFT JOIN threads th ON th.id = msg.thread_id
+  -- The task this one is a step of, for the sake of My Tasks: a step read
+  -- outside its parent is a sentence with its subject missing.
+  LEFT JOIN tasks pt ON pt.id = t.parent_task_id
   -- The other door in. A task promoted from the pad carries no source message
   -- — that is the whole point of the pad, a thought captured before it knows
   -- which room it belongs to — so the link back lives on the pad line, which
@@ -53,6 +57,15 @@ function serialize(t, found) {
     projectName: t.project_name,
     stageId: t.stage_id,
     stageName: t.stage_name,
+    // A step, and the task it is a step of. The title comes with it because
+    // My Tasks spans every space and shows steps alongside whole tasks — and
+    // "Chase the surveyor" on its own does not say what it is part of.
+    parentTaskId: t.parent_task_id || null,
+    parentTitle: t.parent_title || null,
+    // Filled in by withSteps for the lists that nest. Always present, so a
+    // renderer never has to tell "no steps" from "not asked for".
+    subtasks: [],
+    steps: { done: 0, total: 0 },
     // Where the talking about this happens. A task is not a conversation and
     // should never try to be one — it is a title, an owner and a date — but it
     // must always be able to say where the conversation is, or assigning work
@@ -92,6 +105,44 @@ async function serializeAll(rows, viewerId) {
     tasks.forEach((t, i) => out.set(t.id, found[i]));
   }
   return rows.map((t) => serialize(t, out.get(t.id)));
+}
+
+/**
+ * Hang each task's steps under it, and count them.
+ *
+ * TOP LEVEL MEANS TOP LEVEL. The scoped lists — a space, a project, a stage —
+ * show whole tasks with their steps underneath, never steps loose among them:
+ * a five-step task would otherwise be six rows that all look equally like work
+ * somebody has been given, and the board would read as five times the load.
+ *
+ * My Tasks does the opposite, deliberately. A step assigned to you IS your
+ * work, and the one list that answers "what have I got" must not hide it
+ * because somebody happened to file it inside something. It arrives flat there,
+ * carrying its parent's title.
+ */
+async function withSteps(parents, viewerId) {
+  if (parents.length === 0) return [];
+  const ids = parents.map((t) => t.id);
+  const kids = await db.prepare(`
+    ${SELECT_TASK} WHERE t.parent_task_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY t.created_at ASC
+  `).all(...ids);
+
+  const shaped = await serializeAll([...parents, ...kids], viewerId);
+  const byId = new Map(shaped.map((t) => [t.id, t]));
+  const out = [];
+  for (const t of shaped) {
+    if (!t.parentTaskId) { out.push(t); continue; }
+    const owner = byId.get(t.parentTaskId);
+    if (owner) owner.subtasks.push(t);
+  }
+  for (const t of out) {
+    t.steps = {
+      done: t.subtasks.filter((k) => k.status === 'done').length,
+      total: t.subtasks.length,
+    };
+  }
+  return out;
 }
 
 async function loadTask(req, res, next) {
@@ -146,25 +197,66 @@ router.get('/', async (req, res) => {
   if (projectId) { where.push('t.project_id = ?'); values.push(projectId); }
   if (stageId) { where.push('t.stage_id = ?'); values.push(stageId); }
 
+  // Steps are fetched by withSteps and hung under their task, so they are
+  // excluded here rather than filtered afterwards: a stage with four tasks of
+  // five steps each should be four rows and four queries, not twenty-four rows
+  // whittled down in memory.
+  where.push('t.parent_task_id IS NULL');
+
   const rows = await db.prepare(`${SELECT_TASK} WHERE ${where.join(' AND ')} ORDER BY
     CASE t.status WHEN 'done' THEN 1 ELSE 0 END,
     CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,
     t.due_at ASC, t.created_at DESC
   `).all(...values);
-  res.json({ tasks: await serializeAll(rows, req.user.id) });
+  res.json({ tasks: await withSteps(rows, req.user.id) });
 });
 
 router.post('/', async (req, res) => {
-  const { spaceId, projectId, stageId, sourceMessageId, title, assigneeId, dueAt, priority } = req.body || {};
+  const {
+    spaceId, projectId, stageId, sourceMessageId, parentTaskId,
+    title, assigneeId, dueAt, priority,
+  } = req.body || {};
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'Give the task a title.' });
 
-  // A task made from a message inherits its space and stage from that message,
-  // so the caller can't smuggle work into a space they can't reach.
+  /**
+   * WHERE THE TASK LIVES, decided once.
+   *
+   * Three doors lead here — a step inside another task, a line somebody said
+   * in a thread, and a box on a project or stage screen — and each of them
+   * knows the answer in a different way. Working it out per door is how the
+   * three drift: the project box used to send no stage at all, so tasks added
+   * on the screen that shows the stages belonged to none of them, which is a
+   * large part of why a stage looked like it stood alone.
+   *
+   * The inherited cases win outright rather than being merged with what the
+   * caller sent. A step belongs where its parent belongs; a task made from a
+   * message belongs where the message was said. Otherwise a caller could name
+   * a stage in a space they cannot reach and smuggle work into it.
+   */
   let resolvedSpaceId = spaceId;
   let resolvedStageId = stageId || null;
   let resolvedProjectId = projectId || null;
+  let parent = null;
 
-  if (sourceMessageId) {
+  if (parentTaskId) {
+    parent = await db.prepare('SELECT * FROM tasks WHERE id = ?').get(parentTaskId);
+    if (!parent) return res.status(404).json({ error: 'That task no longer exists.' });
+    if (!await resolveAccess(parent.space_id, req.user.id)) {
+      return res.status(404).json({ error: 'That task no longer exists.' });
+    }
+    // ONE LEVEL. Depth beyond a step is a project with stages, which this app
+    // already has, and a tree nobody can see the shape of is how a list of
+    // work stops being a list of work.
+    if (parent.parent_task_id) {
+      return res.status(400).json({
+        error: 'A step cannot have steps of its own. Break the task up differently, '
+          + 'or make this a task of its own on the same stage.',
+      });
+    }
+    resolvedSpaceId = parent.space_id;
+    resolvedProjectId = parent.project_id;
+    resolvedStageId = parent.stage_id;
+  } else if (sourceMessageId) {
     const src = await db.prepare(`
       SELECT th.space_id, th.project_id, th.stage_id FROM messages m
       JOIN threads th ON th.id = m.thread_id WHERE m.id = ?
@@ -173,6 +265,22 @@ router.post('/', async (req, res) => {
     resolvedSpaceId = src.space_id;
     resolvedStageId = src.stage_id;
     resolvedProjectId = src.project_id;
+  } else if (resolvedStageId) {
+    // A stage names its own project, so asking the caller for both is asking
+    // for two answers to one question — and the pair can disagree.
+    const st = await db.prepare(`
+      SELECT s.id, s.project_id, p.space_id FROM project_stages s
+      JOIN projects p ON p.id = s.project_id WHERE s.id = ?
+    `).get(resolvedStageId);
+    if (!st) return res.status(404).json({ error: 'Stage not found.' });
+    resolvedProjectId = st.project_id;
+    // Checked, not trusted. Nothing else here proves the stage is in the space
+    // the caller named, and without this a stage id is a way into a project in
+    // a space they can reach — carrying work with it.
+    if (resolvedSpaceId && resolvedSpaceId !== st.space_id) {
+      return res.status(400).json({ error: 'That stage belongs to another space.' });
+    }
+    resolvedSpaceId = st.space_id;
   }
 
   const access = resolvedSpaceId && await resolveAccess(resolvedSpaceId, req.user.id);
@@ -224,10 +332,11 @@ router.post('/', async (req, res) => {
 
   const id = crypto.randomUUID();
   await db.prepare(`
-    INSERT INTO tasks (id, space_id, project_id, stage_id, source_message_id, title,
-                       assignee_id, created_by, due_at, priority, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
+    INSERT INTO tasks (id, space_id, project_id, stage_id, source_message_id, parent_task_id,
+                       title, assignee_id, created_by, due_at, priority, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
   `).run(id, resolvedSpaceId, resolvedProjectId, resolvedStageId, sourceMessageId || null,
+    parent?.id || null,
     String(title).trim().slice(0, 300), wanted, req.user.id,
     dueAt || null, priority || 'normal', new Date().toISOString());
 
@@ -245,9 +354,48 @@ router.post('/', async (req, res) => {
 
 router.patch('/:taskId', loadTask, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
-  const { title, status, priority, dueAt, assigneeId } = req.body || {};
+  const { title, status, priority, dueAt, assigneeId, stageId } = req.body || {};
   const updates = [];
   const values = [];
+
+  /**
+   * Moving a task from one stage to another.
+   *
+   * The stage names its project, so both move together — a task sitting on a
+   * stage of one project while claiming to belong to another is a state with
+   * no meaning that every screen would then have to decide how to draw.
+   *
+   * A STEP DOES NOT MOVE ON ITS OWN. It is part of its task, and a step on a
+   * different stage from the task it belongs to is exactly the loose work this
+   * whole change exists to stop.
+   */
+  if (stageId !== undefined) {
+    if (req.task.parent_task_id) {
+      return res.status(400).json({
+        error: 'A step follows the task it belongs to. Move the task instead.',
+      });
+    }
+    if (stageId) {
+      const st = await db.prepare(`
+        SELECT s.id, s.project_id, p.space_id FROM project_stages s
+        JOIN projects p ON p.id = s.project_id WHERE s.id = ?
+      `).get(stageId);
+      if (!st) return res.status(404).json({ error: 'Stage not found.' });
+      if (st.space_id !== req.task.space_id) {
+        return res.status(400).json({ error: 'That stage belongs to another space.' });
+      }
+      updates.push('stage_id = ?'); values.push(st.id);
+      updates.push('project_id = ?'); values.push(st.project_id);
+    } else {
+      // Off every stage, but still on the project it was on. "Not yet placed"
+      // is a real answer and the project screen has a place to show it.
+      updates.push('stage_id = ?'); values.push(null);
+    }
+    // Steps live where their task lives, so they come along. Two rows
+    // answering "which stage is this work on" is two rows that will disagree.
+    await db.prepare('UPDATE tasks SET stage_id = ? WHERE parent_task_id = ?')
+      .run(stageId || null, req.task.id);
+  }
 
   if (title !== undefined) {
     if (!String(title).trim()) return res.status(400).json({ error: 'Give the task a title.' });
@@ -281,6 +429,28 @@ router.patch('/:taskId', loadTask, async (req, res) => {
   values.push(req.task.id);
   await db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
+  /**
+   * Finishing a task finishes its steps.
+   *
+   * A task marked done with three of its steps still open is two records of
+   * one fact, and two records of one fact always end up disagreeing — the same
+   * reason the stage's status is driven by its records rather than kept
+   * alongside them. Somebody ticking the task means the work is finished; the
+   * steps were how it got finished.
+   *
+   * NOT THE REVERSE. Reopening a task does not reopen its steps: which of them
+   * came undone is a thing only the person reopening it knows, and guessing
+   * would hand somebody back work they had genuinely completed.
+   */
+  let closedSteps = 0;
+  if (status === 'done' && !req.task.parent_task_id) {
+    const res2 = await db.prepare(`
+      UPDATE tasks SET status = 'done', completed_at = ?
+      WHERE parent_task_id = ? AND status != 'done'
+    `).run(new Date().toISOString(), req.task.id);
+    closedSteps = res2?.changes ?? 0;
+  }
+
   const row = await db.prepare(`${SELECT_TASK} WHERE t.id = ?`).get(req.task.id);
   const audience = await spaceAudience(req.access.space);
   const found = await mentions.of(row.title, {
@@ -298,7 +468,7 @@ router.patch('/:taskId', loadTask, async (req, res) => {
     where: `a task in "${req.access.space.name}"`,
   });
 
-  res.json({ task: serialize(row, found) });
+  res.json({ task: serialize(row, found), closedSteps });
 });
 
 router.delete('/:taskId', loadTask, async (req, res) => {

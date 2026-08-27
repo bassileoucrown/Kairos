@@ -397,6 +397,11 @@ textarea { resize: vertical; min-height: 70px; }
 .task-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .task-row {
   display: flex;
+  /* WRAP, because the steps below claim a row of their own with flex-basis:
+     100%. Without this they are not a row at all — they become a squeezed
+     third column beside the title and the controls, and the whole task row
+     spills its box on a phone. */
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
   border: 1px solid var(--border);
@@ -410,6 +415,36 @@ textarea { resize: vertical; min-height: 70px; }
 .task-row.is-done { opacity: 0.6; }
 .task-row.is-done .task-title { text-decoration: line-through; }
 .task-check { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
+
+/* --- Steps inside a task ---------------------------------------------------
+   Below the row, never beside it. .task-row is a flex line, so a third child
+   would sit as a second column of work — which is the reading this whole
+   change exists to prevent: a task with five steps looked like five tasks. */
+.task-steps { flex-basis: 100%; min-width: 0; margin: 6px 0 0 26px; }
+/* The indent that lines steps up under their title is the first thing to go
+   when there is no room for it — 26px is a tenth of a 360px screen. */
+@media (max-width: 520px) { .task-steps { margin-left: 0; } }
+.task-steps-count { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; }
+.task-step-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.task-step {
+  display: flex; align-items: baseline; gap: 8px;
+  /* The meta drops to its own line rather than pushing the title out of the
+     box: an assignee's full name and a date do not fit beside a step's words
+     on a phone, and the words are the part that matters. */
+  flex-wrap: wrap;
+  font-size: 0.84rem; min-width: 0;
+}
+.task-step.is-done { opacity: 0.6; }
+.task-step.is-done .task-step-title { text-decoration: line-through; }
+.task-step-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.task-step-meta { font-size: 0.72rem; color: var(--text-muted); }
+.task-step-add { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.task-step-add input { flex: 1; min-width: 0; font-size: 0.82rem; padding: 5px 8px; }
+
+/* The stage's own work, under the stage. .stage-row is a flex line with the
+   heading on one side and the controls on the other, so this claims a row of
+   its own rather than becoming a third column. */
+.stage-tasks { flex-basis: 100%; min-width: 0; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .task-main { flex: 1; min-width: 0; }
 .task-title { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; }
 /* The title already breaks anywhere; the meta line did not, so a long link or

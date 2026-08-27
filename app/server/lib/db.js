@@ -399,6 +399,10 @@ function ready() {
         LEFT JOIN handle_history h ON h.user_id = u.id AND h.handle = u.slug
         WHERE u.slug IS NOT NULL AND u.slug != '' AND h.id IS NULL
       `).run();
+      // Steps inside a task. See the column in schema.sql for why a step is a
+      // task rather than a lighter checklist row.
+      await ensureColumn('tasks', 'parent_task_id', 'TEXT');
+      await ensureIndex('idx_tasks_parent', 'tasks(parent_task_id)');
       // The two people in a room for two. See lib/pairLine.js.
       await ensureColumn('spaces', 'pair_key', 'TEXT');
       await ensureIndex('idx_spaces_pair', 'spaces(pair_key)');

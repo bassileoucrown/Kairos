@@ -863,7 +863,8 @@ export default function ThreadView() {
         {tasks.length > 0 && view === 'all' && (
           <>
             <h3 style={{ marginTop: 8 }}>Still to do, from this thread</h3>
-            <TaskList tasks={tasks} onChanged={load} viewerId={data.viewerId} />
+            <TaskList tasks={tasks} onChanged={load} viewerId={data.viewerId}
+              canWrite={data.canWrite} />
           </>
         )}
 
