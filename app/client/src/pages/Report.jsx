@@ -152,13 +152,22 @@ export default function Report() {
 
       {data.scope === 'self' && (
         <p className="hint">
-          This is your own week. What everyone else did is the principal's to see.
+          This is your own week. What everyone else did is for the principal and
+          their Chief of Staff to see.
+        </p>
+      )}
+      {data.scope === 'office' && !data.isPrincipal && (
+        <p className="hint">
+          You are seeing the whole office because you are its Chief of Staff.
         </p>
       )}
 
       {data.people.length === 0 && (
         <div className="empty-state">
-          {data.canSeeEveryone
+          {/* Told to whoever can actually act on it. Sending a Chief of Staff
+              to a Team screen that belongs to somebody else is advice they
+              cannot take. */}
+          {data.isPrincipal
             ? 'Nobody is working with you on Kairos yet. Invite a PA, EA or Chief of Staff from Team and their week will show here.'
             : 'Nothing to show for this week.'}
         </div>

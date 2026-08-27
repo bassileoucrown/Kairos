@@ -13,15 +13,27 @@ router.use(requireAuth);
 /**
  * WHO SEES WHOSE LINE.
  *
- * The principal sees the whole office, because it is their office. An
- * assistant sees their own row and nobody else's — including a Chief of Staff,
- * who in many households does manage the others, but who has not been given
- * that power here by anyone and should not acquire it as a side effect of a
- * reporting screen. If a principal wants their Chief of Staff to see the rest,
- * that is a decision they should make deliberately, and it is not this.
+ * The principal sees the whole office, because it is their office. So does a
+ * Chief of Staff, because running the office IS the post — a Chief of Staff
+ * who cannot see whether the EA cleared last week's approvals is being asked
+ * to run something with their eyes shut, and would end up asking each person
+ * individually, which is worse for everybody including the people being asked.
+ *
+ * Everyone else sees their own row and nobody else's. A PA, an EA and a
+ * delegate are not each other's supervisors, and a reporting screen is not the
+ * place to quietly decide otherwise.
+ *
+ * THE LINE IS THE POST, NOT THE SCREEN. This grant follows from what a Chief
+ * of Staff is engaged to do, which is why it lives here as a role rather than
+ * as a per-person switch somebody has to find and set. If a principal wants a
+ * Chief of Staff who cannot see the others, the answer is to appoint them EA —
+ * the roles already mean different things everywhere else in the product.
  */
+const SEES_THE_OFFICE = new Set(['owner', 'chief_of_staff']);
+
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const isOwner = req.paRole === 'owner';
+  const seesEveryone = SEES_THE_OFFICE.has(req.paRole);
   // Clamped, and not merely for tidiness: `back` reaches into a date
   // calculation and a query, and an unbounded number from the URL is an
   // invitation to ask for the week fifty thousand years ago.
@@ -30,7 +42,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
 
   const report = await buildReport(req.principal.id, {
     back,
-    onlyUserId: isOwner ? null : req.user.id,
+    onlyUserId: seesEveryone ? null : req.user.id,
   });
   if (!report) return res.status(404).json({ error: 'Not found.' });
 
@@ -39,8 +51,13 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     // Said plainly on the screen rather than left to be inferred from a short
     // list: an assistant seeing one row should know it is the rule and not a
     // sign that they are the only person working here.
-    scope: isOwner ? 'office' : 'self',
-    canSeeEveryone: isOwner,
+    scope: seesEveryone ? 'office' : 'self',
+    canSeeEveryone: seesEveryone,
+    // Whether this is their OWN office or one they are helping to run. The
+    // screen says different things in each case, and only the server knows
+    // which — a Chief of Staff reading the whole office should not be told
+    // to go and invite people to a team that is not theirs.
+    isPrincipal: isOwner,
   });
 });
 

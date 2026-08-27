@@ -18,9 +18,11 @@
 //   that motivated this — a chip keeping its 1 after the rail went quiet — was
 //   exactly two of them disagreeing.
 //
-//   A REPORT IS A VIEW OF OTHER PEOPLE'S WORK. The principal may see the whole
-//   office; an assistant may see themselves and nobody else. A Chief of Staff
-//   does not acquire line management as a side effect of a reporting screen.
+//   A REPORT IS A VIEW OF OTHER PEOPLE'S WORK. The principal sees the whole
+//   office, and so does a Chief of Staff, because running the office is the
+//   post. A PA, an EA and a delegate see their own line and nobody else's —
+//   they are not each other's supervisors, and a reporting screen must not
+//   quietly decide otherwise.
 //
 //   THE WEEK MUST BE THE PRINCIPAL'S WEEK. Monday to Sunday in their timezone,
 //   not the server's — otherwise Sunday evening in Lagos lands in the wrong
@@ -234,17 +236,29 @@ function client() {
       && typeof r.d.stillOpen?.tasksOverdue === 'number',
       JSON.stringify(r.d.stillOpen));
 
-    head('And it is nobody else\'s business:');
+    head('And who may read whose line follows the post:');
     r = await pa('GET', `/report/${bossId}?week=0`);
     ok('an assistant reads their own line', r.s === 200 && r.d.people.length === 1, JSON.stringify(r.d.people));
     ok('and it is theirs', r.d.people[0]?.id === paId, r.d.people[0]?.id);
     ok('and they are told why it is only one', r.d.scope === 'self' && r.d.canSeeEveryone === false);
 
-    // A Chief of Staff often does manage the others — but not because a
-    // reporting screen quietly granted it.
+    // A Chief of Staff runs the office, so they see it. Asked for explicitly,
+    // and it follows the post rather than a switch somebody has to find.
     r = await cos('GET', `/report/${bossId}?week=0`);
-    ok('not even a Chief of Staff sees the others',
-      r.d.people.length === 1 && r.d.people[0].id === cosId,
+    ok('a Chief of Staff sees the whole office', r.d.people.length === 2,
+      JSON.stringify(r.d.people.map((p) => p.name)));
+    ok('and is told that is what they are seeing', r.d.scope === 'office' && r.d.canSeeEveryone === true,
+      JSON.stringify({ scope: r.d.scope, canSeeEveryone: r.d.canSeeEveryone }));
+    // But it is not their office, and the screen must not tell them to go and
+    // staff somebody else's team.
+    ok('while still knowing it is not their own office', r.d.isPrincipal === false,
+      String(r.d.isPrincipal));
+    ok('and the principal is still the one whose office it is',
+      (await boss('GET', `/report/${bossId}?week=0`)).d.isPrincipal === true);
+
+    // THE LINE THAT STILL HOLDS. A PA is nobody's supervisor.
+    r = await pa('GET', `/report/${bossId}?week=0`);
+    ok('a PA still sees only themselves', r.d.people.length === 1 && r.d.people[0].id === paId,
       JSON.stringify(r.d.people.map((p) => p.name)));
 
     const stranger = client();

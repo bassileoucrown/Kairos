@@ -118,9 +118,11 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
   const { startAt, endAt } = window;
 
   let office = await officeOf(ownerId);
-  // An assistant reads their own line and nobody else's. Managing the office
-  // is the principal's business, and a screen that shows one assistant what
-  // another did all week is a performance review nobody agreed to.
+  // Narrowed to one person when the caller is not entitled to the rest. Who
+  // that is — the principal and their Chief of Staff see everyone, anybody
+  // else sees themselves — is decided in routes/report.js, where the caller's
+  // standing is known. This function is told the answer rather than working it
+  // out, so there is one place to change it and one place to get it wrong.
   if (onlyUserId) office = office.filter((m) => m.id === onlyUserId);
   const ids = office.map((m) => m.id);
 
