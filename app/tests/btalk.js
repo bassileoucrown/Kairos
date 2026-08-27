@@ -216,8 +216,16 @@ function client() {
 
     const inSpace = await boss('GET', `/tasks?spaceId=${spaces.d.spaces[0].id}`);
     const fromPad = inSpace.d.tasks.find((t) => t.id === promoted.d.taskId);
-    ok('with no source message, because there never was one', !fromPad.sourceMessageId);
-    ok('but a way back to the note it came from',
+    // IT LANDS IN THE ROOM NOW, and that is a change of contract rather than a
+    // drift. A task promoted to a space used to carry no source message, so it
+    // appeared on the space's task list and in nobody's conversation — work
+    // handed to an office arriving somewhere only a person already looking for
+    // it would find. The line is posted and the task hangs off it, exactly as
+    // one made from a message does.
+    ok('and lands in the space\'s room rather than only on its list',
+      !!fromPad.sourceMessageId && !!fromPad.sourceThreadId,
+      JSON.stringify({ m: fromPad.sourceMessageId, t: fromPad.sourceThreadId }));
+    ok('while still pointing back at the note it came from',
       fromPad.sourcePadItemId === note.d.item.id, fromPad.sourcePadItemId);
     ok('whose conversation is still there to carry on',
       (await pa('GET', `/pad/${note.d.item.id}/replies`)).d.replies.length === 1);
@@ -279,15 +287,19 @@ function client() {
     head('Arriving from the task, at the line rather than the room:');
     await p.goto(`${BASE}/tasks`);
     await p.waitForSelector('.task-row', { timeout: 20000 });
-    // Named rather than taken first: both of this assistant's tasks now offer a
-    // way back, and they lead to different places on purpose — one to the
-    // thread, one to the pad. Picking whichever sorted first would pass for the
-    // wrong reason on any day the ordering changed.
+    // Named rather than taken first: both of this assistant's tasks offer a way
+    // back, and picking whichever sorted first would pass for the wrong reason
+    // on any day the ordering changed.
     const back = p.locator('.task-row:has-text("Book the car") a:has-text("carry on the conversation")');
     ok('the task from a message offers a way back into the conversation',
       (await back.count()) === 1);
-    ok('and so does the one promoted from the pad, pointing at the settled note',
-      /show=settled/.test(await p.locator('.task-row:has-text("Chase the visa people") a:has-text("carry on the conversation")')
+    // BOTH LEAD TO A ROOM NOW. A task promoted from the pad used to lead back
+    // to the settled note, because the room had never been told about it. Now
+    // the line is posted where the work was sent, and the room is the more
+    // useful destination: it is where the people who have to act on it are.
+    // The note still points forward at the task, so nothing is lost.
+    ok('and so does the one promoted from the pad, pointing at the room it landed in',
+      /\/threads\//.test(await p.locator('.task-row:has-text("Chase the visa people") a:has-text("carry on the conversation")')
         .getAttribute('href') || ''));
 
     await back.click();
