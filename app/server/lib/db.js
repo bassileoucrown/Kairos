@@ -426,6 +426,12 @@ function ready() {
       // covered this week" and not "when did we last send something". See
       // sweepWeeklyReports in lib/reminders.js.
       await ensureColumn('users', 'weekly_report_sent_for', 'TEXT');
+      // When this person was last using Kairos, and the start of the gap
+      // before now if there was one. Two columns rather than one because the
+      // gap has to be captured before last_seen_at is overwritten — see
+      // touch() in lib/catchUp.js.
+      await ensureColumn('users', 'last_seen_at', 'TEXT');
+      await ensureColumn('users', 'away_since', 'TEXT');
 
       // Indexes over columns that arrive by migration, created only once those
       // columns certainly exist.

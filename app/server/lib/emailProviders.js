@@ -110,4 +110,49 @@ function isConfigured(env = process.env) {
   catch { return false; }
 }
 
-module.exports = { PROVIDERS, activeProvider, isConfigured, parseFrom };
+// Senders that a provider will accept a key for and then refuse to deliver
+// from, except back to the account holder.
+//
+// WHY THIS DESERVES ITS OWN CHECK. Resend's shared address works the moment a
+// key is set, which is exactly what makes it dangerous: the key is valid, the
+// provider is reachable, mail to your own inbox arrives, and every message to
+// anybody else is rejected. So the app said "email delivery configured" while
+// no invitation could reach a single tester — true of the credential and false
+// of the thing anybody cared about. Reported now as its own state, because a
+// status screen that is technically right and practically wrong is worse than
+// one that says nothing.
+const SHARED_TEST_SENDERS = ['resend.dev', 'sendgrid.net'];
+
+/**
+ * Configured, and able to reach somebody other than the operator.
+ *
+ * Returns { configured, canReachAnyone, from, reason } so /api/status can say
+ * which of the two it is rather than collapsing them into one boolean.
+ */
+function deliveryState(env = process.env) {
+  const configured = isConfigured(env);
+  const from = env.EMAIL_FROM || '';
+  if (!configured) {
+    return {
+      configured: false,
+      canReachAnyone: false,
+      from: from || null,
+      reason: 'No email provider is configured, so nothing is sent. Messages are still recorded in the Outbox.',
+    };
+  }
+  const domain = (from.match(/@([^\s>]+)/) || [])[1] || '';
+  const shared = !from || SHARED_TEST_SENDERS.some((d) => domain.toLowerCase().endsWith(d));
+  if (shared) {
+    return {
+      configured: true,
+      canReachAnyone: false,
+      from: from || null,
+      reason: 'Sending from the provider\'s shared test address, which only reaches the account '
+        + 'holder\'s own inbox — everyone else is rejected. Verify a domain with the provider and '
+        + 'set EMAIL_FROM to an address at it.',
+    };
+  }
+  return { configured: true, canReachAnyone: true, from, reason: null };
+}
+
+module.exports = { PROVIDERS, activeProvider, isConfigured, deliveryState, parseFrom };

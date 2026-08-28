@@ -43,6 +43,11 @@ const GROUPS = [
 // is the principal's), and a principal has no workspace of principals.
 const NAV = [
   { group: 'day', to: '/today', label: 'Today', icon: '◉', principalScoped: true, badge: 'requests' },
+  // Not principal-scoped, deliberately, and for the same reason as the Pad:
+  // an assistant with three principals has been away from all three at once,
+  // and a catch-up that made them pick one first would be asking them to guess
+  // where the news is. See lib/catchUp.js.
+  { group: 'day', to: '/catch-up', label: 'While you were away', icon: '⟲' },
   { group: 'day', to: '/itinerary', label: 'Itinerary', icon: '✈', principalScoped: true },
   // Deliberately NOT principalScoped, unlike everything around it. A note you
   // jotted is yours, and it should follow you between the principals you

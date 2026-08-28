@@ -83,6 +83,14 @@ async function requireAuth(req, res, next) {
   // every authenticated request wait on a write to earn it is the wrong trade;
   // touch() swallows its own failures for the same reason.
   require('./devices').touch(req.sessionId, req);
+
+  // And note that the PERSON is here, which is a different fact from the
+  // device being in use: an assistant with a phone and a laptop is one person
+  // who was away, not two. This is what makes "since Thursday" possible
+  // without asking anybody to fill in a date. Not awaited, for the same
+  // reason as above — bookkeeping must not slow the request that earns it,
+  // and a failure here is not worth failing a request over.
+  require('./catchUp').touch(req.user.id).catch(() => {});
   next();
 }
 

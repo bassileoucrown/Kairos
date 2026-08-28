@@ -3184,3 +3184,13 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .desk-card-count strong { font-size: 1.5rem; color: var(--text); margin-right: 4px; }
 .desk-card-count.is-tool { font-size: 0.9rem; font-weight: 600; color: var(--accent); }
 .desk-card-note { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
+
+/* ---- While you were away ---- */
+.catch-block { margin-bottom: 22px; }
+.catch-block h4 { margin: 0 0 4px; font-size: 0.95rem; }
+.catch-block .hint { margin-top: 0; }
+.catch-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+.catch-main { min-width: 0; flex: 1 1 220px; }
+/* Wraps rather than truncating: a decision taken in your absence is the one
+   line on this screen worth reading in full. */
+.catch-line { font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }

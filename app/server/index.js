@@ -31,6 +31,7 @@ const securityRouter = require('./routes/security');
 const { router: essentialsRouter } = require('./routes/essentials');
 const { router: archiveRouter } = require('./routes/archive');
 const { router: reportRouter } = require('./routes/report');
+const { router: catchUpRouter } = require('./routes/catchUp');
 const sweepRouter = require('./routes/sweep');
 const connectionsRouter = require('./routes/connections');
 const householdRouter = require('./routes/household');
@@ -47,7 +48,7 @@ const visasRouter = require('./routes/visas');
 const db = require('./lib/db');
 const { startReminderSweep } = require('./lib/reminders');
 const { startVoiceExpiry } = require('./lib/voiceNotes');
-const { isConfigured: emailConfigured } = require('./lib/emailProviders');
+const { isConfigured: emailConfigured, deliveryState } = require('./lib/emailProviders');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -87,6 +88,11 @@ app.get('/api/status', (req, res) => {
   res.json({
     storageDurable: db.dialect !== 'sqlite' || process.env.NODE_ENV !== 'production',
     emailDeliveryConfigured: emailConfigured(),
+    // Configured is not the same as able to reach anybody. See deliveryState
+    // in lib/emailProviders.js: a provider key with the shared test sender
+    // behind it delivers to the operator and nobody else, which is the exact
+    // shape of "it works for me and no invitation ever arrives".
+    emailDelivery: deliveryState(),
     databaseReady: dbState.ready,
     databaseBackend: db.dialect,
     // Named so a human can compare it against their dashboard. Never the
@@ -136,6 +142,7 @@ app.use('/api/security', securityRouter);
 app.use('/api/essentials', essentialsRouter);
 app.use('/api/archive', archiveRouter);
 app.use('/api/report', reportRouter);
+app.use('/api/catch-up', catchUpRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/household', householdRouter);
 app.use('/api/announcements', announcementsRouter);
