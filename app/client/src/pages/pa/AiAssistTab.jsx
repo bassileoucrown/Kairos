@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import Dictate from '../../components/Dictate.jsx';
+import SoonButton from '../../components/SoonButton.jsx';
 
 const EXAMPLES = [
   'Book a call with Jane next Tuesday afternoon',
@@ -79,11 +80,20 @@ function DraftMessageTab({ ownerId }) {
 
   return (
     <div>
-      <p className="tz-note" style={{ marginBottom: 16 }}>
-        Describe what the message needs to say. This drafts a subject and body you can edit before
-        sending — nothing goes out until you click Send. (Pattern-based templates in this
-        environment, not a live model call — no LLM API key is configured here.)
+      {/* SAID FIRST AND SAID PLAINLY, not in a parenthesis at the end. What
+          this does is fill a template — a real and useful thing — and calling
+          that "drafted" without saying so is the app taking credit for work it
+          did not do. A product that will mislead about this has no standing to
+          be believed about what it does with a passport. */}
+      <p className="tz-note" style={{ marginBottom: 8 }}>
+        <strong>These are templates, not writing.</strong> Kairos picks the closest one
+        and fills in the real names and times, so you edit rather than start from a
+        blank box. Nothing goes out until you press Send.
       </p>
+      <div className="code-actions" style={{ marginBottom: 16 }}>
+        <SoonButton feature="ai_compose" />
+        <SoonButton feature="ai_rewrite" />
+      </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {sent && <div className="alert alert-success">Sent.</div>}
@@ -243,10 +253,15 @@ function ScheduleTab({
 }) {
   return (
     <div>
+      {/* THE RELIABLE HALF, AND IT IS RELIABLE BECAUSE IT IS NOT A MODEL.
+          Kairos reads the words for a name, a day and a time of day, then
+          filters the same computed openings the public booking page offers.
+          It cannot invent a time that is not free, which is the property that
+          matters most in a diary. */}
       <p className="tz-note" style={{ marginBottom: 16 }}>
-        Describe what you want to schedule in plain language. This proposes real open slots —
-        it never books anything without you clicking. (Pattern-based matching in this environment,
-        not a live model call — no LLM API key is configured here.)
+        Say what you want to schedule in plain language. Kairos reads it for a name, a day
+        and a time, then offers <strong>real open slots</strong> — it can only ever propose
+        a time you are actually free, and it books nothing until you press it.
       </p>
 
       {error && <div className="alert alert-error">{error}</div>}

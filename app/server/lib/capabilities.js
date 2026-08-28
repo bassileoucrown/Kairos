@@ -3,6 +3,7 @@ const travelTime = require('./travelTime');
 const visas = require('./visas');
 const concierge = require('./concierge');
 const { isConfigured: encryptionConfigured } = require('./secretBox');
+const aiModel = require('./aiModel');
 
 // Everything that is designed but not yet working, and exactly where in the
 // app somebody will look for it.
@@ -36,6 +37,7 @@ const SCREENS = {
   itinerary: 'Itinerary',
   trips: 'Trips',
   vault: 'Essentials',
+  ai_assist: 'AI Assist',
   direct_line: 'Direct line',
   settings: 'Settings',
   concierge: 'Concierge',
@@ -129,6 +131,62 @@ function build() {
     // Waiting on contracted people rather than on code, so it never carries a
     // date. See lib/concierge.js.
     state: 'soon',
+  });
+
+  // ---- AI Assist -----------------------------------------------------
+  //
+  // WHAT IS REAL HERE ALREADY. Finding a time is a keyword parser filtering
+  // the same computed slots the public page uses — no model, entirely
+  // deterministic, and reliable precisely because it cannot invent a time.
+  // Drafting from a template is real too. Neither is generation, and neither
+  // is listed here, because a working thing does not belong in a register of
+  // things that are not working.
+  //
+  // WHAT IS LISTED is everything that needs a model, so it is visibly absent
+  // in the place it will occupy rather than quietly missing. One key turns all
+  // four on at once; they are separate entries because they will arrive
+  // separately and somebody reading this should see what is coming.
+  const aiReady = aiModel.isConfigured();
+  const aiNeeds = ['ANTHROPIC_API_KEY'];
+  add({
+    id: 'ai_compose',
+    control: 'Write it for me',
+    screen: 'ai_assist',
+    label: 'Compose in the principal\'s voice',
+    what: 'A message written the way this principal writes, learned from what they have actually sent — not a template with a name dropped into it.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_reply',
+    control: 'Reply to this',
+    screen: 'ai_assist',
+    label: 'Reply to a message you paste in',
+    what: 'Paste what arrived and get an answer that reads as though a person wrote it, in the principal\'s register.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_rewrite',
+    control: 'Shorter · Warmer · Firmer',
+    screen: 'ai_assist',
+    label: 'Rework what is already written',
+    what: 'One tap on a draft you have: shorter, warmer, firmer, more formal.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_summary',
+    control: 'What was decided',
+    screen: 'ai_assist',
+    label: 'Summarise a long conversation',
+    what: 'Sixty messages down to what was settled and what is still open. The records register already holds the formal half of this.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
   });
 
   // ---- Settings: where a session is signed in from ---------------------

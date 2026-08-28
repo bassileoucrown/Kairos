@@ -15,6 +15,7 @@ const { formatForEmail, rangeForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { getOpenSlots } = require('../lib/availability');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
+const aiModel = require('../lib/aiModel');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
@@ -800,6 +801,13 @@ router.post('/:ownerId/comms', requirePaAccess, async (req, res) => {
 });
 
 router.post('/:ownerId/ai-assist/parse', requirePaAccess, async (req, res) => {
+  // Same rule as drafting: free text from a person, so the same refusal. A
+  // request phrased around a document is refused rather than answered with a
+  // meeting time and a silence about the rest of what was asked.
+  if (aiModel.asksForVault(req.body?.message)) {
+    return res.status(400).json({ error: aiModel.REFUSAL, code: 'vault_off_limits' });
+  }
+
   const { message } = req.body || {};
   if (!message || !String(message).trim()) {
     return res.status(400).json({ error: 'Please describe what you want to schedule.' });
@@ -899,6 +907,15 @@ router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, async (req, re
   const { instruction, contactId, bookingId } = req.body || {};
   if (!instruction || !String(instruction).trim()) {
     return res.status(400).json({ error: 'Describe what the message needs to say.' });
+  }
+
+  // THE VAULT IS OFF-LIMITS, AND THE RULE IS OLDER THAN THE MODEL. Enforced
+  // here now, while drafting is still templates, so it is already true and
+  // already tested on the day a model is wired in behind the same endpoint —
+  // rather than being a thing somebody has to remember to add at exactly the
+  // moment it starts to matter. See lib/aiModel.js.
+  if (aiModel.asksForVault(instruction)) {
+    return res.status(400).json({ error: aiModel.REFUSAL, code: 'vault_off_limits' });
   }
 
   let contact = null;
