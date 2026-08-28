@@ -23,10 +23,22 @@ const { visibleThreads } = require('./spaceAccess');
 // booking_events, which the weekly report also reads. This screen is a
 // different QUESTION over the same records, not a different answer.
 
-// Eight hours: long enough that a working day's gap does not count as an
-// absence, short enough that overnight does. Somebody who closes the app at
-// six and opens it at nine has been asleep, not away.
-const AWAY_AFTER_MS = 8 * 60 * 60 * 1000;
+// Three hours.
+//
+// This was eight, which was really "an overnight" — a threshold that only
+// makes sense for one principal in one timezone. An assistant covering three
+// offices can lose a morning in three hours: a cancellation, the rebooking
+// that followed it, and a decision filed against a thread they are working
+// under. Being told about it at six because the gap did not clear eight
+// hours is being told too late to act.
+//
+// The cost of being wrong is asymmetric, which is what settles it. A gap
+// counted as an absence when nothing happened costs nothing — isEmpty()
+// makes that screen say there is nothing to catch up on. A gap NOT counted
+// when something did happen costs the thing that was missed. So the
+// threshold should sit near the point where a busy office can turn over,
+// not near the point where a person can sleep.
+const AWAY_AFTER_MS = 3 * 60 * 60 * 1000;
 
 // Nobody wants a report of a month. Past this the question stops being "what
 // did I miss" and becomes "where do I start", which is what the live screens

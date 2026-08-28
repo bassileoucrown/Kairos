@@ -129,6 +129,34 @@ function client() {
     ok('and neither is stepping out for an hour and a half', r.d.away === false,
       JSON.stringify(r.d).slice(0, 120));
 
+    // THE BOUNDARY ITSELF, pinned from both sides.
+    //
+    // The threshold is three hours, and it is a judgement rather than a
+    // derivation: an assistant covering three offices can lose a morning in
+    // three hours — a cancellation, the rebooking after it, a decision filed
+    // against a thread they work under. It began at eight, which was really
+    // "an overnight" and only ever fitted one principal in one timezone.
+    //
+    // Asserted from BOTH sides because a one-sided check does not hold a
+    // number still: "four days is away" stays true at any threshold, so on
+    // its own it would let this silently drift back to eight hours, or to
+    // eight minutes, without a board going red.
+    await db.prepare('UPDATE users SET last_seen_at = ?, away_since = NULL WHERE id = ?')
+      .run(new Date(Date.now() - 175 * 60 * 1000).toISOString(), paId);
+    r = await pa('GET', '/catch-up');
+    ok('five minutes short of three hours is still being at your desk',
+      r.d.away === false, JSON.stringify(r.d).slice(0, 120));
+
+    await db.prepare('UPDATE users SET last_seen_at = ?, away_since = NULL WHERE id = ?')
+      .run(new Date(Date.now() - 185 * 60 * 1000).toISOString(), paId);
+    r = await pa('GET', '/catch-up');
+    ok('five minutes past it is an absence', r.d.away === true,
+      JSON.stringify(r.d).slice(0, 120));
+    // And put it back, so the absence built here is not carried into the
+    // four-days case below and quietly answer its question for it.
+    await db.prepare('UPDATE users SET last_seen_at = ?, away_since = NULL WHERE id = ?')
+      .run(new Date().toISOString(), paId);
+
     // ---- Four days out -----------------------------------------------------
     head('Four days out, and the app knows when that was:');
     const space = await boss('POST', '/spaces', { name: `The office ${ID}`, context: 'work' });
