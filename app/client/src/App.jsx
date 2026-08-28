@@ -28,6 +28,7 @@ import Trips from './pages/Trips.jsx';
 import Archive from './pages/Archive.jsx';
 import Report from './pages/Report.jsx';
 import CatchUp from './pages/CatchUp.jsx';
+import Operator from './pages/Operator.jsx';
 import Workspace from './pages/Workspace.jsx';
 import Connections from './pages/Connections.jsx';
 import Household from './pages/Household.jsx';
@@ -152,6 +153,7 @@ export default function App() {
       <Route path="/archive" element={<RequireAuth><Archive /></RequireAuth>} />
       <Route path="/report" element={<RequireAuth><Report /></RequireAuth>} />
       <Route path="/catch-up" element={<RequireAuth><CatchUp /></RequireAuth>} />
+      <Route path="/operator" element={<RequireAuth><Operator /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />
       {/* Whose diary it is travels in the path rather than in stored state:
           an assistant who mails this link to a colleague, or opens it in a

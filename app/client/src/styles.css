@@ -3239,3 +3239,17 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .tellus-kind:hover { border-color: var(--accent); }
 .tellus-kind-label { display: block; font-weight: 600; font-size: 0.92rem; }
 .tellus-thanks { margin: 0; font-weight: 600; }
+
+/* ---- Start here, and the pilot screen ---- */
+.start-here { border-left: 3px solid var(--accent); margin-bottom: 18px; }
+.start-here-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: baseline; }
+.start-here-head h3 { margin: 0 0 4px; font-size: 1rem; }
+.start-here-list { margin: 10px 0; padding-left: 20px; }
+.start-here-list li { margin-bottom: 7px; font-size: 0.9rem; }
+
+.op-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+.op-main { min-width: 0; flex: 1 1 220px; }
+/* Wraps rather than truncating: a tester's own words and a fault's message are
+   both things you read in full or not at all. */
+.op-body { font-size: 0.9rem; overflow-wrap: anywhere; }
+.op-body code { font-size: 0.85em; }

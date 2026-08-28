@@ -6,6 +6,7 @@ import { BRAND_FULL } from '../lib/brand.js';
 import TimeUp from './TimeUp.jsx';
 import PadDock from './PadDock.jsx';
 import TellUs from './TellUs.jsx';
+import { track, startUsage } from '../lib/usage.js';
 import { useVisiblePoll } from '../lib/useVisiblePoll.js';
 
 // One navigation for the whole app.
@@ -99,6 +100,11 @@ const NAV = [
   // somebody being shown the product should be able to find it without it
   // competing with anything they actually use.
   { group: 'account', to: '/coming', label: 'Coming', icon: '◷' },
+  // Only for whoever is running the pilot. Hidden rather than refused: a
+  // tester does not need to know the screen exists, and the endpoints behind
+  // it answer 404 to everybody else regardless — the rail is a convenience,
+  // not the gate.
+  { group: 'account', to: '/operator', label: 'The pilot', icon: '◎', operatorOnly: true },
 ];
 
 const ASSISTANT_CATEGORIES = new Set(['pa', 'ea', 'chief_of_staff']);
@@ -326,8 +332,17 @@ export default function AppShell({ children, title, actions, active }) {
   const actingForSomeoneElse = current && current.role !== 'owner';
   const viewerIsAssistant = ASSISTANT_CATEGORIES.has(user?.accountCategory);
 
+  // ONE PLACE RECORDS EVERY SCREEN. A track() call added to each page is a
+  // call somebody forgets on the next page, and a pilot's most useful number —
+  // the screen opened once and never returned to — is exactly the one that
+  // goes missing when the instrumentation is per-page. Every screen inside the
+  // shell is counted here, and nowhere else.
+  useEffect(() => { startUsage(); }, []);
+  useEffect(() => { track('screen', location.pathname); }, [location.pathname]);
+
   const visible = NAV.filter((item) => {
     if (item.needsScheduling && current?.canManageScheduling === false) return false;
+    if (item.operatorOnly && !user?.canOperate) return false;
     if (item.assistantOnly && !viewerIsAssistant) return false;
     // Only shown to somebody who actually has a household post — for everyone
     // else it is a screen about nothing.

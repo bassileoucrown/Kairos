@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import StartHere from '../components/StartHere.jsx';
 import RunningLate from '../components/RunningLate.jsx';
 import QuickJot from '../components/QuickJot.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
@@ -324,6 +325,11 @@ export default function Today() {
     >
       {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
+
+      {/* Above the day itself, and only until it is dismissed. A tester who
+          does not know what is being asked of them tries nothing, and the
+          findings that never arrive are the ones nobody asked for. */}
+      <StartHere />
 
       {/* The masthead. Set in a serif, because this is the one line on the
           screen that is a statement rather than a control. */}

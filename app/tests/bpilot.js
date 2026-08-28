@@ -63,7 +63,7 @@ function client() {
     cwd: `${ROOT}/app/server`,
     env: {
       ...process.env, NODE_ENV: 'production', PORT: String(PORT),
-      ENCRYPTION_KEY: KEY, SWEEP_SECRET: SECRET, OPERATOR_EMAIL: OPERATOR,
+      ENCRYPTION_KEY: KEY, SWEEP_SECRET: SECRET, ANNOUNCEMENT_AUTHORS: OPERATOR,
       REMINDER_SWEEP_MS: String(60 * 60 * 1000),
     },
     stdio: ['ignore', 'ignore', 'inherit'],
@@ -202,6 +202,57 @@ function client() {
     ok('and it arrives with the screen it came from',
       fromScreen?.route === '/tasks' && fromScreen?.kind === 'wrong',
       JSON.stringify(fromScreen));
+
+    // ---- What was used, counted and not read -------------------------------
+    head('What testers did is counted, and what they wrote is not:');
+    // Navigating is itself instrumented, and the client batches — so give the
+    // flush a moment rather than assuming it has already gone.
+    // Moved through the rail rather than by reloading, because that is how a
+    // person uses it: one page load, several screens. A test that hard-loads
+    // each one would be measuring page loads rather than navigation, and would
+    // pass while the thing a tester actually does went uncounted.
+    await page.goto(`${BASE}/today`);
+    await page.waitForSelector('.app-nav', { timeout: 20000 });
+    await page.click('.app-nav a:has-text("Spaces")');
+    await page.waitForURL('**/spaces', { timeout: 20000 });
+    await page.click('.app-nav a:has-text("Tasks")');
+    await page.waitForURL('**/tasks', { timeout: 20000 });
+    // Leaving is what flushes it, which is the behaviour that makes a
+    // phone-mostly pilot countable at all. pagehide rather than
+    // visibilitychange: Safari fires it on a back-forward navigation without
+    // ever marking the document hidden, so it is the one that has to work.
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.waitForTimeout(900);
+
+    r = await boss('GET', '/usage?days=14');
+    ok('the operator can see what was used', r.s === 200, String(r.s));
+    ok('and who is still opening it',
+      (r.d.people || []).some((p) => p.who === 'Ngozi Bello'),
+      JSON.stringify(r.d.people));
+    ok('with the screens they opened',
+      (r.d.screens || []).some((x) => x.route === '/spaces'),
+      JSON.stringify(r.d.screens));
+    // THE LINE. Counts about the app, never anything anybody wrote.
+    ok('and nothing anybody typed', !/showed yesterday|acting for/.test(JSON.stringify(r.d)),
+      JSON.stringify(r.d).slice(0, 160));
+
+    // The same rule as feedback, and it needs its own check: the navigation
+    // above only touched routes with no identifiers in them, so it would have
+    // passed just as happily with the shaping removed.
+    await pa('POST', '/usage', {
+      events: [{ event: 'screen', route: '/threads/aa11bb22-cc33-dd44-ee55-ff6677889900' }],
+    });
+    r = await boss('GET', '/usage?days=14');
+    ok('a counted screen names no room',
+      (r.d.screens || []).some((x) => x.route === '/threads/:id')
+      && !/aa11bb22/.test(JSON.stringify(r.d)),
+      JSON.stringify(r.d.screens));
+
+    r = await pa('GET', '/usage');
+    ok('a tester cannot read the counts', r.s === 404, String(r.s));
+
+    r = await boss('GET', '/errors');
+    ok('and the faults have a home too', r.s === 200, String(r.s));
 
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
 

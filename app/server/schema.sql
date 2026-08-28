@@ -1330,3 +1330,32 @@ CREATE TABLE IF NOT EXISTS app_state (
   value       TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );
+
+-- What testers actually did, as counts rather than as content.
+--
+-- WHY A PILOT NEEDS THIS. Running one without instrumentation means learning
+-- only what people happen to say out loud, which is a biased sample of the
+-- loudest problems and silent about the commonest: the screen everybody opens
+-- once and never returns to.
+--
+-- EVENTS, NEVER CONTENT, and the line is not negotiable in this product. That
+-- a draft was requested at 09:14 is a fact about the app; what the draft said
+-- is a fact about a principal. A PA who discovers Kairos was reading their
+-- messages to improve the product will not put a passport in it, and will tell
+-- the other PAs. So: which screen, which action, whose account, when. Nothing
+-- typed, nothing quoted, and the route shaped exactly as feedback shapes it.
+--
+-- NOT A TABLE ANY MODEL MAY READ. See READABLE in lib/aiModel.js — a table
+-- has to be named there before a model can see it, and this one deliberately
+-- is not.
+CREATE TABLE IF NOT EXISTS usage_events (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  user_label  TEXT NOT NULL DEFAULT '',
+  role        TEXT NOT NULL DEFAULT '',
+  event       TEXT NOT NULL,
+  route       TEXT NOT NULL DEFAULT '',
+  at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_usage_at ON usage_events(at);
+CREATE INDEX IF NOT EXISTS idx_usage_event ON usage_events(event);

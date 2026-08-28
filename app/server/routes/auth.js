@@ -63,6 +63,12 @@ function publicUser(u) {
     timezone: u.timezone,
     onboardingStep: u.onboarding_step,
     accountCategory: u.account_category,
+    // Whether this account can open the pilot screen. Read from the same
+    // ANNOUNCEMENT_AUTHORS list the faults and feedback endpoints read, so the
+    // rail and the endpoints cannot disagree about who the operator is — and
+    // so an account somebody has got into cannot promote itself, since there
+    // is nothing in the database to flip.
+    canOperate: require('../lib/announcements').canPublish(u),
   };
 }
 

@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { limit, clientIp } = require('../lib/rateLimit');
+const { canPublish } = require('../lib/announcements');
 
 // A tester telling you something, from where they were standing.
 // See the table comment in schema.sql for what is kept and what is not.
@@ -62,10 +63,12 @@ router.post('/', reportLimiter, async (req, res) => {
  * each other would make the next one less candid.
  */
 router.get('/', async (req, res) => {
-  if (!process.env.OPERATOR_EMAIL
-      || req.user.email !== process.env.OPERATOR_EMAIL) {
-    return res.status(404).json({ error: 'Not found.' });
-  }
+  // The SAME operator gate the faults screen uses — ANNOUNCEMENT_AUTHORS. This
+  // briefly had a second one of its own, which is the shape this codebase
+  // keeps getting bitten by: two answers to "who is the operator" drift the
+  // first time one is edited, and the drift here would be somebody reading
+  // reports they were never meant to.
+  if (!canPublish(req.user)) return res.status(404).json({ error: 'Not found.' });
   const rows = await db.prepare(
     'SELECT * FROM feedback ORDER BY created_at DESC LIMIT 200',
   ).all();
