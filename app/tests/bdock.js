@@ -180,29 +180,36 @@ async function onboard(p, name, email, roleLabel) {
       await page.setViewportSize({ width: w, height: h });
       await page.goto(`${BASE}/today`);
       await page.waitForSelector('.pad-dock-btn', { timeout: 20000 });
-      // Scroll to the very end, which is where a fixed corner button does its
-      // damage: the last row is the one that ends up underneath it.
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(400);
-      const clear = await page.evaluate(() => {
-        const dock = document.querySelector('.pad-dock-btn').getBoundingClientRect();
+      // SCROLL THE LAST ROW INTO VIEW AND ASK WHETHER IT IS COVERED.
+      //
+      // This used to scroll the window to document.body.scrollHeight and
+      // measure from there, which quietly assumed the window is the scroller.
+      // It is not always — and when the assumption failed, the "last row" was
+      // still hundreds of pixels below the fold, so the check compared the
+      // dock against something nobody was looking at and reported a layout
+      // fault that did not exist.
+      //
+      // The real question does not need that assumption: take the lowest
+      // thing a person has to read or tap, bring it into view the way the
+      // person would, and see whether the button is sitting on it.
+      const clear = await page.evaluate(async () => {
         const body = document.querySelector('.app-body');
-        // THE CONTENT, NOT THE CONTAINER. This used to read .app-body's own
-        // box, which passed only while the page was short enough not to
-        // scroll: the clearance IS bottom padding on .app-body, so its border
-        // box legitimately extends under the dock — the padding is the gap.
-        // The first page that grew tall enough to scroll turned a real
-        // measurement into a false red. What has to be above the dock is the
-        // last thing somebody has to read or tap.
-        let lowest = 0;
+        let last = null;
         for (const el of body.querySelectorAll('*')) {
+          if (el.children.length > 0) continue;
           const cs = getComputedStyle(el);
-          if (cs.position === 'fixed' || cs.display === 'none') continue;
+          if (cs.position === 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
           const r = el.getBoundingClientRect();
-          if (r.width === 0 && r.height === 0) continue;
-          if (r.bottom > lowest) lowest = r.bottom;
+          if (r.width === 0 || r.height === 0) continue;
+          const speaks = (el.textContent || '').trim() || ['INPUT', 'TEXTAREA', 'IMG'].includes(el.tagName);
+          if (!speaks) continue;
+          if (!last || r.bottom > last.getBoundingClientRect().bottom) last = el;
         }
-        return lowest <= dock.top;
+        if (!last) return true;
+        last.scrollIntoView({ block: 'end', behavior: 'instant' });
+        await new Promise((r) => setTimeout(r, 250));
+        const dock = document.querySelector('.pad-dock-btn').getBoundingClientRect();
+        return last.getBoundingClientRect().bottom <= dock.top;
       });
       ok(`on ${label}, the page's content ends above the dock`, clear);
 
