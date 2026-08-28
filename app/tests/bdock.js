@@ -186,11 +186,23 @@ async function onboard(p, name, email, roleLabel) {
       await page.waitForTimeout(400);
       const clear = await page.evaluate(() => {
         const dock = document.querySelector('.pad-dock-btn').getBoundingClientRect();
-        const body = document.querySelector('.app-body').getBoundingClientRect();
-        // Content ends above where the dock begins. This is the padding on
-        // .app-body doing its job; without it the last row sits under the
-        // button and cannot be read or tapped.
-        return body.bottom <= dock.top;
+        const body = document.querySelector('.app-body');
+        // THE CONTENT, NOT THE CONTAINER. This used to read .app-body's own
+        // box, which passed only while the page was short enough not to
+        // scroll: the clearance IS bottom padding on .app-body, so its border
+        // box legitimately extends under the dock — the padding is the gap.
+        // The first page that grew tall enough to scroll turned a real
+        // measurement into a false red. What has to be above the dock is the
+        // last thing somebody has to read or tap.
+        let lowest = 0;
+        for (const el of body.querySelectorAll('*')) {
+          const cs = getComputedStyle(el);
+          if (cs.position === 'fixed' || cs.display === 'none') continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) continue;
+          if (r.bottom > lowest) lowest = r.bottom;
+        }
+        return lowest <= dock.top;
       });
       ok(`on ${label}, the page's content ends above the dock`, clear);
 

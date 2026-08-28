@@ -816,7 +816,20 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .principal-switcher select { font-size: 0.85rem; padding: 6px 8px; }
 
-.app-nav nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+/* SCROLLS, because the rail is now longer than a laptop screen.
+   It is height: 100vh and sticky, so once the list of entries outgrew the
+   viewport the last of them — Coming, at the foot of the account group — was
+   simply unreachable: no scrollbar, no way down, and nothing on screen saying
+   there was more. Caught by bsoon failing to click it rather than by anybody
+   looking, which is the shape of this fault: an entry that has fallen off the
+   bottom looks exactly like an entry that was never added. */
+.app-nav nav {
+  display: flex; flex-direction: column; gap: 2px; flex: 1;
+  overflow-y: auto;
+  /* The scrollbar sits inside the rail rather than pushing its width around
+     when it appears, so the layout does not shift as entries are added. */
+  scrollbar-gutter: stable;
+}
 .nav-item {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 10px; border-radius: var(--radius);
@@ -876,7 +889,11 @@ textarea { resize: vertical; min-height: 70px; }
 .app-header h1 { font-size: 1.25rem; margin: 0; }
 .app-header-sub { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted); }
 .app-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.app-body { padding: 22px 28px 96px; max-width: 1100px; width: 100%; }
+/* The bottom padding is the clearance under the floating controls, and
+   there are two of them stacked now — the pad dock and Tell us — so it
+   covers the taller stack rather than the button it was measured against
+   when there was one. See bdock. */
+.app-body { padding: 22px 28px 144px; max-width: 1100px; width: 100%; }
 
 /* --- Declared, but not open yet ---------------------------------------- */
 /* Marked in the rail as well as on the page: somebody deciding whether to
@@ -925,7 +942,7 @@ textarea { resize: vertical; min-height: 70px; }
   .nav-close { display: block; }
   .nav-toggle { display: block; }
   .nav-scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 30; }
-  .app-body { padding: 18px 16px 104px; }
+  .app-body { padding: 18px 16px 152px; }
   .app-header { padding: 14px 16px; }
 }
 
@@ -3196,13 +3213,18 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .catch-line { font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }
 
 /* ---- Tell us ---- */
-/* Left of the pad dock and deliberately quieter than it. The pad is a tool
-   somebody uses every day; this is a thing they reach for when something has
-   gone wrong, and it should not compete for the same attention. */
+/* ABOVE the pad dock, not beside it on the left.
+   It sat at bottom-left, which on a desktop is exactly where the rail is — so
+   it covered the last entries of the navigation and swallowed clicks meant for
+   them. A floating control has to be somewhere nothing else lives, and the
+   bottom-right corner is already that place, so this stacks over the dock
+   rather than inventing a second corner.
+   Quieter than the dock, deliberately: the pad is a tool somebody uses every
+   day, this is what they reach for when something has gone wrong. */
 .tellus-tab {
   position: fixed;
-  left: 20px;
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  right: 20px;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 20;
   padding: 9px 15px;
   border: 1px dashed var(--border);
