@@ -32,6 +32,7 @@ const { router: essentialsRouter } = require('./routes/essentials');
 const { router: archiveRouter } = require('./routes/archive');
 const { router: reportRouter } = require('./routes/report');
 const { router: catchUpRouter } = require('./routes/catchUp');
+const { router: feedbackRouter } = require('./routes/feedback');
 const sweepRouter = require('./routes/sweep');
 const connectionsRouter = require('./routes/connections');
 const householdRouter = require('./routes/household');
@@ -84,7 +85,7 @@ app.use((req, res, next) => {
 // now visible at a URL instead of invisible in a deploy queue.
 const dbState = { ready: false, error: null };
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   res.json({
     storageDurable: db.dialect !== 'sqlite' || process.env.NODE_ENV !== 'production',
     emailDeliveryConfigured: emailConfigured(),
@@ -93,6 +94,15 @@ app.get('/api/status', (req, res) => {
     // behind it delivers to the operator and nobody else, which is the exact
     // shape of "it works for me and no invitation ever arrives".
     emailDelivery: deliveryState(),
+    // Whether the outside clock is actually coming through. A scheduler
+    // pointed at the wrong URL means every reminder in the product silently
+    // never goes, and that failure is indistinguishable from a quiet week —
+    // so it is reported where somebody will look rather than left to be
+    // noticed by its absence. See routes/sweep.js.
+    sweep: {
+      configured: !!String(process.env.SWEEP_SECRET || '').trim(),
+      lastRun: await require('./routes/sweep').lastRun().catch(() => null),
+    },
     databaseReady: dbState.ready,
     databaseBackend: db.dialect,
     // Named so a human can compare it against their dashboard. Never the
@@ -143,6 +153,7 @@ app.use('/api/essentials', essentialsRouter);
 app.use('/api/archive', archiveRouter);
 app.use('/api/report', reportRouter);
 app.use('/api/catch-up', catchUpRouter);
+app.use('/api/feedback', feedbackRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/household', householdRouter);
 app.use('/api/announcements', announcementsRouter);

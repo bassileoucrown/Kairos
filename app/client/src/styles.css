@@ -3194,3 +3194,48 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 /* Wraps rather than truncating: a decision taken in your absence is the one
    line on this screen worth reading in full. */
 .catch-line { font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere; }
+
+/* ---- Tell us ---- */
+/* Left of the pad dock and deliberately quieter than it. The pad is a tool
+   somebody uses every day; this is a thing they reach for when something has
+   gone wrong, and it should not compete for the same attention. */
+.tellus-tab {
+  position: fixed;
+  left: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  padding: 9px 15px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer;
+}
+.tellus-tab:hover, .tellus-tab:focus-visible { border-color: var(--accent); color: var(--accent); }
+.tellus-scrim {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.tellus-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%; max-width: 460px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.tellus-card h3 { margin: 0 0 12px; }
+/* Full-width targets, stacked: the three are a choice rather than a row of
+   buttons, and on a phone a row of three would be three cramped words. */
+.tellus-kind {
+  display: block; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); padding: 12px; margin-bottom: 8px;
+  cursor: pointer; font: inherit; color: inherit;
+}
+.tellus-kind:hover { border-color: var(--accent); }
+.tellus-kind-label { display: block; font-weight: 600; font-size: 0.92rem; }
+.tellus-thanks { margin: 0; font-weight: 600; }

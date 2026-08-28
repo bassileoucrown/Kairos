@@ -5,6 +5,7 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { BRAND_FULL } from '../lib/brand.js';
 import TimeUp from './TimeUp.jsx';
 import PadDock from './PadDock.jsx';
+import TellUs from './TellUs.jsx';
 import { useVisiblePoll } from '../lib/useVisiblePoll.js';
 
 // One navigation for the whole app.
@@ -481,6 +482,11 @@ export default function AppShell({ children, title, actions, active }) {
           Not on the pad's own screen, which already has a composer at the top;
           two on one page would be a choice nobody asked for. */}
       {location.pathname !== '/pad' && <PadDock ownerId={activeId} />}
+      {/* On every screen inside the shell, including the pad's own — a tester
+          confused by the pad has nowhere else to say so. Beside the dock
+          rather than in a menu: a way to report something that has to be
+          found first is a way that reports to nobody. */}
+      <TellUs />
     </div>
   );
 }

@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { asyncRouter } = require('../lib/asyncRouter');
 const { runReminderSweep } = require('../lib/reminders');
+const db = require('../lib/db');
 
 const router = asyncRouter();
 
@@ -67,6 +68,45 @@ function matches(given, expected) {
   );
 }
 
+/**
+ * When the outside clock last came through, and how long ago.
+ *
+ * WITHOUT THIS THERE IS NO WAY TO KNOW IT IS WORKING. The sweep is what makes
+ * reminders happen on a deployment that gets stopped when nobody is looking at
+ * it, so a scheduler pointed at the wrong URL is not a small misconfiguration
+ * — it is every notice in the product silently never going. The failure is
+ * indistinguishable from a quiet week, which is the worst shape a failure can
+ * have.
+ *
+ * Stored on a row of its own rather than in memory, because the process this
+ * would live in is exactly the process that gets stopped.
+ */
+async function noteRun(result) {
+  const at = new Date().toISOString();
+  // Upsert rather than update-then-insert: two schedulers pointed at the same
+  // deployment, or one retrying, must not race into two rows for one key.
+  await db.prepare(`
+    INSERT INTO app_state (state_key, value, updated_at)
+    VALUES ('sweep_last_run', ?, ?)
+    ON CONFLICT (state_key) DO UPDATE SET value = ?, updated_at = ?
+  `).run(JSON.stringify(result || {}), at, JSON.stringify(result || {}), at);
+}
+
+/** { at, agoMinutes, result } or null when it has never run here. */
+async function lastRun() {
+  const row = await db.prepare(
+    "SELECT value, updated_at FROM app_state WHERE state_key = 'sweep_last_run'",
+  ).get();
+  if (!row?.updated_at) return null;
+  let result = null;
+  try { result = JSON.parse(row.value); } catch { /* an older shape */ }
+  return {
+    at: row.updated_at,
+    agoMinutes: Math.round((Date.now() - Date.parse(row.updated_at)) / 60000),
+    result,
+  };
+}
+
 async function sweep(req, res) {
   const secret = configuredSecret();
   if (!secret) return res.status(404).json({ error: 'Not found.' });
@@ -79,6 +119,7 @@ async function sweep(req, res) {
   // deployment and a continuously running one cannot drift apart in what a
   // sweep actually means.
   const result = await runReminderSweep();
+  await noteRun(result).catch(() => {});
   res.json({ ok: true, ...result });
 }
 
@@ -91,3 +132,4 @@ router.post('/', sweep);
 router.get('/', sweep);
 
 module.exports = router;
+module.exports.lastRun = lastRun;

@@ -1280,3 +1280,53 @@ CREATE TABLE IF NOT EXISTS kept_items (
 );
 CREATE INDEX IF NOT EXISTS idx_kept_owner ON kept_items(owner_id, kept_at);
 CREATE INDEX IF NOT EXISTS idx_kept_source ON kept_items(source_message_id);
+
+-- What a tester wanted to tell you, from wherever they were standing.
+--
+-- WHY A PROTOTYPE NEEDS THIS MORE THAN THE FINISHED PRODUCT DOES. A pilot
+-- whose findings arrive as voice notes on WhatsApp produces impressions and
+-- loses evidence: the screen somebody was on, what they were trying to do, and
+-- what the app was showing at the time are exactly the details that do not
+-- survive being retold an hour later. So the report is taken in the app, one
+-- tap from wherever the confusion happened, and it carries the route with it.
+--
+-- THE ROUTE, NOT THE URL. A path like /threads/abc-123 identifies a
+-- conversation; the pattern /threads/:id says which screen without naming
+-- anybody's room. Same reasoning as the crash reports in lib/errorReports.js,
+-- and for the same reason: a feedback table is a place personal data goes to
+-- hide, and the useful half of it is never the personal half.
+--
+-- WHAT THE TESTER TYPES IS THEIRS AND IS KEPT VERBATIM. That is the one field
+-- where their own words are the point, and it is the one field they chose to
+-- write. Everything else here is either their account or the shape of the
+-- screen.
+CREATE TABLE IF NOT EXISTS feedback (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  -- Kept as text rather than joined, so a report survives the account being
+  -- deleted at the end of the pilot — which is a promise made to testers.
+  user_label  TEXT NOT NULL DEFAULT '',
+  role        TEXT NOT NULL DEFAULT '',
+  kind        TEXT NOT NULL DEFAULT 'confusing', -- confusing | wrong | idea
+  route       TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL,
+  -- What the operator did about it, so a pilot's inbox can be worked through
+  -- rather than merely accumulated.
+  status      TEXT NOT NULL DEFAULT 'open',      -- open | seen | done
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at);
+
+-- One row per fact the app needs to remember about ITSELF, rather than about
+-- anybody in it.
+--
+-- The first of them is when the outside clock last came through. That cannot
+-- live in memory, because the process it would live in is exactly the process
+-- a free instance stops when nobody is looking — and "the sweep has never run
+-- here" and "the sweep ran four minutes ago" would then be the same answer
+-- every time the container woke up.
+CREATE TABLE IF NOT EXISTS app_state (
+  state_key   TEXT PRIMARY KEY,
+  value       TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
