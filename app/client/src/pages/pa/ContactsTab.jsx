@@ -24,7 +24,7 @@ function monthDay(value) {
  *
  * So it reads as a line, and opens when there is something to change.
  */
-function ContactCard({ contact, ownerId, onSaved }) {
+function ContactCard({ contact, ownerId, onSaved, onRemoved }) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(contact.notes);
   const [tier, setTier] = useState(contact.relationshipTier);
@@ -34,6 +34,45 @@ function ContactCard({ contact, ownerId, onSaved }) {
   const [error, setError] = useState('');
   const dirty = notes !== contact.notes || tier !== contact.relationshipTier
     || birthday !== (contact.birthday || '') || anniversary !== (contact.anniversary || '');
+
+  /**
+   * Take them out of the book.
+   *
+   * TWO ROUNDS WHEN THERE IS SOMETHING TO LOSE. The vault hangs documents off a
+   * contact — a spouse's passport, a child's yellow fever card — so removing
+   * one can destroy papers nobody was thinking about while pressing a button on
+   * an address card. The server refuses the first attempt and says what is
+   * attached; the second names the number back, so what is being agreed to is
+   * a count somebody has actually read rather than a vague "are you sure".
+   */
+  async function remove() {
+    setError('');
+    setSaving(true);
+    try {
+      await api.del(`/pa/${ownerId}/contacts/${contact.id}`);
+      onRemoved(contact.id);
+      return;
+    } catch (err) {
+      if (err.status !== 409) { setError(err.message); setSaving(false); return; }
+      const { documents = 0, visas = 0 } = err.data || {};
+      const held = [
+        documents ? `${documents} document${documents === 1 ? '' : 's'}` : null,
+        visas ? `${visas} visa${visas === 1 ? '' : 's'}` : null,
+      ].filter(Boolean).join(' and ');
+      const yes = window.confirm(
+        `${contact.name || contact.email} has ${held} kept against their name.\n\n`
+        + 'Removing them deletes those too, permanently. Meetings you have already '
+        + 'had with them stay.\n\nRemove anyway?',
+      );
+      if (!yes) { setSaving(false); return; }
+      try {
+        await api.del(`/pa/${ownerId}/contacts/${contact.id}`, { alsoDelete: documents + visas });
+        onRemoved(contact.id);
+        return;
+      } catch (err2) { setError(err2.message); }
+    }
+    setSaving(false);
+  }
 
   async function save() {
     if (birthday && !MONTH_DAY_RE.test(birthday)) return setError('Birthday must be MM-DD, e.g. 03-21.');
@@ -133,11 +172,19 @@ function ContactCard({ contact, ownerId, onSaved }) {
             placeholder="PA notes — preferences, context, anything worth remembering"
             style={{ minHeight: 60 }}
           />
-          {dirty && (
-            <button className="btn btn-primary btn-sm" type="button" onClick={save} disabled={saving} style={{ marginTop: 10 }}>
-              {saving ? 'Saving…' : 'Save'}
+          <div className="code-actions" style={{ marginTop: 10 }}>
+            {dirty && (
+              <button className="btn btn-primary btn-sm" type="button" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            )}
+            {/* Inside the opened card rather than on the closed row. A delete
+                sitting on a list is a delete somebody presses while scrolling,
+                and this one can take a passport with it. */}
+            <button className="btn btn-danger btn-sm" type="button" onClick={remove} disabled={saving}>
+              Remove
             </button>
-          )}
+          </div>
         </>
       )}
     </div>
@@ -266,6 +313,10 @@ export default function ContactsTab({ ownerId }) {
     setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
+  function handleRemoved(id) {
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+  }
+
   function handleCreated(created) {
     setContacts((prev) => [created, ...(prev || [])]);
   }
@@ -280,7 +331,8 @@ export default function ContactsTab({ ownerId }) {
         <div className="empty-state">No contacts yet — add one above, or they'll appear automatically the first time someone books.</div>
       )}
       {contacts && contacts.map((c) => (
-        <ContactCard key={c.id} contact={c} ownerId={ownerId} onSaved={handleSaved} />
+        <ContactCard key={c.id} contact={c} ownerId={ownerId}
+          onSaved={handleSaved} onRemoved={handleRemoved} />
       ))}
     </div>
   );

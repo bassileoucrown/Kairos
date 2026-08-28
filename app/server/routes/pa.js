@@ -14,6 +14,9 @@ const { sendEmail } = require('../lib/email');
 const { formatForEmail, rangeForEmail } = require('../lib/format');
 const { daysUntilNextOccurrence } = require('../lib/relationships');
 const { getOpenSlots } = require('../lib/availability');
+// The vault's own access log. Deleting a contact can destroy documents held
+// against them, and that belongs in the same trail as reading one.
+const { logAccess } = require('./essentials');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const aiModel = require('../lib/aiModel');
 const history = require('../lib/bookingHistory');
@@ -335,6 +338,63 @@ router.post('/:ownerId/contacts', requirePaAccess, async (req, res) => {
     GROUP BY c.id, u.slug
   `).get(id);
   res.status(201).json({ contact: serializeContact(row) });
+});
+
+/**
+ * Take somebody out of the book.
+ *
+ * WHAT GOES WITH THEM, AND WHY THAT IS NOT OBVIOUS. A contact is not only a
+ * name and an email. The vault holds essentials and visas against a SUBJECT,
+ * and that subject is often a contact rather than the principal — a spouse's
+ * passport, a child's yellow fever card — hung off this row with ON DELETE
+ * CASCADE. So the plainest possible delete button on a contact card quietly
+ * destroys a family member's identity documents, and the person pressing it
+ * has no way to know that from the card they are looking at.
+ *
+ * REFUSED UNTIL IT IS SAID OUT LOUD. A first attempt comes back with the count
+ * of what would go, so the screen can ask a real question rather than a vague
+ * "are you sure" — and only a request that names the number goes through. The
+ * confirmation is the count itself: somebody who has read "3 documents" and
+ * typed nothing has still been told the thing that matters.
+ *
+ * THE MEETINGS STAY. Bookings are keyed on the booker's email rather than on
+ * this row, so the history of who was seen and when survives — which is right.
+ * Removing somebody from your address book is not a claim that you never met.
+ */
+router.delete('/:ownerId/contacts/:id', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM contacts WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.principal.id);
+  if (!row) return res.status(404).json({ error: 'Contact not found.' });
+
+  const attached = await db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM essentials WHERE subject_contact_id = ?) AS documents,
+      (SELECT COUNT(*) FROM visas WHERE subject_contact_id = ?) AS visas
+  `).get(row.id, row.id);
+  const documents = Number(attached?.documents || 0);
+  const visas = Number(attached?.visas || 0);
+
+  if ((documents || visas) && req.body?.alsoDelete !== documents + visas) {
+    return res.status(409).json({
+      error: `${row.name || row.email} has things kept against their name. `
+        + 'Deleting the contact deletes those too.',
+      code: 'contact_has_records',
+      documents,
+      visas,
+    });
+  }
+
+  await db.prepare('DELETE FROM contacts WHERE id = ?').run(row.id);
+  // Logged like any other reach into the vault, because that is what it was:
+  // whatever was held against this person is now gone, and the principal is
+  // entitled to see that it happened and who did it.
+  if (documents || visas) {
+    await logAccess({
+      actorId: req.user.id, ownerId: req.principal.id,
+      action: 'delete', field: `contact:${row.name || row.email}`,
+    });
+  }
+  res.status(204).end();
 });
 
 router.patch('/:ownerId/contacts/:id', requirePaAccess, async (req, res) => {
