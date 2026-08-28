@@ -132,13 +132,50 @@ function client() {
     r = await pa('POST', '/feedback', { kind: 'wrong', body: '', route: '/today' });
     ok('an empty one is refused rather than filed', r.s === 400, String(r.s));
 
+    // ---- The observation that fits none of the boxes -----------------------
+    //
+    // A list of kinds is a guess about what testers will find, made before
+    // they have found anything, and the observations worth most in a pilot are
+    // the ones nobody anticipated. So there is a way out of the list, and it
+    // has to survive the round trip AS ITSELF.
+    //
+    // The route rewrites any kind it does not recognise to 'confusing'. That
+    // fallback is right for junk and would be silently wrong here: adding the
+    // button on the screen without adding the kind on the server would file
+    // every free-form observation as "I was confused" — a false signal on the
+    // one screen built to tell the operator what testers are hitting, and
+    // false quietly, which is the kind that gets believed. Hence the assertion
+    // is on what came BACK, not on the 201.
+    r = await pa('POST', '/feedback',
+      { kind: 'other', body: 'It works, but no principal I know would run their day this way.',
+        route: '/today' });
+    ok('an observation outside the list is taken', r.s === 201, `${r.s} ${JSON.stringify(r.d)}`);
+
+    let filed = (await boss('GET', '/feedback')).d.feedback
+      .find((f) => /no principal I know/.test(f.body));
+    ok('and is filed as what it is, not rewritten to confusion',
+      filed?.kind === 'other', JSON.stringify({ kind: filed?.kind }));
+
+    // The fallback still does its job for genuine junk, which is what makes
+    // the assertion above mean something rather than merely pass.
+    r = await pa('POST', '/feedback',
+      { kind: 'not-a-kind', body: 'Filed under something invented.', route: '/today' });
+    filed = (await boss('GET', '/feedback')).d.feedback
+      .find((f) => /something invented/.test(f.body));
+    ok('while a kind nobody offers is still brought back to a known one',
+      filed?.kind === 'confusing', JSON.stringify({ kind: filed?.kind }));
+
     // ---- What is kept, and what is not ------------------------------------
     head('And the report carries the screen, not the room:');
     r = await boss('GET', '/feedback');
     ok('the operator can read the pile', r.s === 200, `${r.s} ${JSON.stringify(r.d).slice(0, 90)}`);
-    const one = (r.d.feedback || [])[0];
-    ok('the words are kept exactly', /which principal I was acting for/.test(one?.body || ''),
-      one?.body);
+    // NAMED, NOT COUNTED FROM THE TOP. This was feedback[0], which meant it
+    // silently pointed at whichever report happened to be newest — so adding
+    // a report anywhere above it moved these six assertions onto a different
+    // row, and they failed complaining about the wrong words. The pile is
+    // ordered newest-first for the operator's benefit, not for this test's.
+    const one = (r.d.feedback || []).find((f) => /which principal I was acting for/.test(f.body));
+    ok('the words are kept exactly', !!one, JSON.stringify(r.d.feedback?.map((f) => f.body)));
     ok('with who said it and what they are',
       one?.userLabel === 'Ngozi Bello' && one?.role === 'pa',
       JSON.stringify({ who: one?.userLabel, role: one?.role }));
@@ -181,10 +218,15 @@ function client() {
 
     await page.click('.tellus-tab');
     await page.waitForSelector('.tellus-kind', { timeout: 20000 });
-    // Three kinds rather than one box: confusing is a design problem, wrong is
-    // a bug, an idea is neither, and a pilot reads them differently.
+    // Kinds rather than one box: confusing is a design problem, wrong is a
+    // bug, an idea is neither, and a pilot reads them differently.
     ok('it asks what kind of thing happened',
-      (await page.locator('.tellus-kind').count()) === 3);
+      (await page.locator('.tellus-kind').count()) === 4);
+    // And the way out of the list is ON the list. Checked by its own label
+    // rather than by the count above, which would go on passing if a fourth
+    // button appeared that was not this one.
+    ok('with a way out of the list for anything else',
+      (await page.locator('.tellus-kind', { hasText: 'Something else' }).count()) === 1);
 
     await page.locator('.tellus-kind', { hasText: 'Something is wrong' }).click();
     await page.fill('#tellus-body', 'The task list showed yesterday for a moment.');
@@ -202,6 +244,31 @@ function client() {
     ok('and it arrives with the screen it came from',
       fromScreen?.route === '/tasks' && fromScreen?.kind === 'wrong',
       JSON.stringify(fromScreen));
+
+    // THE WHOLE WAY THROUGH THE SCREEN, for the kind that has no box.
+    // The API assertions above prove the server keeps 'other'; this proves a
+    // tester can actually reach it — the two halves failed separately once, in
+    // the direction where the button existed and the server quietly relabelled
+    // what it sent.
+    await page.click('.tellus-tab');
+    await page.waitForSelector('.tellus-kind', { timeout: 20000 });
+    await page.locator('.tellus-kind', { hasText: 'Something else' }).click();
+    await page.waitForSelector('#tellus-body', { timeout: 20000 });
+    ok('and the box does not steer the answer back to a fault',
+      /does not have to be a fault/i.test(
+        await page.locator('#tellus-body').getAttribute('placeholder') || ''),
+      await page.locator('#tellus-body').getAttribute('placeholder'));
+    await page.fill('#tellus-body', 'Handover between two assistants is the missing piece.');
+    await page.click('button:has-text("Send")');
+    await page.waitForFunction(
+      () => /straight through/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+
+    r = await boss('GET', '/feedback');
+    const freeform = (r.d.feedback || []).find((f) => /Handover between two/.test(f.body));
+    ok('an observation typed on the screen arrives as its own kind',
+      freeform?.kind === 'other' && freeform?.route === '/tasks',
+      JSON.stringify(freeform));
 
     // ---- What was used, counted and not read -------------------------------
     head('What testers did is counted, and what they wrote is not:');

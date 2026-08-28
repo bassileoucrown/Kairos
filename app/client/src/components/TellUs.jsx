@@ -10,11 +10,20 @@ import { api } from '../lib/api.js';
 // exactly the details that do not survive being retold. Taken here, the report
 // carries the route with it and costs the tester nothing.
 //
-// THREE BUTTONS, NOT A TEXT BOX WITH A LABEL. "Confusing", "wrong" and "idea"
-// are different reports and a pilot reads them differently: confusing is a
-// design problem, wrong is a bug, an idea is neither and should not be triaged
-// as one. Asking first also does most of the writing — somebody who has
-// pressed "This is wrong" has already said the hard part.
+// BUTTONS, NOT A TEXT BOX WITH A LABEL. "Confusing", "wrong" and "idea" are
+// different reports and a pilot reads them differently: confusing is a design
+// problem, wrong is a bug, an idea is neither and should not be triaged as
+// one. Asking first also does most of the writing — somebody who has pressed
+// "This is wrong" has already said the hard part.
+//
+// AND A FOURTH, FOR EVERYTHING THE THREE DO NOT COVER. A list of kinds is a
+// guess about what testers will find, made before they have found anything,
+// and the observations worth most in a pilot are the ones nobody anticipated —
+// "this is fine but it is not how an office actually works" is none of
+// confused, wrong, or an idea. Without a way out of the list, a tester either
+// mislabels the report or does not make it. Both are losses, and the
+// mislabelled one is worse: it arrives as a wrong signal on the screen built
+// to tell the operator what testers are hitting.
 //
 // It sits beside the Pad button rather than in a menu, because a thing you
 // have to go and find is a thing that gets reported to nobody.
@@ -23,7 +32,15 @@ const KINDS = [
   { id: 'confusing', label: 'I was confused', hint: 'You could not tell what to do, or what happened.' },
   { id: 'wrong', label: 'Something is wrong', hint: 'It did the wrong thing, or nothing at all.' },
   { id: 'idea', label: 'I have an idea', hint: 'Something that would have helped you here.' },
+  { id: 'other', label: 'Something else', hint: 'An observation that fits none of the above.' },
 ];
+
+// The prompt above the box. The three named kinds have already been half
+// answered by the button; "something else" has not, so it asks openly rather
+// than steering the answer back towards a category the tester just declined.
+const PROMPTS = {
+  other: 'Whatever you noticed — it does not have to be a fault.',
+};
 
 export default function TellUs() {
   const location = useLocation();
@@ -86,7 +103,7 @@ export default function TellUs() {
               <textarea
                 id="tellus-body" rows={5} value={body} autoFocus
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="What were you trying to do?"
+                placeholder={PROMPTS[kind] || 'What were you trying to do?'}
               />
               {/* Said plainly. Somebody whose profession is discretion should
                   know what leaves with a report before they write it. */}

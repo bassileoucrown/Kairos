@@ -25,7 +25,7 @@ function ago(iso) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-const KIND_LABEL = { confusing: 'Confused', wrong: 'Wrong', idea: 'Idea' };
+const KIND_LABEL = { confusing: 'Confused', wrong: 'Wrong', idea: 'Idea', other: 'Note' };
 
 function Feedback() {
   const [data, setData] = useState(null);

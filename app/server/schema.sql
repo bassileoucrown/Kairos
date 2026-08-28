@@ -1307,7 +1307,7 @@ CREATE TABLE IF NOT EXISTS feedback (
   -- deleted at the end of the pilot — which is a promise made to testers.
   user_label  TEXT NOT NULL DEFAULT '',
   role        TEXT NOT NULL DEFAULT '',
-  kind        TEXT NOT NULL DEFAULT 'confusing', -- confusing | wrong | idea
+  kind        TEXT NOT NULL DEFAULT 'confusing', -- confusing | wrong | idea | other
   route       TEXT NOT NULL DEFAULT '',
   body        TEXT NOT NULL,
   -- What the operator did about it, so a pilot's inbox can be worked through

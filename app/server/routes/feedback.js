@@ -11,7 +11,13 @@ const { canPublish } = require('../lib/announcements');
 const router = asyncRouter();
 router.use(requireAuth);
 
-const KINDS = new Set(['confusing', 'wrong', 'idea']);
+// 'other' is not a spare slot, it is the one a tester picks when the list does
+// not describe what they saw — and it must be here as well as on the screen.
+// The fallback below rewrites anything unrecognised to 'confusing', so adding
+// the button alone would have filed every free-form observation as "I was
+// confused": a wrong signal on the very screen built to say what testers hit,
+// and wrong quietly, which is the kind that gets believed.
+const KINDS = new Set(['confusing', 'wrong', 'idea', 'other']);
 
 /**
  * The route, with the identifiers taken out.
