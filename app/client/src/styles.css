@@ -3152,3 +3152,35 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .report-group h4 { margin: 0 0 6px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 .report-line { display: flex; gap: 8px; align-items: baseline; font-size: 0.9rem; }
 .report-n { font-weight: 700; min-width: 1.6em; text-align: right; }
+
+/* ---- The desk, before you have picked a drawer ---- */
+.desk-intro { margin: 0 0 14px; }
+.desk-return { margin-bottom: 10px; }
+/* Auto-fit rather than a fixed column count: nine cards want three columns on a
+   desk, two on a tablet and one on a phone, and the browser can work that out
+   from the only number that matters — how narrow a card may get before its
+   count and its sentence stop reading. */
+.desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.desk-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.desk-card:hover { border-color: var(--accent); }
+/* The one that needs somebody today. A left edge rather than a fill, so a desk
+   with four things outstanding still reads as a page rather than as an alarm. */
+.desk-card.needs-you { border-left: 3px solid var(--accent); }
+.desk-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.desk-card-label { font-weight: 600; font-size: 0.95rem; }
+.desk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.desk-card-count { margin: 6px 0 4px; font-size: 0.85rem; color: var(--text-muted); }
+.desk-card-count strong { font-size: 1.5rem; color: var(--text); margin-right: 4px; }
+.desk-card-count.is-tool { font-size: 0.9rem; font-weight: 600; color: var(--accent); }
+.desk-card-note { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }

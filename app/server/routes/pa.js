@@ -934,4 +934,123 @@ router.post('/:ownerId/ai-assist/draft-message', requirePaAccess, async (req, re
   });
 });
 
+/**
+ * What is on the desk, before you have picked a drawer.
+ *
+ * WHY THIS EXISTS. The desk held nine sections behind a tab strip, which on a
+ * phone is a menu you have to open — so arriving at the desk showed you one
+ * section and hid the other eight behind an act of curiosity. That is fine for
+ * somebody who already knows what is in there and useless for everybody else:
+ * the assistant cannot see that two requests are waiting and a brief is
+ * unwritten without visiting three drawers to find out.
+ *
+ * ONE ROUND TRIP, NOT NINE. The obvious build is to render all nine sections
+ * stacked, which is nine components each fetching its own data — an unusable
+ * page and nine queries where one will do. What a person needs on arrival is
+ * not nine screens, it is nine answers to "is there anything here for me".
+ * So this counts, and the sections themselves stay one click away.
+ *
+ * A COUNT IS NOT ALWAYS THE POINT. Approvals waiting is urgent; contacts is
+ * merely a size. The `attention` flag says which is which, so the screen can
+ * mark the one that needs somebody today without lighting up the whole page.
+ */
+router.get('/:ownerId/desk', requirePaAccess, async (req, res) => {
+  const id = req.principal.id;
+  const now = new Date().toISOString();
+  const canSchedule = req.paRole === 'owner' || !!req.membership?.can_manage_scheduling;
+
+  const n = async (sql, ...args) =>
+    Number((await db.prepare(sql).get(id, ...args))?.n || 0);
+
+  const [approvals, upcoming, types, days, contacts, birthdays, briefs, instructions, comms] =
+    await Promise.all([
+      n("SELECT COUNT(*) AS n FROM bookings WHERE owner_id = ? AND status = 'pending'"),
+      n("SELECT COUNT(*) AS n FROM bookings WHERE owner_id = ? AND status = 'confirmed' AND start_at >= ?", now),
+      n("SELECT COUNT(*) AS n FROM meeting_types WHERE owner_id = ? AND kind != 'internal'"),
+      n('SELECT COUNT(DISTINCT day_of_week) AS n FROM availability_rules WHERE owner_id = ?'),
+      n('SELECT COUNT(*) AS n FROM contacts WHERE owner_id = ?'),
+      // Only the ones with a date on them: a contact with no birthday recorded
+      // is not a birthday nobody remembered.
+      n("SELECT COUNT(*) AS n FROM contacts WHERE owner_id = ? AND (birthday IS NOT NULL AND birthday != '')"),
+      n('SELECT COUNT(*) AS n FROM briefs WHERE owner_id = ?'),
+      n("SELECT COUNT(*) AS n FROM instructions WHERE owner_id = ? AND status = 'open'"),
+      n("SELECT COUNT(*) AS n FROM emails WHERE owner_id = ? AND category = 'comms'"),
+    ]);
+
+  // A meeting that has been agreed but never briefed. The single most useful
+  // thing this screen can say to an assistant, and the reason briefs carries a
+  // count of what is MISSING rather than of what exists: "6 briefs" tells you
+  // nothing, "2 meetings with no brief" tells you what to do this morning.
+  const unbriefed = await db.prepare(`
+    SELECT COUNT(*) AS n FROM bookings b
+    WHERE b.owner_id = ? AND b.status = 'confirmed' AND b.start_at >= ?
+      AND NOT EXISTS (SELECT 1 FROM briefs f WHERE f.booking_id = b.id)
+  `).get(id, now).then((r) => Number(r?.n || 0));
+
+  const sections = [
+    {
+      id: 'approvals', label: 'Approvals',
+      count: approvals, unit: approvals === 1 ? 'request waiting' : 'requests waiting',
+      note: 'People asking for time. Say yes, say no, or offer another slot.',
+      attention: approvals > 0,
+    },
+    {
+      id: 'bookings', label: 'Bookings',
+      count: upcoming, unit: upcoming === 1 ? 'meeting ahead' : 'meetings ahead',
+      note: 'Everything agreed and still to come. Move it, shorten it, call it off.',
+    },
+    ...(canSchedule ? [
+      {
+        id: 'availability', label: 'Availability',
+        count: days, unit: days === 1 ? 'day open' : 'days open',
+        note: 'The hours strangers are allowed to book into.',
+        // Nothing bookable at all is a state worth flagging: the public page
+        // is live and offering nobody anything.
+        attention: days === 0,
+      },
+      {
+        id: 'meeting_types', label: 'Meeting types',
+        count: types, unit: types === 1 ? 'kind of meeting' : 'kinds of meeting',
+        note: 'What can be booked, how long it runs, and who may book it.',
+        attention: types === 0,
+      },
+    ] : []),
+    {
+      id: 'contacts', label: 'Contacts',
+      count: contacts, unit: contacts === 1 ? 'person' : 'people',
+      note: birthdays
+        ? `Who they are and how it went last time. ${birthdays} with a date to remember.`
+        : 'Who they are and how it went last time.',
+    },
+    {
+      id: 'briefs', label: 'Briefs',
+      count: unbriefed, unit: unbriefed === 1 ? 'meeting unbriefed' : 'meetings unbriefed',
+      note: briefs
+        ? `${briefs} written so far. A brief is what the principal reads on the way in.`
+        : 'A brief is what the principal reads on the way in.',
+      attention: unbriefed > 0,
+    },
+    {
+      id: 'instructions', label: 'Instructions',
+      count: instructions, unit: instructions === 1 ? 'still open' : 'still open',
+      note: 'Standing orders from the principal, and what is outstanding.',
+      attention: instructions > 0,
+    },
+    {
+      id: 'comms', label: 'Comms',
+      count: comms, unit: comms === 1 ? 'message sent' : 'messages sent',
+      note: 'Write to somebody on the principal\'s behalf, in their voice.',
+    },
+    {
+      id: 'ai_assist', label: 'AI Assist',
+      // No count, deliberately: it is a tool rather than a pile, and inventing
+      // a number for it would make the row look like the others and mean less.
+      count: null,
+      note: 'Describe a meeting in a sentence and have it drafted or booked.',
+    },
+  ];
+
+  res.json({ sections, canSchedule });
+});
+
 module.exports = router;

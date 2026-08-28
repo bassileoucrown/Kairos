@@ -64,7 +64,9 @@ const NAV = [
   { group: 'desk', to: '/workspace', label: 'Workspace', icon: '◈', assistantOnly: true },
   // One door to the whole desk. What used to be four rail entries is four tabs
   // behind this one, which is where they already were.
-  { group: 'desk', to: '/pa?tab=approvals', match: '/pa', label: 'Desk', icon: '☰', principalScoped: true, badge: 'approvals' },
+  // No ?tab, deliberately. The desk opens on everything it holds rather than
+  // on whichever section was picked as a default. See pages/pa/DeskOverview.jsx.
+  { group: 'desk', to: '/pa', match: '/pa', label: 'Desk', icon: '☰', principalScoped: true, badge: 'approvals' },
   // Shown to assistants as well as principals, and it shows them their own
   // week rather than the office's — see mayRead's cousin in routes/report.js.
   // Hiding it from them would mean the people the report is about are the only

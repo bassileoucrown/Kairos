@@ -15,6 +15,7 @@ import MeetingTypesTab from '../dashboard/MeetingTypesTab.jsx';
 import BookingsTab from '../dashboard/BookingsTab.jsx';
 import CalendarTab from '../dashboard/CalendarTab.jsx';
 import Tabs from '../../components/Tabs.jsx';
+import DeskOverview from './DeskOverview.jsx';
 
 // Scheduling tabs only appear when the principal has delegated them, so an
 // assistant is never shown a door that will 403.
@@ -63,10 +64,16 @@ export default function PaHome() {
   const [error, setError] = useState('');
   const [waiting, setWaiting] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
-  const raw = searchParams.get('tab') || 'approvals';
+  // NO TAB IS A REAL STATE NOW, and it is the one you arrive in. It used to
+  // default to Approvals, which meant the desk opened on one of its nine
+  // sections and said nothing about the other eight — see DeskOverview.jsx.
+  const raw = searchParams.get('tab');
   // A bookmark or a link somebody sent last week still lands somewhere true.
-  const tab = MOVED[raw] || raw;
+  const tab = raw ? (MOVED[raw] || raw) : null;
   const setTab = (t) => setSearchParams({ tab: t }, { replace: true });
+  // Back to the overview, and back out of the tab in the URL with it, so the
+  // browser's own Back button and this one agree about where they go.
+  const clearTab = () => setSearchParams({}, { replace: true });
 
   // Assistant-category users land here straight out of onboarding (never
   // through Dashboard), so this is the other place a stashed post-onboarding
@@ -99,7 +106,7 @@ export default function PaHome() {
         const preferred = data.principals.find((p) => p.id === stored)
           || data.principals.find((p) => p.role !== 'owner')
           || data.principals[0];
-        navigate(`/pa/${preferred.id}?tab=${tab}`, { replace: true });
+        navigate(`/pa/${preferred.id}${tab ? `?tab=${tab}` : ''}`, { replace: true });
       }
     }).catch((err) => setError(err.message));
   }, [ownerId, navigate]);
@@ -123,12 +130,13 @@ export default function PaHome() {
   const visibleTabs = TABS.filter((t) => !t.scheduling || canSchedule)
     .map((t) => (t.id === 'approvals' ? { ...t, attention: waiting > 0 } : t));
   const TAB_LABEL = { ...Object.fromEntries(TABS.map((t) => [t.id, t.label])), calendar: 'Calendar' };
+  const title = tab ? (TAB_LABEL[tab] || 'Desk') : 'Desk';
   // Every tab of this page is behind one rail entry now, so they all light
   // the same one. Which section you are in is the tab strip's job.
   const activeNav = tab === 'calendar' ? 'calendar' : 'desk';
 
   return (
-    <AppShell title={TAB_LABEL[tab] || 'PA Home'} active={activeNav}>
+    <AppShell title={title} active={activeNav}>
       {!current ? (
         <div className="empty-state">You don't have access to that account.</div>
       ) : (
@@ -141,7 +149,26 @@ export default function PaHome() {
             </div>
           )}
 
-          <Tabs tabs={visibleTabs} active={tab} onChange={setTab} label="Desk sections" />
+          {/* The strip is for moving BETWEEN sections once you are in one. On
+              arrival there is nothing to move between yet, and a row of tabs
+              above a page that shows all of them is two answers to one
+              question. */}
+          {tab && (
+            <div className="desk-return">
+              <button className="btn btn-sm" type="button" onClick={clearTab}>
+                ← The whole desk
+              </button>
+            </div>
+          )}
+          {tab && <Tabs tabs={visibleTabs} active={tab} onChange={setTab} label="Desk sections" />}
+
+          {!tab && (
+            <DeskOverview
+              ownerId={ownerId}
+              principalName={current.role === 'owner' ? null : current.name}
+              onOpen={setTab}
+            />
+          )}
 
           {tab === 'availability' && (canSchedule
             ? <AvailabilityTab ownerId={ownerId} principalName={current.role === 'owner' ? null : current.name} />
