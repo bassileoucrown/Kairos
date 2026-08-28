@@ -167,19 +167,57 @@ async function onboard(p, name, email, roleLabel) {
     ok('and the line is filed against that appointment', attached === 1, String(attached));
 
     head('THE OBSTRUCTION QUESTION, measured rather than assumed:');
-    // A full list, so there is something at the very bottom to be covered.
-    await page.goto(`${BASE}/pad`);
-    await page.waitForSelector('.pad-write textarea', { timeout: 20000 });
-    for (let i = 0; i < 8; i++) {
-      await page.fill('.pad-write textarea', `Line number ${i} on the pad.`);
-      await page.click('.pad-write button:has-text("Jot it")');
-      await page.waitForSelector(`.pad-line:has-text("number ${i}")`, { timeout: 20000 });
-    }
+    // A FULL DAY, because an empty one cannot be covered by anything.
+    //
+    // This used to fill the PAD with eight lines and then measure /today —
+    // two different screens. /today on a fresh account says "Nothing waiting
+    // on you. Genuinely." and stops, so the check asked whether a fixed
+    // button covers the last row of a page with no rows. It could only
+    // answer yes, and it did: cutting .app-body's bottom padding to 8px left
+    // it green, because a page too short to scroll clears everything by
+    // default. A check that survives the deletion of the thing it checks is
+    // not a check.
+    //
+    // A busy day is also the case that matters. Nobody is hurt by a button
+    // floating over an empty afternoon; the principal with fourteen things
+    // in the diary is the one who cannot read the last of them.
+    const filled = await page.evaluate(async () => {
+      const me = await (await fetch('/api/auth/me', { credentials: 'include' })).json();
+      const id = me.user?.id || me.id;
+      const start = new Date(); start.setHours(6, 0, 0, 0);
+      let made = 0;
+      for (let i = 0; i < 14; i++) {
+        const r = await fetch(`/api/itinerary/${id}/items`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            title: `Standing item number ${i}`,
+            kind: 'meeting',
+            startAt: new Date(start.getTime() + i * 30 * 60000).toISOString(),
+            status: 'confirmed',
+          }),
+        });
+        if (r.ok) made++;
+      }
+      return made;
+    });
+    ok('the day has enough in it to be worth covering', filled === 14, String(filled));
 
     for (const [w, h, label] of [[1280, 900, 'a desktop'], [390, 844, 'a phone']]) {
       await page.setViewportSize({ width: w, height: h });
       await page.goto(`${BASE}/today`);
       await page.waitForSelector('.pad-dock-btn', { timeout: 20000 });
+      // AND WAIT FOR THE PAGE, WHICH IS NOT THE SAME THING. The dock lives in
+      // AppShell, and so does "Loading…" — so the selector above clears while
+      // the page is still empty. Measuring there measures a short page that
+      // never scrolls: it passes for the wrong reason on a slow run and
+      // disagrees with the next run.
+      await page.waitForSelector('.sched-row', { timeout: 20000 });
+      await page.waitForFunction(() => {
+        const h = document.querySelector('.app-body .hint');
+        return !(h && /Loading/.test(h.textContent || ''));
+      }, null, { timeout: 20000 });
       // SCROLL THE LAST ROW INTO VIEW AND ASK WHETHER IT IS COVERED.
       //
       // This used to scroll the window to document.body.scrollHeight and
@@ -205,13 +243,70 @@ async function onboard(p, name, email, roleLabel) {
           if (!speaks) continue;
           if (!last || r.bottom > last.getBoundingClientRect().bottom) last = el;
         }
-        if (!last) return true;
-        last.scrollIntoView({ block: 'end', behavior: 'instant' });
-        await new Promise((r) => setTimeout(r, 250));
-        const dock = document.querySelector('.pad-dock-btn').getBoundingClientRect();
-        return last.getBoundingClientRect().bottom <= dock.top;
+        if (!last) return { clear: true, why: 'nothing on the page to cover' };
+
+        // SCROLL TO THE END, THE WAY A READER DOES.
+        //
+        // Not scrollIntoView({block:'end'}): that aligns the element flush
+        // with the VIEWPORT edge, which is the one place it must never be
+        // measured. On a phone it dragged the last line down until it sat
+        // under the dock and then reported the dock as covering it; on a
+        // desktop it did not scroll at all, because the element was already
+        // visible, and reported the unscrolled page. Wrong in both
+        // directions, from the same mistake.
+        //
+        // The clearance this check exists to verify IS .app-body's bottom
+        // padding, and padding only shows itself at the END OF THE SCROLL
+        // RANGE. So go there — every scrollable ancestor of the last row,
+        // rather than assuming which element scrolls, since assuming the
+        // window was the scroller is what broke the previous version.
+        for (let el = last; el; el = el.parentElement) {
+          if (el.scrollHeight - el.clientHeight > 4) el.scrollTop = el.scrollHeight;
+        }
+
+        // AND THEN WAIT FOR THE DOCK TO STOP MOVING.
+        //
+        // The dock is anchored to `bottom` and shrinks by reducing its
+        // padding over 0.16s, so its TOP EDGE TRAVELS DOWNWARD while it
+        // shrinks — and the shrink is driven by a scroll handler, so it can
+        // begin well after the scroll lands. A fixed delay therefore lands
+        // inside the animation on some runs and after it on others, and
+        // inside it the dock is taller and the threshold stricter than
+        // anything a reader ever sees. That is a test that disagrees with
+        // itself, which is worth less than no test at all.
+        //
+        // So wait for the rectangle to stop changing rather than guessing how
+        // long it takes. Bounded, so a dock that somehow never settles fails
+        // as a timeout rather than hanging the suite.
+        const rect = () => document.querySelector('.pad-dock-btn').getBoundingClientRect();
+        const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        let seen = null;
+        let stable = 0;
+        for (let i = 0; i < 120 && stable < 3; i++) {
+          await frame();
+          const r = rect();
+          const key = `${Math.round(r.top)}:${Math.round(r.left)}:${Math.round(r.height)}`;
+          stable = key === seen ? stable + 1 : 0;
+          seen = key;
+        }
+
+        const dock = rect();
+        const bottom = last.getBoundingClientRect().bottom;
+        // Reported either way, so a red result says what it measured instead
+        // of only saying "false" — which is what this check did the first
+        // time it went red, and it cost an afternoon.
+        return {
+          clear: bottom <= dock.top,
+          settled: stable >= 3,
+          bottom: Math.round(bottom),
+          dockTop: Math.round(dock.top),
+          on: `${last.tagName.toLowerCase()}.${last.className || '(none)'}`,
+          text: (last.textContent || '').trim().slice(0, 40),
+        };
       });
-      ok(`on ${label}, the page's content ends above the dock`, clear);
+      ok(`on ${label}, the page's content ends above the dock`, clear.clear,
+        `${clear.text ? `"${clear.text}" (${clear.on})` : ''} ends at ${clear.bottom}, `
+        + `dock starts at ${clear.dockTop}${clear.settled === false ? ', dock never settled' : ''}`);
 
       const onScreen = await page.evaluate(() => {
         const r = document.querySelector('.pad-dock-btn').getBoundingClientRect();
