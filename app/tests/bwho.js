@@ -530,9 +530,19 @@ function client() {
       (await p.locator('.msg-stream').innerText()).slice(0, 120));
 
     head('A past appointment on screen:');
-    
+
     await p.goto(`${BASE}/appointments/${bossId}/${gone}`);
-    await p.waitForSelector('.card', { timeout: 20000 });
+    // WAITING FOR THE PAGE, NOT FOR A BOX THAT IS ALWAYS THERE. `.card` is in
+    // the shell, so it is present while the page still says "Loading…" — and
+    // reading body text at that moment reads a page with the nav on it and
+    // nothing else. Standalone it always won the race; on a board, behind
+    // ninety other suites, it lost one and reported that minutes filed and
+    // confirmed two hundred lines earlier were missing from the screen.
+    // Measurement error, not a product fault, and an expensive one to read.
+    await p.waitForFunction(() => {
+      const h = document.querySelector('.app-body .hint');
+      return !(h && /Loading/.test(h.textContent || ''));
+    }, null, { timeout: 20000 });
     const page = await p.locator('body').innerText();
     ok('says it has happened', /already happened/i.test(page), page.slice(0, 200));
     ok('and offers none of the three verbs',
