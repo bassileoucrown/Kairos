@@ -291,12 +291,19 @@ const iso = (ms) => new Date(ms).toISOString();
     });
     await page.goto(`${BASE}/dashboard?tab=calendar`);
     await page.waitForSelector('.cal-cell', { timeout: 20000 });
-    // The cell for the day the meeting is on: matched on the day number and
-    // excluding the neighbouring months' spill, which repeats those numbers.
-    const dom = String(Number(day.slice(8, 10)));
-    await page.locator('.cal-cell:not(.is-outside)')
-      .filter({ has: page.locator('.cal-dom', { hasText: new RegExp(`^${dom}$`) }) })
-      .first().click();
+    // THE CELL FOR THE DAY, BY THE DAY.
+    //
+    // This used to match on the printed day number while excluding the
+    // neighbouring months' spill — which is correct for about twenty-eight
+    // days a month and wrong for the rest. The meeting is three days out, so
+    // on the 29th of a month it falls in the NEXT one: the calendar opens on
+    // this month, "1" matches the 1st of the month being displayed, and the
+    // suite clicks an empty day and waits twenty seconds for a link that was
+    // never going to be there. It failed on the 29th of August having passed
+    // every day since it was written.
+    //
+    // The cell now carries the day it is, so there is nothing to infer.
+    await page.locator(`.cal-cell[data-day="${day}"]`).first().click();
     const link = page.locator('.sched-title-link').first();
     await link.waitFor({ timeout: 20000 });
     ok('the meeting on the calendar is a way in, not just a label', true);

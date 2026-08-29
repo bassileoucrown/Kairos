@@ -256,6 +256,11 @@ export default function CalendarTab({ ownerId = null, timezone = null }) {
               <button
                 key={key}
                 type="button"
+                // The day this cell IS, rather than the number printed on it.
+                // A month grid shows the neighbouring months' spill, so "1"
+                // appears twice and the only thing telling them apart is which
+                // month you happen to be looking at.
+                data-day={key}
                 className={'cal-cell'
                   + (key.slice(0, 7) === period.month ? '' : ' is-outside')
                   + (selectedDay === key ? ' is-selected' : '')
