@@ -534,6 +534,7 @@ router.get('/:ownerId/bookings/:bookingId/openings', requirePaAccess, loadPrinci
     minutes: req.query.minutes
       || Math.round((Date.parse(req.booking.end_at) - Date.parse(req.booking.start_at)) / 60000),
     excludeBookingId: req.booking.id,
+    viewerId: req.user.id,
   });
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json(result);

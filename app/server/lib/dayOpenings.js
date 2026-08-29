@@ -1,4 +1,5 @@
 const db = require('./db');
+const tripPrivacy = require('./tripPrivacy');
 const { zonedTimeToUtc, dayOfWeek } = require('./timezone');
 const { gapMinutesFor } = require('./availability');
 
@@ -53,7 +54,7 @@ const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && aEnd > bStart;
  * Returns { ok: true, ... } or { ok: false, status, error } — prose, since
  * every caller shows it to somebody.
  */
-async function openingsFor({ owner, date, minutes, excludeBookingId = null }) {
+async function openingsFor({ owner, date, minutes, excludeBookingId = null, viewerId = null }) {
   const parts = parseDateKey(date);
   if (!parts) return { ok: false, status: 400, error: 'That is not a date.' };
 
@@ -63,6 +64,35 @@ async function openingsFor({ owner, date, minutes, excludeBookingId = null }) {
   }
 
   const tz = owner.timezone || 'UTC';
+
+  // A DAY THE OFFICE MAY NOT LOOK INTO.
+  //
+  // A private journey is absent from every other screen, and absence is the
+  // right answer everywhere except here: a day that looks free is a day the
+  // office books, in good faith, while the principal is away with their
+  // family. So exactly one bit crosses — the day is spoken for — with no
+  // title, no destination, no reason, not even that it is travel.
+  //
+  // And it is SUBTRACTED, which nothing else in this function is. An ordinary
+  // commitment is shown and left bookable because the office can see what it
+  // is and judge whether to book over it. Here they cannot see it, so they
+  // cannot judge it, so the choice is taken off the table instead of being
+  // offered blind.
+  const shut = tripPrivacy.coversDay(
+    await tripPrivacy.privateWindows(owner.id, viewerId ?? owner.id), date,
+  );
+  if (shut) {
+    return {
+      ok: true,
+      date,
+      timezone: tz,
+      minutes: mins,
+      openings: [],
+      busy: [{ id: null, kind: 'unavailable', label: 'Unavailable', startAt: null, endAt: null }],
+      unavailable: true,
+    };
+  }
+
   const { year, month, day } = parts;
   const dayStart = zonedTimeToUtc(year, month, day, DAY_START_HOUR, 0, tz);
   const dayEnd = zonedTimeToUtc(year, month, day, DAY_END_HOUR, 0, tz);

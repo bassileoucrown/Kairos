@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
     const tz = m.timezone || 'UTC';
     const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
     // The assistant's view, so drafts are included — this is their work queue.
-    const entries = await buildDay({ id: m.id, timezone: tz }, dayKey, { viewerIsPrincipal: false });
+    const entries = await buildDay({ id: m.id, timezone: tz }, dayKey, { viewerIsPrincipal: false, viewerId: req.user.id });
     const confirmed = entries.filter((e) => e.status === 'confirmed');
 
     const pendingApprovals = await db.prepare(

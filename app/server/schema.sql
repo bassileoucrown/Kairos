@@ -932,6 +932,22 @@ CREATE TABLE IF NOT EXISTS trip_travellers (
 );
 CREATE INDEX IF NOT EXISTS idx_trip_travellers ON trip_travellers(trip_id);
 
+-- Who the principal has let in on a private trip.
+--
+-- A private trip is absent from the office entirely — see lib/tripPrivacy.js.
+-- This is how it stops being absent for one named person, and the principal is
+-- the only one who can add a row: the whole point is that they choose. The
+-- arranger is NOT listed here, because they do not need granting; they built
+-- the trip and are recognised by created_by.
+CREATE TABLE IF NOT EXISTS trip_shares (
+  id          TEXT PRIMARY KEY,
+  trip_id     TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trip_shares ON trip_shares(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_shares_once ON trip_shares(trip_id, user_id);
+
 -- Who to call at the far end. The office there, the host, the fixer, the
 -- doctor somebody recommended. Not contacts in the CRM sense — these are
 -- specific to one journey and should leave with it.

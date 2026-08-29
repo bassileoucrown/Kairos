@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const trips = require('../lib/trips');
+const tripPrivacy = require('../lib/tripPrivacy');
 const visas = require('../lib/visas');
 const pickup = require('../lib/pickup');
 const pickupSignal = require('../lib/pickupSignal');
@@ -73,7 +74,7 @@ router.use(requireAuth);
 
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
   res.json({
-    trips: await trips.listFor(req.principal.id),
+    trips: await trips.listFor(req.principal.id, req.user.id),
     arrangements: Object.entries(trips.ARRANGEMENTS).map(([id, a]) => ({
       id, label: a.label, hint: a.hint, needsContact: a.needsContact,
     })),
@@ -86,6 +87,7 @@ router.post('/:ownerId', requirePaAccess, requirePlan('trips'), async (req, res)
     ownerId: req.principal.id,
     createdBy: req.user.id,
     name, destination, destinationTimezone, startsOn, endsOn, notes,
+    visibility: req.body?.visibility,
     // A principal planning their own travel means it; an assistant starts in
     // draft, exactly as with a single itinerary item.
     status: req.paRole === 'owner' ? (status || 'confirmed') : (status || 'draft'),
@@ -96,7 +98,7 @@ router.post('/:ownerId', requirePaAccess, requirePlan('trips'), async (req, res)
 
 /** One trip, with everything hanging off it. */
 router.get('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
 
   const items = await db.prepare(`
@@ -137,8 +139,85 @@ router.get('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
   });
 });
 
+/**
+ * Whose business this journey is — and only the principal may say.
+ *
+ * Not the arranger, not a Chief of Staff, however much of the office they can
+ * otherwise see. An assistant who could mark a trip private could hide a
+ * principal's movements from the principal's own office, and an assistant who
+ * could mark one public could put a family holiday in front of everybody. Both
+ * are the same mistake: this is the principal's call about their own life.
+ */
+router.patch('/:ownerId/:tripId/visibility', requirePaAccess, async (req, res) => {
+  if (req.paRole !== 'owner') {
+    return res.status(403).json({ error: 'Only the principal decides whether a trip is private.' });
+  }
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+
+  const { visibility } = req.body || {};
+  if (!tripPrivacy.VISIBILITIES.has(visibility)) {
+    return res.status(400).json({ error: 'A trip is either the office\'s or private.' });
+  }
+  await db.prepare('UPDATE trips SET visibility = ? WHERE id = ? AND owner_id = ?')
+    .run(visibility, trip.id, req.principal.id);
+  res.json({ trip: await trips.get(req.principal.id, trip.id, req.user.id) });
+});
+
+/** Who the principal has let in, and letting somebody in. Principal only. */
+router.get('/:ownerId/:tripId/shares', requirePaAccess, async (req, res) => {
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+  const shares = await db.prepare(`
+    SELECT s.id, s.user_id, s.created_at, u.name, u.email
+      FROM trip_shares s JOIN users u ON u.id = s.user_id
+     WHERE s.trip_id = ? ORDER BY s.created_at
+  `).all(trip.id);
+  res.json({
+    shares: shares.map((s) => ({
+      id: s.id, userId: s.user_id, name: s.name, email: s.email, createdAt: s.created_at,
+    })),
+  });
+});
+
+router.post('/:ownerId/:tripId/shares', requirePaAccess, async (req, res) => {
+  if (req.paRole !== 'owner') {
+    return res.status(403).json({ error: 'Only the principal decides who knows about a private trip.' });
+  }
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+
+  const { userId } = req.body || {};
+  // Only somebody already in the office. Sharing a private journey with a
+  // stranger is not a smaller version of sharing it with an assistant, it is
+  // a different act, and this is not the route for it.
+  const member = await db.prepare(`
+    SELECT member_user_id FROM memberships
+     WHERE owner_id = ? AND member_user_id = ? AND status = 'active'
+  `).get(req.principal.id, userId || '');
+  if (!member) {
+    return res.status(400).json({ error: 'That is not somebody in your office.' });
+  }
+  await db.prepare(
+    'INSERT INTO trip_shares (id, trip_id, user_id, created_at) VALUES (?, ?, ?, ?)',
+  ).run(crypto.randomUUID(), trip.id, userId, new Date().toISOString())
+    .catch(() => {});  // Already told. Telling them twice is not an error.
+  res.status(201).json({ ok: true });
+});
+
+router.delete('/:ownerId/:tripId/shares/:userId', requirePaAccess, async (req, res) => {
+  if (req.paRole !== 'owner') {
+    return res.status(403).json({ error: 'Only the principal decides who knows about a private trip.' });
+  }
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
+  if (!trip) return res.status(404).json({ error: 'Not found.' });
+  await db.prepare('DELETE FROM trip_shares WHERE trip_id = ? AND user_id = ?')
+    .run(trip.id, req.params.userId);
+  res.status(204).end();
+});
+
 router.patch('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
 
   const { name, destination, destinationTimezone, startsOn, endsOn, status, notes } = req.body || {};
@@ -170,7 +249,7 @@ router.patch('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
 
   values.push(trip.id);
   await db.prepare(`UPDATE trips SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  res.json({ trip: await trips.get(req.principal.id, trip.id) });
+  res.json({ trip: await trips.get(req.principal.id, trip.id, req.user.id) });
 });
 
 // --- Who else is going, and who to call there -----------------------------
@@ -193,17 +272,17 @@ router.patch('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
  * screen offers first.
  */
 router.post('/:ownerId/:tripId/cancel', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   if (trip.status === 'cancelled') {
     return res.status(409).json({ error: 'That trip is already cancelled.' });
   }
   await db.prepare('UPDATE trips SET status = ? WHERE id = ?').run('cancelled', trip.id);
-  res.json({ trip: await trips.get(req.principal.id, trip.id) });
+  res.json({ trip: await trips.get(req.principal.id, trip.id, req.user.id) });
 });
 
 router.delete('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
 
   // A confirmed trip is drawing the principal's days in another timezone.
@@ -228,7 +307,7 @@ router.delete('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
 
 /** What deleting would take with it, so the screen can say so before it asks. */
 router.get('/:ownerId/:tripId/deletion', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   const [items, travellers, contacts] = await Promise.all([
     db.prepare('SELECT COUNT(*) AS n FROM itinerary_items WHERE owner_id = ? AND trip_id = ?').get(req.principal.id, trip.id),
@@ -244,7 +323,7 @@ router.get('/:ownerId/:tripId/deletion', requirePaAccess, async (req, res) => {
 });
 
 router.post('/:ownerId/:tripId/travellers', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   const { name, role, contactId } = req.body || {};
   if (!String(name || '').trim()) return res.status(400).json({ error: 'Who is coming?' });
@@ -265,14 +344,14 @@ router.post('/:ownerId/:tripId/travellers', requirePaAccess, async (req, res) =>
 });
 
 router.delete('/:ownerId/:tripId/travellers/:id', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   await db.prepare('DELETE FROM trip_travellers WHERE id = ? AND trip_id = ?').run(req.params.id, trip.id);
   res.status(204).end();
 });
 
 router.post('/:ownerId/:tripId/contacts', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   const { name, role, phone, notes } = req.body || {};
   if (!String(name || '').trim()) return res.status(400).json({ error: 'Give the contact a name.' });
@@ -287,7 +366,7 @@ router.post('/:ownerId/:tripId/contacts', requirePaAccess, async (req, res) => {
 });
 
 router.delete('/:ownerId/:tripId/contacts/:id', requirePaAccess, async (req, res) => {
-  const trip = await trips.get(req.principal.id, req.params.tripId);
+  const trip = await trips.get(req.principal.id, req.params.tripId, req.user.id);
   if (!trip) return res.status(404).json({ error: 'Not found.' });
   await db.prepare('DELETE FROM trip_contacts WHERE id = ? AND trip_id = ?').run(req.params.id, trip.id);
   res.status(204).end();

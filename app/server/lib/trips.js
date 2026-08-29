@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('./db');
+const tripPrivacy = require('./tripPrivacy');
 
 // A journey as an object, and the two things that follow from having one.
 //
@@ -80,12 +81,14 @@ function serializeTrip(row, extras = {}) {
     endsOn: row.ends_on,
     status: row.status,
     notes: row.notes,
+    // 'office' for everything that existed before private trips did.
+    visibility: row.visibility || 'office',
     createdAt: row.created_at,
     ...extras,
   };
 }
 
-async function create({ ownerId, createdBy, name, destination, destinationTimezone, startsOn, endsOn, status, notes }) {
+async function create({ ownerId, createdBy, name, destination, destinationTimezone, startsOn, endsOn, status, notes, visibility }) {
   if (!String(name || '').trim()) return { error: 'Give the trip a name.' };
   if (!startsOn || !endsOn) return { error: 'A trip needs a first and last day.' };
   if (endsOn < startsOn) return { error: 'The trip ends before it starts.' };
@@ -105,14 +108,19 @@ async function create({ ownerId, createdBy, name, destination, destinationTimezo
     ends_on: endsOn,
     status: chosen,
     notes: String(notes || '').trim(),
+    // Only the principal may create a journey the office cannot see. An
+    // assistant marking one private on creation is the same mistake as an
+    // assistant marking one private later, and it is refused in the same way.
+    visibility: (visibility === 'private' && ownerId === createdBy)
+      ? 'private' : 'office',
     created_at: new Date().toISOString(),
   };
   await db.prepare(`
     INSERT INTO trips (id, owner_id, created_by, name, destination, destination_timezone,
-                       starts_on, ends_on, status, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       starts_on, ends_on, status, notes, visibility, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(row.id, row.owner_id, row.created_by, row.name, row.destination, row.destination_timezone,
-    row.starts_on, row.ends_on, row.status, row.notes, row.created_at);
+    row.starts_on, row.ends_on, row.status, row.notes, row.visibility, row.created_at);
   return { trip: serializeTrip(row) };
 }
 
@@ -132,40 +140,62 @@ function isTimezone(name) {
  * rather than a fact — answering it by shifting their clock would be deciding
  * it for them.
  */
-async function timezoneOn(ownerId, dateKey, fallback = 'UTC') {
+// Both of these take a viewer, and for the same reason: a clock is evidence.
+// Draw an assistant's view of the principal's Thursday in Dubai time and you
+// have told them the principal is in the Gulf, without ever showing them the
+// trip. So for somebody who may not see the journey, the day stays in the
+// principal's home zone and reads as an ordinary Thursday.
+async function timezoneOn(ownerId, dateKey, fallback = 'UTC', viewerId = null) {
   const trip = await db.prepare(`
-    SELECT destination_timezone FROM trips
+    SELECT id, owner_id, created_by, visibility, destination_timezone FROM trips
     WHERE owner_id = ? AND status = 'confirmed'
       AND destination_timezone IS NOT NULL
       AND starts_on <= ? AND ends_on >= ?
     ORDER BY starts_on DESC LIMIT 1
   `).get(ownerId, dateKey, dateKey);
-  return trip?.destination_timezone || fallback;
+  if (!trip) return fallback;
+  if (!await tripPrivacy.maySeeTrip(trip, viewerId ?? ownerId)) return fallback;
+  return trip.destination_timezone || fallback;
 }
 
 /** The trip covering a date, whatever its status — for showing context. */
-async function tripOn(ownerId, dateKey) {
+async function tripOn(ownerId, dateKey, viewerId = null) {
   const row = await db.prepare(`
     SELECT * FROM trips
     WHERE owner_id = ? AND status IN ('confirmed', 'proposed')
       AND starts_on <= ? AND ends_on >= ?
     ORDER BY status = 'confirmed' DESC, starts_on DESC LIMIT 1
   `).get(ownerId, dateKey, dateKey);
-  return row ? serializeTrip(row) : null;
+  if (!row) return null;
+  if (!await tripPrivacy.maySeeTrip(row, viewerId ?? ownerId)) return null;
+  return serializeTrip(row);
 }
 
-async function listFor(ownerId, { includeDrafts = true } = {}) {
+// PRIVACY IS APPLIED HERE, not at the eleven call sites above this file.
+//
+// `viewerId` has no default on purpose. A caller that forgets it passes
+// undefined, which matches nobody, so a private trip disappears rather than
+// leaking — the failure lands on the safe side and shows up as a missing trip
+// in a test, instead of as somebody's family holiday on an assistant's screen.
+async function listFor(ownerId, viewerId, { includeDrafts = true } = {}) {
   const rows = await db.prepare(`
     SELECT * FROM trips WHERE owner_id = ?
       ${includeDrafts ? '' : "AND status != 'draft'"}
     ORDER BY starts_on DESC LIMIT 50
   `).all(ownerId);
-  return rows.map((r) => serializeTrip(r));
+  const hidden = await tripPrivacy.hiddenTripIds(ownerId, viewerId);
+  return rows.filter((r) => !hidden.has(r.id)).map((r) => serializeTrip(r));
 }
 
-async function get(ownerId, tripId) {
+async function get(ownerId, tripId, viewerId) {
   const row = await db.prepare('SELECT * FROM trips WHERE id = ? AND owner_id = ?').get(tripId, ownerId);
-  return row ? serializeTrip(row) : null;
+  if (!row) return null;
+  // A trip the viewer may not see answers exactly as one that does not exist,
+  // the same way every other lookup in this app refuses: "not yours to see"
+  // and "not there" must be one answer, or the difference between them is the
+  // leak.
+  if (!await tripPrivacy.maySeeTrip(row, viewerId)) return null;
+  return serializeTrip(row);
 }
 
 /**

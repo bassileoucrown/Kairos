@@ -2,6 +2,7 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const tripPrivacy = require('../lib/tripPrivacy');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const { arrangementProblem } = require('../lib/trips');
@@ -150,7 +151,7 @@ function serializeBooking(b, ownerTz) {
  * Everything on the principal's plate for a given day, in their timezone:
  * itinerary items plus confirmed bookings, merged and ordered.
  */
-async function buildDay(principal, dateKey, { viewerIsPrincipal = true } = {}) {
+async function buildDay(principal, dateKey, { viewerIsPrincipal = true, viewerId = null } = {}) {
   const tz = principal.timezone || 'UTC';
 
   // Pull a generous window and filter by day-in-zone rather than trying to
@@ -160,12 +161,19 @@ async function buildDay(principal, dateKey, { viewerIsPrincipal = true } = {}) {
   const to = new Date(windowStart.getTime() + 60 * 3600 * 1000).toISOString();
 
   const statuses = visibleStatusesFor(viewerIsPrincipal);
-  const items = await db.prepare(`
+  const allItems = await db.prepare(`
     SELECT i.*, u.name AS created_by_name FROM itinerary_items i
     LEFT JOIN users u ON u.id = i.created_by
     WHERE i.owner_id = ? AND i.start_at >= ? AND i.start_at <= ?
       AND i.status IN (${statuses.map(() => '?').join(',')})
   `).all(principal.id, from, to, ...statuses);
+  // The legs of a private journey are as private as the journey. Filtered
+  // here rather than in the SQL because the gate is one function and this is
+  // the only way to keep it that way across two backends.
+  const hiddenTrips = await tripPrivacy.hiddenTripIds(principal.id, viewerId ?? principal.id);
+  const items = hiddenTrips.size
+    ? allItems.filter((i) => !i.trip_id || !hiddenTrips.has(i.trip_id))
+    : allItems;
 
   const bookings = await db.prepare(`
     SELECT b.*, mt.name AS meeting_type_name FROM bookings b
@@ -194,7 +202,7 @@ async function buildDay(principal, dateKey, { viewerIsPrincipal = true } = {}) {
  * month. The window and the filtering are the only things that differ, so the
  * body is buildDay's with the day key swapped for a range.
  */
-async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true, includePending = false } = {}) {
+async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true, includePending = false, viewerId = null } = {}) {
   const tz = principal.timezone || 'UTC';
 
   // Same generous margins as buildDay, for the same reason: "this calendar day
@@ -204,12 +212,19 @@ async function buildRange(principal, fromKey, toKey, { viewerIsPrincipal = true,
   const to = new Date(new Date(`${toKey}T00:00:00Z`).getTime() + 60 * 3600 * 1000).toISOString();
 
   const statuses = visibleStatusesFor(viewerIsPrincipal);
-  const items = await db.prepare(`
+  const allItems = await db.prepare(`
     SELECT i.*, u.name AS created_by_name FROM itinerary_items i
     LEFT JOIN users u ON u.id = i.created_by
     WHERE i.owner_id = ? AND i.start_at >= ? AND i.start_at <= ?
       AND i.status IN (${statuses.map(() => '?').join(',')})
   `).all(principal.id, from, to, ...statuses);
+  // The legs of a private journey are as private as the journey. Filtered
+  // here rather than in the SQL because the gate is one function and this is
+  // the only way to keep it that way across two backends.
+  const hiddenTrips = await tripPrivacy.hiddenTripIds(principal.id, viewerId ?? principal.id);
+  const items = hiddenTrips.size
+    ? allItems.filter((i) => !i.trip_id || !hiddenTrips.has(i.trip_id))
+    : allItems;
 
   // A held slot occupies the time, so the calendar shows it — that is what
   // stops somebody promising the same hour twice. But the week outlook has
@@ -267,7 +282,7 @@ router.get('/:ownerId/range', requirePaAccess, async (req, res) => {
   const viewerIsPrincipal = req.paRole === 'owner';
   res.json({
     from, to, timezone: tz, viewerIsPrincipal,
-    days: await buildRange(req.principal, from, to, { viewerIsPrincipal, includePending: true }),
+    days: await buildRange(req.principal, from, to, { viewerIsPrincipal, includePending: true, viewerId: req.user.id }),
   });
 });
 
@@ -284,7 +299,7 @@ router.get('/:ownerId/day', requirePaAccess, async (req, res) => {
     timezone: tz,
     principal: { id: req.principal.id, name: req.principal.name },
     viewerIsPrincipal,
-    entries: await buildDay(req.principal, date, { viewerIsPrincipal }),
+    entries: await buildDay(req.principal, date, { viewerIsPrincipal, viewerId: req.user.id }),
   });
 });
 
@@ -306,7 +321,7 @@ router.get('/:ownerId/upcoming', requirePaAccess, async (req, res) => {
     d.setUTCDate(d.getUTCDate() + i);
     keys.push(d.toISOString().slice(0, 10));
   }
-  const grouped = await buildRange(req.principal, keys[0], keys[keys.length - 1], { viewerIsPrincipal });
+  const grouped = await buildRange(req.principal, keys[0], keys[keys.length - 1], { viewerIsPrincipal, viewerId: req.user.id });
   // buildRange returns only the days that hold something; this endpoint has
   // always returned a row per day, empty ones included, so the shape is filled
   // back in from the keys rather than from what came back.

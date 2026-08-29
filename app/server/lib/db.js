@@ -525,6 +525,12 @@ function ready() {
       // what every existing row is.
       await ensureColumn('itinerary_items', 'series_id', 'TEXT');
       await ensureColumn('itinerary_items', 'recurrence', 'TEXT');
+      // Whether a journey is the office's business at all. Defaults to
+      // 'office', so every trip that already exists stays exactly as visible
+      // as it was — a migration that made old trips private would hide work
+      // from the people doing it. See lib/tripPrivacy.js.
+      await ensureColumn('trips', 'visibility', "TEXT NOT NULL DEFAULT 'office'");
+      await ensureIndex('idx_trips_visibility', 'trips(owner_id, visibility)');
       await ensureIndex('idx_itinerary_series', 'itinerary_items(series_id)');
       await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
       await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');

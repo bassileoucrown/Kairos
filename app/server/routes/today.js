@@ -37,14 +37,14 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   // date is it" is itself a question that needs a zone to answer, and only a
   // trip covering that date changes it.
   const homeKey = new Intl.DateTimeFormat('en-CA', { timeZone: homeTz }).format(now);
-  const tz = await tripTimezoneOn(req.principal.id, homeKey, homeTz);
+  const tz = await tripTimezoneOn(req.principal.id, homeKey, homeTz, req.user.id);
   const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
   const nowIso = now.toISOString();
-  const awayTrip = tz !== homeTz ? await tripOn(req.principal.id, todayKey) : null;
+  const awayTrip = tz !== homeTz ? await tripOn(req.principal.id, todayKey, req.user.id) : null;
 
   // --- The day itself: itinerary + bookings, merged ---
   const viewerIsPrincipal = req.paRole === 'owner';
-  const schedule = await buildDay(req.principal, todayKey, { viewerIsPrincipal });
+  const schedule = await buildDay(req.principal, todayKey, { viewerIsPrincipal, viewerId: req.user.id });
   const nextUp = schedule.find((e) => new Date(e.startAt) > now && e.status === 'confirmed') || null;
 
   // --- Bookings held for approval (Tier 3/4) ---
