@@ -163,6 +163,69 @@ router.patch('/stages/:stageId', loadStage, async (req, res) => {
   res.json({ stages: await stagesFor(req.project.id) });
 });
 
+/** What deleting a project would take with it. */
+async function projectContents(projectId) {
+  const stages = await db.prepare('SELECT COUNT(*) AS n FROM project_stages WHERE project_id = ?')
+    .get(projectId);
+  const tasks = await db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE project_id = ?')
+    .get(projectId);
+  const threads = await db.prepare('SELECT COUNT(*) AS n FROM threads WHERE project_id = ?')
+    .get(projectId);
+  return {
+    stages: Number(stages?.n || 0),
+    tasks: Number(tasks?.n || 0),
+    threads: Number(threads?.n || 0),
+  };
+}
+
+router.get('/:projectId/deletion', loadProject, async (req, res) => {
+  res.json({ contents: await projectContents(req.project.id) });
+});
+
+/**
+ * Deleting a project, which was not possible at all until now.
+ *
+ * A project could be marked 'archived' and never removed, so a duplicate
+ * created by mistake stayed on the books forever with no way to be rid of it.
+ *
+ * The stages and the tasks go with it, by cascade — that is what the schema
+ * says and it is right, a stage has no meaning outside its project. Which is
+ * exactly why it is counted and refused first: the confirmation IS the count,
+ * the same as removing somebody who has documents against their name.
+ *
+ * THE THREADS DO NOT GO. A conversation is linked to a project, not owned by
+ * it — people said those things and they survive the plan being abandoned. So
+ * they are unlinked and left in their space, and the count says how many, so
+ * nobody expects them to vanish and nobody expects them to stay by accident.
+ */
+router.delete('/:projectId', loadProject, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can delete a project.' });
+  }
+  const contents = await projectContents(req.project.id);
+  const agreed = req.body?.alsoDelete;
+  const going = contents.stages + contents.tasks;
+  if (going && agreed !== going) {
+    return res.status(409).json({
+      error: `"${req.project.name}" has ${contents.stages} stage${contents.stages === 1 ? '' : 's'} `
+        + `and ${contents.tasks} task${contents.tasks === 1 ? '' : 's'}. Deleting the project deletes those too.`
+        + (contents.threads
+          ? ` ${contents.threads} conversation${contents.threads === 1 ? '' : 's'} will stay in the space.`
+          : ''),
+      code: 'project_has_contents',
+      contents,
+    });
+  }
+
+  // Unlinked before the delete rather than left to a cascade, because there
+  // is no cascade to leave it to: threads.project_id is SET NULL only if the
+  // database says so, and saying it here makes the intention readable.
+  await db.prepare('UPDATE threads SET project_id = NULL, stage_id = NULL WHERE project_id = ?')
+    .run(req.project.id);
+  await db.prepare('DELETE FROM projects WHERE id = ?').run(req.project.id);
+  res.json({ ok: true, deleted: contents });
+});
+
 router.delete('/stages/:stageId', loadStage, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   await db.prepare('DELETE FROM project_stages WHERE id = ?').run(req.stage.id);

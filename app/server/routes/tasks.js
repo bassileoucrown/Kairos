@@ -74,6 +74,9 @@ function serialize(t, found) {
     sourceThreadId: t.source_thread_id,
     sourcePadItemId: t.source_pad_item_id || null,
     completedAt: t.completed_at,
+    // Put away rather than thrown away, and separate from status on purpose:
+    // a screen needs to tell "done and filed" from "abandoned and filed".
+    archivedAt: t.archived_at || null,
     createdAt: t.created_at,
   };
 }
@@ -159,7 +162,12 @@ async function loadTask(req, res, next) {
 // spans contexts, which is why each row carries its context to be filtered by
 // rather than being silently mixed together.
 router.get('/mine', async (req, res) => {
-  const rows = await db.prepare(`${SELECT_TASK} WHERE t.assignee_id = ? ORDER BY
+  // Archived work leaves the list. That is the whole point of archiving it —
+  // and `?archived=1` is how it is found again, so putting something away is
+  // never the same as losing it.
+  const shelf = req.query.archived === '1'
+    ? 't.archived_at IS NOT NULL' : 't.archived_at IS NULL';
+  const rows = await db.prepare(`${SELECT_TASK} WHERE t.assignee_id = ? AND ${shelf} ORDER BY
     CASE t.status WHEN 'done' THEN 1 ELSE 0 END,
     CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,
     t.due_at ASC, t.created_at DESC
@@ -202,6 +210,7 @@ router.get('/', async (req, res) => {
   // five steps each should be four rows and four queries, not twenty-four rows
   // whittled down in memory.
   where.push('t.parent_task_id IS NULL');
+  where.push(req.query.archived === '1' ? 't.archived_at IS NOT NULL' : 't.archived_at IS NULL');
 
   const rows = await db.prepare(`${SELECT_TASK} WHERE ${where.join(' AND ')} ORDER BY
     CASE t.status WHEN 'done' THEN 1 ELSE 0 END,
@@ -471,8 +480,68 @@ router.patch('/:taskId', loadTask, async (req, res) => {
   res.json({ task: serialize(row, found), closedSteps });
 });
 
+/**
+ * Put it away, rather than throw it away.
+ *
+ * The cheap verb, and the one that should be reached for first: a finished
+ * task that stays on the list forever makes the list useless, and deleting it
+ * to tidy up destroys the only record that the work was ever done.
+ *
+ * Archiving does NOT touch status. "Done and filed" and "abandoned and filed"
+ * are different things, and somebody will need to know which — see the column
+ * comment in lib/db.js.
+ *
+ * Whoever can write here can do it, like archiving a thread: the person who
+ * finishes the work is the person holding the list, and a rule that sends them
+ * to find the principal first is a rule that leaves every finished task on it.
+ */
+router.post('/:taskId/archive', loadTask, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  if (req.task.archived_at) return res.json({ archivedAt: req.task.archived_at });
+  const at = new Date().toISOString();
+  await db.prepare('UPDATE tasks SET archived_at = ? WHERE id = ?').run(at, req.task.id);
+  // A task's steps go with it. Leaving them live on the list under an archived
+  // parent is how a list acquires rows nobody can account for.
+  await db.prepare('UPDATE tasks SET archived_at = ? WHERE parent_task_id = ? AND archived_at IS NULL')
+    .run(at, req.task.id);
+  res.json({ archivedAt: at });
+});
+
+router.delete('/:taskId/archive', loadTask, async (req, res) => {
+  if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  await db.prepare('UPDATE tasks SET archived_at = NULL WHERE id = ? OR parent_task_id = ?')
+    .run(req.task.id, req.task.id);
+  res.json({ archivedAt: null });
+});
+
+/** What deleting this would take with it, asked before it is asked for. */
+router.get('/:taskId/deletion', loadTask, async (req, res) => {
+  const steps = await db.prepare(
+    'SELECT COUNT(*) AS n FROM tasks WHERE parent_task_id = ?',
+  ).get(req.task.id);
+  res.json({ steps: Number(steps?.n || 0) });
+});
+
 router.delete('/:taskId', loadTask, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+
+  // A step exists only as part of its task, so deleting the task deletes the
+  // steps — which is right, and is exactly why it has to be said first. The
+  // same shape as removing a contact who has documents against their name: the
+  // confirmation IS the count, because somebody who has read "3 steps" has
+  // been told the thing that matters.
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE parent_task_id = ?')
+    .get(req.task.id);
+  const steps = Number(row?.n || 0);
+  if (steps && req.body?.alsoDelete !== steps) {
+    return res.status(409).json({
+      error: `"${req.task.title}" has ${steps} step${steps === 1 ? '' : 's'} under it. `
+        + 'Deleting the task deletes those too.',
+      code: 'task_has_steps',
+      steps,
+    });
+  }
+
   await db.prepare('DELETE FROM tasks WHERE id = ?').run(req.task.id);
   res.status(204).end();
 });

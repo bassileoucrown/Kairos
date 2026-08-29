@@ -23,12 +23,19 @@ function serializeSpace(s, viewerRole) {
     autoDelegateRoles: parseRoles(s.auto_delegate_roles),
     viewerRole: viewerRole || s.viewer_role,
     isOwner: (viewerRole || s.viewer_role) === 'owner',
+    archivedAt: s.archived_at || null,
     createdAt: s.created_at,
   };
 }
 
 router.get('/', async (req, res) => {
-  const spaces = await listVisibleSpaces(req.user.id);
+  const all = await listVisibleSpaces(req.user.id);
+  // A room that has been put away leaves the list. `?archived=1` is where it
+  // went — filtered here rather than inside listVisibleSpaces, which is also
+  // what decides whether a TASK is visible: an archived room should drop off
+  // this screen without quietly removing work somebody was still assigned.
+  const wantArchived = req.query.archived === '1';
+  const spaces = all.filter((sp) => (wantArchived ? !!sp.archived_at : !sp.archived_at));
   const counts = await db.prepare(`
     SELECT t.space_id, COUNT(*) AS thread_count
     FROM threads t GROUP BY t.space_id
@@ -197,6 +204,42 @@ async function spaceContents(spaceId) {
   };
 }
 
+/**
+ * Close the room without burning it.
+ *
+ * This existed only as delete — type the name and everything in it goes. That
+ * is the right ceremony for destroying a workspace and the wrong ONLY option
+ * for finishing with one: a project that ended is not a project that should be
+ * erased, and an office with no way to put a finished room away either keeps
+ * every room it has ever had on the list, or starts deleting history to tidy
+ * up. Both are worse than a shelf.
+ *
+ * An archived space leaves the live list, accepts nothing new, and stays
+ * readable in full — the same bargain as an archived thread, and reversible
+ * for the same reason: "finished" is a judgement, and judgements get revisited.
+ *
+ * Owner-only, unlike archiving a thread. A thread is one conversation and the
+ * person who finished the work can put it away; a space is everybody's room,
+ * and one member deciding the whole office is done with it is not their call.
+ */
+router.post('/:spaceId/archive', requireSpaceAccess, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can put this room away.' });
+  }
+  if (req.space.archived_at) return res.json({ archivedAt: req.space.archived_at });
+  const at = new Date().toISOString();
+  await db.prepare('UPDATE spaces SET archived_at = ? WHERE id = ?').run(at, req.space.id);
+  res.json({ archivedAt: at });
+});
+
+router.delete('/:spaceId/archive', requireSpaceAccess, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can bring this room back.' });
+  }
+  await db.prepare('UPDATE spaces SET archived_at = NULL WHERE id = ?').run(req.space.id);
+  res.json({ archivedAt: null });
+});
+
 router.delete('/:spaceId', requireSpaceAccess, async (req, res) => {
   if (req.access.role !== 'owner') {
     return res.status(403).json({ error: 'Only the space owner can close it.' });
@@ -324,6 +367,15 @@ router.post('/:spaceId/projects', requireSpaceAccess, async (req, res) => {
 
 router.post('/:spaceId/threads', requireSpaceAccess, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
+  // The same bargain an archived thread makes: readable in full, closed to
+  // anything new. A room put away that still accepts new conversations was
+  // never put away.
+  if (req.space.archived_at) {
+    return res.status(409).json({
+      error: 'This room is archived. Bring it back to start something new in it.',
+      archivedAt: req.space.archived_at,
+    });
+  }
   const { name } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'Give the thread a name.' });
 

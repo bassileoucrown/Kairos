@@ -159,6 +159,64 @@ router.delete('/:threadId/archive', loadThread, async (req, res) => {
   res.json({ archivedAt: null });
 });
 
+/** What deleting this room would destroy, countable before anybody asks for it. */
+async function threadContents(threadId) {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS messages,
+           SUM(CASE WHEN register = 'record' THEN 1 ELSE 0 END) AS records
+      FROM messages WHERE thread_id = ?
+  `).get(threadId);
+  const tasks = await db.prepare(`
+    SELECT COUNT(*) AS n FROM tasks t
+     JOIN messages m ON m.id = t.source_message_id
+    WHERE m.thread_id = ?
+  `).get(threadId);
+  return {
+    messages: Number(row?.messages || 0),
+    records: Number(row?.records || 0),
+    tasks: Number(tasks?.n || 0),
+  };
+}
+
+router.get('/:threadId/deletion', loadThread, async (req, res) => {
+  res.json({ contents: await threadContents(req.thread.id) });
+});
+
+/**
+ * Destroying a room, which is different from finishing with one.
+ *
+ * ARCHIVING IS THE ANSWER ALMOST EVERY TIME, and it is one tap away. This
+ * exists because rooms get made by mistake — a duplicate, a wrong name, a test
+ * — and an office that cannot remove those accumulates clutter it is
+ * frightened to touch. That is a real cost and it is worth a delete button.
+ *
+ * BUT THE RECORD IS THE PRODUCT. Messages here are immutable by construction,
+ * a decision filed as a record is something people are working under, and this
+ * takes all of it with no undo. So it costs the same deliberate act as closing
+ * a space: the name, typed. Not a confirm dialog — this is a product used on
+ * phones between meetings and a dialog is one mis-tap.
+ *
+ * OWNER-ONLY, unlike archiving. Whoever can write may put a room away, because
+ * the cost of being wrong is one tap. Nobody but the space's owner may destroy
+ * what everybody else said in it.
+ */
+router.delete('/:threadId', loadThread, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can delete a conversation.' });
+  }
+  const contents = await threadContents(req.thread.id);
+  const typed = String(req.body?.confirmName || '').trim();
+  if (typed !== req.thread.name) {
+    return res.status(400).json({
+      error: `Type the conversation's name to delete it: "${req.thread.name}".`,
+      code: 'confirm_name',
+      contents,
+    });
+  }
+  await db.prepare('DELETE FROM threads WHERE id = ?').run(req.thread.id);
+  res.json({ ok: true, deleted: contents });
+});
+
 router.get('/:threadId/messages', loadThread, async (req, res) => {
   // Opening a thread is what reading it means. Stamped before the rows are
   // read so a message that lands mid-request is still counted as unread next

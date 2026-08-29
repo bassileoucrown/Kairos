@@ -401,6 +401,17 @@ function ready() {
       `).run();
       // Finished with, but kept. See the column in schema.sql.
       await ensureColumn('threads', 'archived_at', 'TEXT');
+      // Put away, for the two things that could only be thrown away.
+      //
+      // A COLUMN RATHER THAN A STATUS VALUE, for tasks especially. status is
+      // the state of the WORK — open, doing, blocked, done — and "put away" is
+      // not a state of the work, it is a decision about the list. Folding it
+      // into status would mean archiving a task erases whether it was ever
+      // finished, so "done and filed" and "abandoned and filed" become the
+      // same row. They are not the same thing and somebody will need to know
+      // which.
+      await ensureColumn('tasks', 'archived_at', 'TEXT');
+      await ensureColumn('spaces', 'archived_at', 'TEXT');
       // Public, or the one the app keeps so the office can slot something into
       // the diary directly. See lib/internalBooking.js.
       await ensureColumn('meeting_types', 'kind', "TEXT NOT NULL DEFAULT 'public'");
