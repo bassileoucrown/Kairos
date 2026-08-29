@@ -1,5 +1,6 @@
 const db = require('./db');
 const tripPrivacy = require('./tripPrivacy');
+const unavailable = require('./unavailable');
 const { zonedTimeToUtc, dayOfWeek } = require('./timezone');
 const { gapMinutesFor } = require('./availability');
 
@@ -131,6 +132,11 @@ async function openingsFor({ owner, date, minutes, excludeBookingId = null, view
      ORDER BY start_at ASC
   `).all(owner.id, to, from);
 
+  // Time the principal has said is not on offer. Unlike a commitment this is
+  // SUBTRACTED — see lib/unavailable.js for why the two are different
+  // instructions rather than two flavours of the same one.
+  const blocked = await unavailable.overlapping(owner.id, from, to);
+
   const rules = await db.prepare('SELECT start_time, end_time FROM availability_rules WHERE owner_id = ? AND day_of_week = ?')
     .all(owner.id, dayOfWeek(parts));
   const published = rules.map((r) => {
@@ -165,6 +171,9 @@ async function openingsFor({ owner, date, minutes, excludeBookingId = null, view
     const tight = gapMs > 0 && bookings.some((b) => overlaps(
       t - gapMs, end + gapMs, Date.parse(b.start_at), Date.parse(b.end_at),
     ));
+
+    // Not offered at all, rather than offered with a caution.
+    if (unavailable.blocks(blocked, t, end)) continue;
 
     const against = commitments.find((c) => overlaps(
       t, end, Date.parse(c.start_at), Date.parse(c.end_at || c.start_at),
@@ -204,6 +213,16 @@ async function openingsFor({ owner, date, minutes, excludeBookingId = null, view
         startAt: c.start_at,
         endAt: c.end_at || c.start_at,
       })),
+      // Shown so a day with no room explains itself. The label is decided in
+      // lib/unavailable.js, which is also what decides whether this viewer may
+      // be told the reason — so a screen cannot disagree with the gate.
+      ...blocked.map((b) => {
+        const seen = unavailable.serialize(b, viewerId ?? owner.id);
+        return {
+          id: seen.id, kind: 'unavailable', label: seen.label,
+          startAt: seen.startsAt, endAt: seen.endsAt,
+        };
+      }),
     ].sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)),
     // The office's day, so the screen can say what it is showing rather than
     // leaving somebody to infer it from the first and last button.

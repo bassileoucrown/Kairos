@@ -932,6 +932,36 @@ CREATE TABLE IF NOT EXISTS trip_travellers (
 );
 CREATE INDEX IF NOT EXISTS idx_trip_travellers ON trip_travellers(trip_id);
 
+-- Time the principal is simply not available, for as long as they say.
+--
+-- SEPARATE FROM A TRIP ON PURPOSE. A trip is dates — "am I away on the 14th"
+-- is a calendar question. This is instants, because being unavailable is not
+-- always travel and rarely lines up with midnight: a funeral on Thursday
+-- morning, a medical appointment at two, a sabbatical month. Hours, a day, a
+-- week, or longer, all one shape.
+--
+-- WHY IT IS NOT AN ITINERARY ITEM. An itinerary item is something the
+-- principal is DOING, and the picker deliberately shows those without
+-- subtracting them — the office can see a flight at three and decide to book
+-- against it anyway, because reschedule allows that and sometimes it is right.
+-- This is the opposite instruction: not "here is what is on" but "do not put
+-- anything here". It has to subtract, or it means nothing.
+--
+-- The reason is optional and the office sees it unless the block is marked
+-- private, in which case they are told only that the time is spoken for.
+-- Same word as trips, same meaning, so there is one idea to learn.
+CREATE TABLE IF NOT EXISTS unavailable (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_by  TEXT NOT NULL REFERENCES users(id),
+  starts_at   TEXT NOT NULL,   -- ISO-8601 UTC
+  ends_at     TEXT NOT NULL,
+  reason      TEXT NOT NULL DEFAULT '',
+  visibility  TEXT NOT NULL DEFAULT 'office',  -- office | private
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_unavailable_owner ON unavailable(owner_id, starts_at);
+
 -- Who the principal has let in on a private trip.
 --
 -- A private trip is absent from the office entirely — see lib/tripPrivacy.js.

@@ -3,6 +3,7 @@ const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const tripPrivacy = require('../lib/tripPrivacy');
+const unavailable = require('../lib/unavailable');
 const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const { arrangementProblem } = require('../lib/trips');
@@ -1099,6 +1100,43 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
     // absent from the day sheet and from every later read of the item.
     arrivalPickup,
   });
+});
+
+// --- Not available ---------------------------------------------------------
+//
+// Mounted here rather than in its own file because it is the same question the
+// rest of this router answers — what is on the principal's diary — asked in the
+// negative.
+
+router.get('/:ownerId/unavailable', requirePaAccess, async (req, res) => {
+  res.json({ blocks: await unavailable.listFor(req.principal.id, req.user.id) });
+});
+
+router.post('/:ownerId/unavailable', requirePaAccess, async (req, res) => {
+  const { startsAt, endsAt, reason, visibility } = req.body || {};
+  const result = await unavailable.create({
+    ownerId: req.principal.id,
+    createdBy: req.user.id,
+    startsAt, endsAt, reason, visibility,
+  });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result);
+});
+
+router.delete('/:ownerId/unavailable/:blockId', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM unavailable WHERE id = ? AND owner_id = ?')
+    .get(req.params.blockId, req.principal.id);
+  if (!row) return res.status(404).json({ error: 'Not found.' });
+  // A block the principal made private is theirs to lift. An assistant
+  // clearing one they were never allowed to read would be putting the diary
+  // back on the market without knowing what they were overruling.
+  if (row.visibility === unavailable.PRIVATE && req.paRole !== 'owner'
+      && row.created_by !== req.user.id) {
+    return res.status(403).json({ error: 'Only the principal can lift this one.' });
+  }
+  await db.prepare('DELETE FROM unavailable WHERE id = ? AND owner_id = ?')
+    .run(req.params.blockId, req.principal.id);
+  res.status(204).end();
 });
 
 module.exports = { router, buildDay, KINDS };

@@ -1,4 +1,5 @@
 const db = require('./db');
+const unavailable = require('./unavailable');
 const { zonedTimeToUtc, todayInZone, addCalendarDays, dayOfWeek } = require('./timezone');
 
 // How far ahead the diary is open, when nobody has said otherwise. This was
@@ -106,6 +107,15 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
   const existingBookings = await db.prepare("SELECT id, start_at, end_at FROM bookings WHERE owner_id = ? AND status IN ('confirmed', 'pending') AND end_at > ? AND id != ?")
     .all(owner.id, now.toISOString(), excludeBookingId || '');
 
+  // Time the principal has said is not on offer. Fetched once for the whole
+  // window rather than per slot: a fortnight's block is one row, and asking
+  // the database about it ten thousand times would be the same answer each
+  // time.
+  const blocked = await unavailable.overlapping(
+    owner.id, now.toISOString(),
+    new Date(now.getTime() + (windowDaysFor(owner) + 2) * 86400000).toISOString(),
+  );
+
   const durationMs = meetingType.duration_minutes * 60000;
   // The account's breather is added to whatever the meeting type asks for, so
   // a principal who wants ten minutes between everything gets it without
@@ -151,6 +161,9 @@ async function getOpenSlots({ owner, meetingType, excludeBookingId = null }) {
           return checkStart < bEnd && checkEnd > bStart;
         });
         if (overlaps) continue;
+        // A booker is never told why — they are simply not offered the time,
+        // which is what an unavailable hour looks like from outside an office.
+        if (unavailable.blocks(blocked, slotStart, slotEnd)) continue;
 
         slots.push({ startUtc: new Date(slotStart), endUtc: new Date(slotEnd) });
       }
