@@ -543,6 +543,23 @@ function client() {
       const h = document.querySelector('.app-body .hint');
       return !(h && /Loading/.test(h.textContent || ''));
     }, null, { timeout: 20000 });
+    // AND THE MINUTES, WHICH LOAD ON THEIR OWN CLOCK.
+    //
+    // The first fix here waited for '.app-body .hint' to stop saying Loading,
+    // which is the FIRST hint on the page — the appointment's. The minutes are
+    // a separate component with a separate fetch and a Loading hint of their
+    // own, so the page could be finished while they were still in flight. On
+    // SQLite that gap never opened; on Postgres it did, and the suite reported
+    // that minutes filed two hundred lines earlier were missing from a screen
+    // that simply had not drawn them yet.
+    //
+    // Waiting on the panel rather than on the words keeps the assertion
+    // honest: this settles when the minutes have loaded, not when they say
+    // what the test wants.
+    await p.waitForFunction(() => {
+      const box = document.querySelector('.booking-minutes');
+      return !!box && !/Loading/.test(box.textContent || '');
+    }, null, { timeout: 20000 });
     const page = await p.locator('body').innerText();
     ok('says it has happened', /already happened/i.test(page), page.slice(0, 200));
     ok('and offers none of the three verbs',
