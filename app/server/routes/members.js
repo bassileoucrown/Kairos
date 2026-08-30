@@ -20,6 +20,11 @@ function serialize(m) {
     id: m.id,
     invitedEmail: m.invited_email,
     memberName: m.member_name || null,
+    // The account behind the invitation, once it has been accepted. Null while
+    // the invite is outstanding — there is nobody to name yet. Needed by any
+    // screen that has to say "this person", rather than "this invitation":
+    // sharing a private trip is the first, and it takes a user id.
+    memberUserId: m.member_user_id || null,
     role: m.role,
     roleLabel: roleLabel(m.role),
     status: m.status,

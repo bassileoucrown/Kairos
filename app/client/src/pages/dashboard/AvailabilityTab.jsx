@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { dayName } from '../../lib/timezones.js';
 import RhythmRead from '../../components/RhythmRead.jsx';
+import NotAvailable from '../../components/NotAvailable.jsx';
 
 // A day holds a list of blocks rather than a single start/end, so a schedule
 // can be "9–12 and 2–5" (or mornings only, or an evening window) instead of
@@ -339,6 +340,16 @@ export default function AvailabilityTab({ ownerId = null, principalName = null, 
             Read from the diary rather than guessed at. Every line says how many items it counted.
           </p>
           <RhythmRead ownerId={readId} principalName={principalName} />
+        </section>
+      )}
+
+      {/* Beside the hours, because it answers the same question from the other
+          side: those say when somebody CAN be booked, this says when they
+          cannot regardless. Anywhere else and a person setting their hours
+          would have to go looking for it. */}
+      {readId && (
+        <section style={{ marginTop: 32 }}>
+          <NotAvailable ownerId={readId} principalName={principalName} />
         </section>
       )}
     </form>

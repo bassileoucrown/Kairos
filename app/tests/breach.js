@@ -205,6 +205,67 @@ async function confirmWith(page, text) {
     ok('and is findable on the shelf',
       /The office/.test(await page.locator('body').innerText()));
 
+    // ---- Saying you are not available ---------------------------------------
+    //
+    // The feature worked and had no screen, which made "I can choose to be
+    // unavailable" true of the system and false of the person using it.
+    head('And a principal can take time off the table, by hand:');
+    await page.goto(`${BASE}/dashboard?tab=availability`);
+    await page.waitForSelector('button:has-text("The next 2 hours")', { timeout: 20000 });
+    ok('every length is offered, not just a date range',
+      (await page.locator('button:has-text("All day tomorrow")').count()) === 1
+      && (await page.locator('button:has-text("The next 7 days")').count()) === 1);
+
+    await page.fill('#na-reason', 'Funeral');
+    await page.click('button:has-text("All day tomorrow")');
+    await page.waitForFunction(
+      () => /Funeral/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('blocking a day says so afterwards, with the reason', true);
+
+    // THE ASSERTION THAT MATTERS MOST HERE. A block that does not take the
+    // time off the diary is a note to nobody.
+    const blockedOut = await page.evaluate(async () => {
+      const me = await (await fetch('/api/auth/me', { credentials: 'include' })).json();
+      const r = await (await fetch(`/api/itinerary/${me.user.id}/unavailable`,
+        { credentials: 'include' })).json();
+      return (r.blocks || []).length;
+    });
+    ok('and the diary is holding it', blockedOut === 1, String(blockedOut));
+
+    await page.locator('.ess-row', { hasText: 'Funeral' })
+      .locator('button:has-text("Lift")').click();
+    await page.waitForFunction(
+      () => !/Funeral/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('and it can be lifted again', true);
+
+    // ---- A journey that is nobody else's business ---------------------------
+    head('And a principal can keep a journey to themselves:');
+    await page.evaluate(async () => {
+      const me = await (await fetch('/api/auth/me', { credentials: 'include' })).json();
+      await fetch(`/api/trips/${me.user.id}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({
+          name: 'Sallah with the family', destination: 'Kaduna',
+          startsOn: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+          endsOn: new Date(Date.now() + 34 * 86400000).toISOString().slice(0, 10),
+          status: 'confirmed',
+        }),
+      });
+    });
+    await page.goto(`${BASE}/trips`);
+    await page.waitForSelector('.card', { timeout: 20000 });
+    await page.locator('.card', { hasText: 'Sallah with the family' }).first().click();
+    await page.waitForSelector('button:has-text("Make it private")', { timeout: 20000 });
+    ok('the switch is on the trip, for the principal', true);
+
+    await page.click('button:has-text("Make it private")');
+    await page.waitForSelector('button:has-text("Let the office see it")', { timeout: 20000 });
+    ok('making it private says what that means', true);
+    ok('and asks who should be told anyway',
+      /Who knows/.test(await page.locator('body').innerText()));
+
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
 
   } catch (err) {

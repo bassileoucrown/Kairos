@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
@@ -132,15 +132,113 @@ function Pickup({ ownerId, item, freshCard, onArm, onDisarm }) {
   );
 }
 
-function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onChanged }) {
+/**
+ * Who the principal has let in on a private journey.
+ *
+ * The point of a private trip is that the principal CHOOSES, not that nobody
+ * knows — so there has to be a way to name somebody, and a way to take it
+ * back. Only people already in the office can be named: sharing a private
+ * journey with a stranger is a different act, and not one this control does.
+ */
+function Shares({ ownerId, tripId }) {
+  const [rows, setRows] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [pick, setPick] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    Promise.all([
+      api.get(`/trips/${ownerId}/${tripId}/shares`),
+      api.get('/members').catch(() => ({ members: [] })),
+    ]).then(([s, m]) => {
+      setRows(s.shares || []);
+      // Accepted invitations only: an outstanding one has no account behind
+      // it, so there is nobody to tell yet.
+      setMembers((m.members || []).filter((x) => x.status === 'active' && x.memberUserId));
+    }).catch((e) => setError(e.message));
+  }, [ownerId, tripId]);
+  useEffect(load, [load]);
+
+  async function add() {
+    if (!pick) return;
+    setError('');
+    try { await api.post(`/trips/${ownerId}/${tripId}/shares`, { userId: pick }); setPick(''); load(); }
+    catch (e) { setError(e.message); }
+  }
+  async function drop(userId) {
+    setError('');
+    try { await api.del(`/trips/${ownerId}/${tripId}/shares/${userId}`); load(); }
+    catch (e) { setError(e.message); }
+  }
+
+  if (!rows) return <p className="hint">Loading…</p>;
+  const told = new Set(rows.map((r) => r.userId));
+  const canAdd = members.filter((m) => !told.has(m.memberUserId));
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <h4 style={{ marginBottom: 6 }}>Who knows</h4>
+      {error && <div className="alert alert-error">{error}</div>}
+      {rows.length === 0 ? (
+        <p className="hint">
+          Only you, and whoever arranged it. Name somebody below if you want them told.
+        </p>
+      ) : rows.map((r) => (
+        <div className="ess-row" key={r.id}>
+          <div className="ess-main">
+            <div className="ess-label">{r.name}</div>
+            <div className="hint">{r.email}</div>
+          </div>
+          <div className="ess-buttons">
+            <button className="btn btn-sm" type="button" onClick={() => drop(r.userId)}>
+              Stop telling them
+            </button>
+          </div>
+        </div>
+      ))}
+      {canAdd.length > 0 && (
+        <div className="code-actions" style={{ marginTop: 8 }}>
+          <select
+            aria-label="Tell somebody about this trip"
+            value={pick} onChange={(e) => setPick(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            <option value="">Tell somebody…</option>
+            {canAdd.map((m) => (
+              <option key={m.memberUserId} value={m.memberUserId}>{m.memberName || m.invitedEmail}</option>
+            ))}
+          </select>
+          <button className="btn btn-sm" type="button" disabled={!pick} onClick={add}>Add</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TripDetail({ ownerId, tripId, arrangements, homeTimezone, isPrincipal = false, onBack, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [cards, setCards] = useState({});
   const [adding, setAdding] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // Its own flag rather than borrowing `deleting`, which means something else.
+  const [saving, setSaving] = useState(false);
 
   function load() {
     return api.get(`/trips/${ownerId}/${tripId}`).then(setData).catch((e) => setError(e.message));
+  }
+
+  /**
+   * Whose business this journey is. Principal only, enforced on the server —
+   * this is the request, not the decision.
+   */
+  async function setVisibility(visibility) {
+    setSaving(true); setError('');
+    try {
+      await api.patch(`/trips/${ownerId}/${tripId}/visibility`, { visibility });
+      await load();
+      onChanged?.();
+    } catch (e) { setError(e.message); } finally { setSaving(false); }
   }
   useEffect(() => { load(); }, [tripId]);
 
@@ -188,6 +286,43 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, onBack, onCha
         </div>
         <StatusPill status={trip.status} />
       </div>
+
+      {/* WHOSE JOURNEY THIS IS.
+          A board trip is work and the office arranging it is the point. A
+          family holiday is not, and an office that can see it holds a pattern
+          of a private person's movements. The switch existed on the server and
+          nowhere on a screen, so the choice was the principal's in theory and
+          nobody's in practice.
+          Only the principal is shown it: an assistant who could mark a trip
+          private could hide movements from the office that needs them. */}
+      {isPrincipal && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="ess-row">
+            <div className="ess-main">
+              <div className="ess-label">
+                {trip.visibility === 'private' ? 'Private journey' : 'The office can see this'}
+              </div>
+              <p className="hint">
+                {trip.visibility === 'private'
+                  ? 'Absent from the office entirely — no title, no destination, no dates. '
+                    + 'They are told only that the days are unavailable, so nothing is booked over it.'
+                  : 'On the office\'s list like any other trip.'}
+              </p>
+            </div>
+            <div className="ess-buttons">
+              <button
+                className="btn btn-sm" type="button" disabled={saving}
+                onClick={() => setVisibility(trip.visibility === 'private' ? 'office' : 'private')}
+              >
+                {trip.visibility === 'private' ? 'Let the office see it' : 'Make it private'}
+              </button>
+            </div>
+          </div>
+          {trip.visibility === 'private' && (
+            <Shares ownerId={ownerId} tripId={trip.id} />
+          )}
+        </div>
+      )}
 
       <div className="code-actions">
         {trip.status !== 'confirmed' && trip.status !== 'cancelled' && (
@@ -548,6 +683,10 @@ export default function Trips() {
           tripId={openId}
           arrangements={data.arrangements || []}
           homeTimezone={user?.timezone || 'UTC'}
+          // Only the principal may make a journey private or say who knows.
+          // Decided here where the viewer is known, rather than by the detail
+          // component guessing from an id it was handed.
+          isPrincipal={!!user && user.id === ownerId}
           onBack={() => { setOpenId(null); load(); }}
           onChanged={load}
         />

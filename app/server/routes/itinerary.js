@@ -1109,7 +1109,14 @@ router.post('/:ownerId/trips', requirePaAccess, async (req, res) => {
 // negative.
 
 router.get('/:ownerId/unavailable', requirePaAccess, async (req, res) => {
-  res.json({ blocks: await unavailable.listFor(req.principal.id, req.user.id) });
+  res.json({
+    blocks: await unavailable.listFor(req.principal.id, req.user.id),
+    // The PRINCIPAL's zone, not the viewer's. "Block tomorrow" means their
+    // tomorrow — an assistant in London setting it for a principal in Lagos
+    // must not take out the wrong day, and the browser cannot know which zone
+    // was meant without being told.
+    timezone: req.principal.timezone || 'UTC',
+  });
 });
 
 router.post('/:ownerId/unavailable', requirePaAccess, async (req, res) => {
