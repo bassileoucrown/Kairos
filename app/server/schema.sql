@@ -962,6 +962,124 @@ CREATE TABLE IF NOT EXISTS unavailable (
 );
 CREATE INDEX IF NOT EXISTS idx_unavailable_owner ON unavailable(owner_id, starts_at);
 
+-- ============================================================
+-- Moving a principal on the ground
+-- ============================================================
+--
+-- A trip is not only a flight, and a car is not only a line on an itinerary.
+-- A movement is the thing an office actually arranges in Lagos or Abuja: who
+-- is driving, in which car, with which escort, leaving from where, at what
+-- time, and whether they arrived.
+--
+-- WHY THIS IS CUSTODY AND NOT A DIARY ENTRY. An escort roster is a pattern of
+-- a principal's movements with names and numbers attached. Leaked, it is a
+-- brief for somebody planning against them. So it is gated like the vault
+-- rather than like a calendar: the principal and whoever arranged it, and
+-- nobody else — not the wider office, and not a Chief of Staff who can
+-- otherwise see everything.
+
+-- The cars an office runs, as things rather than as a string on a leg.
+CREATE TABLE IF NOT EXISTS vehicles (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label       TEXT NOT NULL,                  -- "The Prado"
+  plate       TEXT NOT NULL DEFAULT '',
+  make_model  TEXT NOT NULL DEFAULT '',
+  colour      TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  archived_at TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vehicles_owner ON vehicles(owner_id);
+
+-- Papers that lapse, on the same footing as a passport.
+--
+-- Nigerian vehicle particulars expire and are demanded at checkpoints, which
+-- is the same shape of problem the essentials expiry engine already solves for
+-- travel documents — so this reuses expiryState rather than growing a second
+-- idea of "nearly out of date" that would drift from the first.
+CREATE TABLE IF NOT EXISTS vehicle_papers (
+  id          TEXT PRIMARY KEY,
+  vehicle_id  TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,                  -- insurance | roadworthiness | licence | permit
+  reference   TEXT NOT NULL DEFAULT '',
+  expires_on  TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vehicle_papers ON vehicle_papers(vehicle_id);
+
+CREATE TABLE IF NOT EXISTS movements (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Who arranged it, and therefore who may see it in full alongside the
+  -- principal. Not a membership check: the person who built this is named on
+  -- it, so revoking their PA access later does not silently widen or narrow
+  -- who could read a movement that already happened.
+  arranged_by   TEXT NOT NULL REFERENCES users(id),
+  -- Deliberately not a foreign key, like the archive's provenance columns: a
+  -- movement is a safety record and should outlive the trip it hung off.
+  trip_id       TEXT,
+  title         TEXT NOT NULL,
+  departs_from  TEXT NOT NULL DEFAULT '',
+  destination   TEXT NOT NULL DEFAULT '',
+  departs_at    TEXT NOT NULL,
+  -- Leave-by margin. The thing an office argues about on the morning itself.
+  buffer_minutes INTEGER NOT NULL DEFAULT 0,
+  -- The whole point of a movement record: did they get there.
+  arrived_at    TEXT,
+  arrived_by    TEXT REFERENCES users(id),
+  notes         TEXT NOT NULL DEFAULT '',
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movements_owner ON movements(owner_id, departs_at);
+
+CREATE TABLE IF NOT EXISTS movement_vehicles (
+  id          TEXT PRIMARY KEY,
+  movement_id TEXT NOT NULL REFERENCES movements(id) ON DELETE CASCADE,
+  -- Null once the vehicle is deleted from the fleet; the plate below is a
+  -- snapshot so the record still says which car it was.
+  vehicle_id  TEXT REFERENCES vehicles(id) ON DELETE SET NULL,
+  role        TEXT NOT NULL DEFAULT 'principal',  -- lead | principal | backup
+  plate       TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movement_vehicles ON movement_vehicles(movement_id);
+
+CREATE TABLE IF NOT EXISTS movement_people (
+  id          TEXT PRIMARY KEY,
+  movement_id TEXT NOT NULL REFERENCES movements(id) ON DELETE CASCADE,
+  role        TEXT NOT NULL DEFAULT 'driver',
+    -- driver | aide | escort_lead | police_escort | other
+  name        TEXT NOT NULL,
+  phone       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movement_people ON movement_people(movement_id);
+
+-- Somebody covering, for one movement, with less than the whole record.
+--
+-- The problem it solves: if only the principal and the arranger can see the
+-- detail, an arranger off sick on the morning leaves nobody able to ring the
+-- driver. The answer is not to widen the rule permanently — it is to let it be
+-- opened once, for one journey, expiring on its own.
+--
+-- LIMITED ON PURPOSE. What a stand-in needs is when, from where, to where,
+-- which car and which driver to ring. What they do not need is the escort
+-- roster, and handing it over "just in case" is how a safety record becomes a
+-- circulated document. See lib/movement.js for what is withheld.
+CREATE TABLE IF NOT EXISTS movement_grants (
+  id           TEXT PRIMARY KEY,
+  movement_id  TEXT NOT NULL REFERENCES movements(id) ON DELETE CASCADE,
+  grantee_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  granted_by   TEXT NOT NULL REFERENCES users(id),
+  reason       TEXT NOT NULL DEFAULT '',
+  expires_at   TEXT NOT NULL,
+  revoked_at   TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movement_grants ON movement_grants(grantee_user_id, expires_at);
+
 -- Who the principal has let in on a private trip.
 --
 -- A private trip is absent from the office entirely — see lib/tripPrivacy.js.

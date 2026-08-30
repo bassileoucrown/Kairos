@@ -42,6 +42,7 @@ const attentionRouter = require('./routes/attention');
 const rhythmRouter = require('./routes/rhythm');
 const accessCodesRouter = require('./routes/accessCodes');
 const tripsRouter = require('./routes/trips');
+const movementRouter = require('./routes/movement');
 const conciergeRouter = require('./routes/concierge');
 const connectorsRouter = require('./routes/connectors');
 const planRouter = require('./routes/plan');
@@ -167,6 +168,10 @@ app.use('/api/attention', attentionRouter);
 app.use('/api/rhythm', rhythmRouter);
 app.use('/api/access-codes', accessCodesRouter);
 app.use('/api/trips', tripsRouter);
+// The fleet and the journeys the principal is moved on. Its own mount rather
+// than a branch of /trips: a movement is not always part of a trip — most are
+// an ordinary Tuesday across Lagos.
+app.use('/api/movement', movementRouter.router);
 app.use('/api/concierge', conciergeRouter);
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/plan', planRouter);

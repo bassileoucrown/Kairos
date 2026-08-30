@@ -25,6 +25,7 @@ import BookingDetail from './pages/BookingDetail.jsx';
 import Pad from './pages/Pad.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
+import Movements from './pages/Movements.jsx';
 import Archive from './pages/Archive.jsx';
 import Report from './pages/Report.jsx';
 import CatchUp from './pages/CatchUp.jsx';
@@ -162,6 +163,7 @@ export default function App() {
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/pad" element={<RequireAuth><Pad /></RequireAuth>} />
       <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />
+      <Route path="/movements" element={<RequireAuth><Movements /></RequireAuth>} />
       <Route path="/concierge" element={<RequireAuth><Concierge /></RequireAuth>} />
       <Route path="/coming" element={<RequireAuth><Coming /></RequireAuth>} />
       <Route path="/workspace" element={<RequireAuth><Workspace /></RequireAuth>} />

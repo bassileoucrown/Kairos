@@ -57,6 +57,10 @@ const NAV = [
   // looking at when the thought arrived.
   { group: 'day', to: '/pad', label: 'Pad', icon: '✎' },
   { group: 'day', to: '/trips', label: 'Trips', icon: '⛳', principalScoped: true },
+  // Beside Trips rather than inside it. A trip is a flight and a week away;
+  // most movements are the school run and the drive across town, and filing
+  // those under a trip would mean inventing a trip to hold them.
+  { group: 'day', to: '/movements', label: 'Movements', icon: '⛟', principalScoped: true },
   // Principal-scoped, like the three above it. It was the one entry in "The
   // day" that was not, so it went to /dashboard — the signed-in user's own
   // account. For a principal that is right by accident; for an assistant it

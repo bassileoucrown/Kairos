@@ -1,23 +1,28 @@
-// Moving an appointment, from the office's side.
+// Moving a principal on the ground, and who is allowed to know how.
 //
-// The booker could always move their own from the link they were sent. The
-// office could only cancel — so an assistant needing to shift a confirmed
-// meeting by an hour had to call it off and ask the booker to book again,
-// which costs the booker two emails and loses the thread.
+// A TRIP IS NOT ONLY A FLIGHT. In Lagos or Abuja the road is the part with
+// risk in it: who is driving, in which car, with which escort, leaving when —
+// and afterwards, whether they arrived. None of that had anywhere to live.
 //
-// Two rules are worth pinning here, because they pull in opposite directions:
-// the office is NOT confined to the published bookable hours, and it is still
-// not allowed to put two meetings on top of each other.
+// THE ACCESS RULE IS THE VAULT'S, NOT THE DIARY'S, and that is what most of
+// this file checks. An escort roster is a pattern of somebody's movements with
+// names and numbers on it; leaked, it is a brief for whoever is planning
+// against them. So: the principal, and whoever arranged it. Not the wider
+// office. Not a Chief of Staff who can otherwise see everything — that rule is
+// about work, and this is somebody's safety.
+//
+// AND ONE DOOR OUT OF IT, because a rule with no exception gets broken in the
+// worst way — an arranger off sick and nobody able to ring the driver. So
+// access opens ONCE, for ONE journey, expiring on its own, and the stand-in
+// gets what they need to coordinate rather than the roster. The assertions
+// about what they DO NOT get are the point of this file.
 const ROOT = require('path').join(__dirname, '..', '..');
-const { spawn } = require('child_process');
 
-const PORT = 20000 + Math.floor(Math.random() * 20000);
-const BASE = `http://127.0.0.1:${PORT}`;
-const ID = Date.now().toString(36);
+const PORT = 4617, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
 let fails = 0;
 const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x ? ' — ' + x : '')); } else console.log('  ✓ ' + l); };
-const head = (t) => console.log(`\n${t}`);
+const head = (s) => console.log(`\n${s}`);
 
 function client() {
   let cookie = '';
@@ -30,163 +35,236 @@ function client() {
     const set = r.headers.get('set-cookie');
     if (set) cookie = set.split(';')[0];
     const text = await r.text();
-    let d = null;
-    try { d = text ? JSON.parse(text) : null; } catch { d = text; }
-    return { s: r.status, d };
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+    return { s: r.status, d: json };
   };
 }
 
 (async () => {
+  const fs = require('fs');
+  const { spawn } = require('child_process');
+  const DATA = `${ROOT}/app/server/data`;
+  if (!process.env.DATABASE_URL) {
+    for (const f of fs.existsSync(DATA) ? fs.readdirSync(DATA) : []) {
+      if (f.startsWith('kairos.sqlite')) fs.rmSync(`${DATA}/${f}`);
+    }
+  }
   const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      PORT: String(PORT),
-      DATABASE_URL: process.env.DATABASE_URL || '',
-    },
-    stdio: ['ignore', 'ignore', 'ignore'],
+    env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT) },
+    stdio: ['ignore', 'ignore', 'inherit'],
   });
-  // Two and a half minutes. Twenty seconds was plenty on an idle machine and
-  // not plenty on a loaded one; a minute went the same way, twice in one day,
-  // on a box where a hundred suites run back to back and each one starts a
-  // server and half of them start a browser. "No server" on a green tree is a
-  // board crying wolf, and it costs an hour of hunting a product bug that was
-  // never there.
-  //
-  // Waiting longer is free when the tree is green — the loop exits the instant
-  // the server answers — and is only paid when something is genuinely broken,
-  // which is the right way round for this trade.
-  const deadline = Date.now() + 150000;
-  for (;;) {
-    try { const r = await (await fetch(`${BASE}/api/status`)).json(); if (r.databaseReady) break; } catch { /* not up */ }
-    if (Date.now() > deadline) throw new Error('no server');
-    await new Promise((r) => setTimeout(r, 200));
-  }
 
   try {
+    const deadline = Date.now() + 150000;
+    for (;;) {
+      try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) break; } catch { /* not up */ }
+      if (Date.now() > deadline) throw new Error('no server');
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     const boss = client();
-    await boss('POST', '/auth/signup', { name: 'Adaeze Okonkwo', email: `boss${ID}@x.com`, password: PW, accountCategory: 'principal' });
-    const me = (await boss('GET', '/auth/me')).d.user;
-    await boss('PATCH', '/profile', { slug: `adaeze-${ID}`, timezone: 'UTC' });
+    const up = await boss('POST', '/auth/signup',
+      { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    const bossId = up.d.user.id;
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
-    // Open around the clock so the fixture never depends on the hour it runs.
-    await boss('PUT', '/availability', {
-      rules: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: '00:00', endTime: '23:30' })),
-    });
-    let r = await boss('POST', '/meeting-types', {
-      name: 'Intro', durationMinutes: 30, locationType: 'video', accessTier: 1,
-    });
-    const mt = r.d.meetingType;
 
-    const anon = client();
-    const slots = (await anon('GET', `/public/adaeze-${ID}/${mt.slug}/slots`)).d.slots || [];
-    ok('there are slots to book', slots.length > 2, String(slots.length));
-    await anon('POST', `/public/adaeze-${ID}/${mt.slug}/book`, {
-      timezone: 'UTC', startAt: slots[0].startAt, name: 'Chidi Eze', email: `chidi${ID}@x.com`,
-    });
-    r = await boss('GET', '/bookings');
-    const booking = (r.d.bookings || [])[0];
-    ok('and one is booked', !!booking, JSON.stringify(r.d).slice(0, 160));
-    const was = booking.startAt;
-
-    // --- The office moves it ----------------------------------------------
-    head('The office can move a confirmed appointment:');
-    // Deliberately a time no slot grid would offer: 3am, well outside any
-    // sensible published hours. Bookable hours say when a STRANGER may take a
-    // slot, not when the principal is permitted to meet anyone.
-    const odd = '2027-06-15T03:00:00.000Z';
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: odd });
-    ok('to a time the public slot grid would never offer', r.s === 200, JSON.stringify(r.d));
-    ok('and the new time is what sticks', r.d.booking.startAt === odd, r.d.booking.startAt);
-    ok('keeping the length it always had',
-      new Date(r.d.booking.endAt) - new Date(r.d.booking.startAt) === 30 * 60000,
-      String(new Date(r.d.booking.endAt) - new Date(r.d.booking.startAt)));
-
-    head('The booker is told, and the old time survives:');
-    r = await boss('GET', '/emails');
-    ok('an email goes to whoever booked it',
-      (r.d.emails || []).some((e) => /^Moved:/.test(e.subject || '') && /chidi/.test(e.toEmail || '')),
-      JSON.stringify((r.d.emails || []).map((e) => e.subject)));
-    r = await boss('GET', `/bookings/${booking.id}/trail`);
-    const moved = (r.d.trail || []).find((t) => /reschedul/i.test(t.kind || ''));
-    ok('the trail records the move', !!moved, JSON.stringify(r.d.trail || []).slice(0, 200));
-    // The trail hands back a sentence rather than raw fields, and that
-    // sentence carries BOTH times — which is the loss booking_events was built
-    // to stop. Asserted on the reading, since the reading is the guarantee.
-    const oldHour = new Date(was).getUTCHours() % 12 || 12;
-    ok('and the line names where it came from as well as where it went',
-      /^Moved from .+ to .+$/.test(moved?.headline || '') && moved.headline.includes(String(oldHour)),
-      moved?.headline);
-
-    // --- What it will not do ----------------------------------------------
-    head('It will not put two meetings on top of each other:');
-    const second = (await anon('GET', `/public/adaeze-${ID}/${mt.slug}/slots`)).d.slots[0];
-    await anon('POST', `/public/adaeze-${ID}/${mt.slug}/book`, {
-      timezone: 'UTC', startAt: second.startAt, name: 'Ngozi Okafor', email: `ngozi${ID}@x.com`,
-    });
-    r = await boss('GET', '/bookings');
-    const other = (r.d.bookings || []).find((b) => /Ngozi/.test(b.bookerName));
-    ok('a second appointment exists', !!other, JSON.stringify(r.d.bookings || []).slice(0, 200));
-
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: other.startAt });
-    ok('moving one onto the other is refused', r.s === 409, String(r.s));
-    ok('and it says what is in the way, not just "taken"',
-      /Ngozi/.test(r.d?.error || ''), r.d?.error);
-
-    // Overlap, not just an exact collision — the half-hour after also clashes.
-    const overlapping = new Date(new Date(other.startAt).getTime() + 10 * 60000).toISOString();
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: overlapping });
-    ok('a partial overlap is refused too', r.s === 409, String(r.s));
-
-    // Its own slot must not block it — a no-op move is not a clash.
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: odd });
-    ok('but its own current time never blocks it', r.s === 200, JSON.stringify(r.d));
-
-    head('And the obvious refusals:');
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: 'not a time' });
-    ok('a time that is not a time', r.s === 400, String(r.s));
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, {});
-    ok('no time at all', r.s === 400, String(r.s));
-
-    // --- An assistant may move it too --------------------------------------
-    head('An assistant can move it as well as the principal:');
-    const inv = await boss('POST', '/members', { email: `pa${ID}@x.com`, role: 'chief_of_staff' });
+    // The PA who arranges the movement.
     const pa = client();
-    await pa('POST', '/auth/signup', { name: 'Kit Staff', email: `pa${ID}@x.com`, password: PW, accountCategory: 'chief_of_staff' });
-    await pa('PATCH', '/profile', { slug: `kit-${ID}` });
+    const paUp = await pa('POST', '/auth/signup',
+      { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    const paId = paUp.d.user.id;
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
-    await pa(
-      'POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`, {},
-    );
+    let inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
+    await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
 
-    const paTime = '2027-06-16T04:30:00.000Z';
-    r = await pa('POST', `/pa/${me.id}/bookings/${booking.id}/reschedule`, { startAt: paTime });
-    ok('the assistant may move their principal\'s appointment', r.s === 200, JSON.stringify(r.d).slice(0, 200));
-    r = await boss('GET', '/bookings');
-    const after = (r.d.bookings || []).find((b) => b.id === booking.id);
-    ok('and it lands where they put it', after.startAt === paTime, after.startAt);
+    // The Chief of Staff, who can otherwise see the whole office.
+    const cos = client();
+    const cosUp = await cos('POST', '/auth/signup',
+      { name: 'Tunde Bakare', email: `tunde${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    const cosId = cosUp.d.user.id;
+    await cos('POST', '/profile/onboarding-step', { step: 'done' });
+    inv = await boss('POST', '/members', { email: `tunde${ID}@x.com`, role: 'chief_of_staff' });
+    await cos('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
 
-    // A stranger must not be able to.
-    const outsider = client();
-    await outsider('POST', '/auth/signup', { name: 'Someone Else', email: `else${ID}@x.com`, password: PW });
-    r = await outsider('POST', `/pa/${me.id}/bookings/${booking.id}/reschedule`, { startAt: '2027-06-17T09:00:00.000Z' });
-    ok('somebody with no business here cannot', r.s === 403, String(r.s));
-    r = await outsider('POST', `/bookings/${booking.id}/reschedule`, { startAt: '2027-06-17T09:00:00.000Z' });
-    ok('not by their own route either', r.s === 404, String(r.s));
+    // ---- The fleet ----------------------------------------------------------
+    head('The cars are things, not a line of text on a leg:');
+    let r = await pa('POST', `/movement/${bossId}/vehicles`,
+      { label: 'The Prado', plate: 'ABC-123-XY', makeModel: 'Toyota Land Cruiser Prado', colour: 'Black' });
+    const carId = r.d.vehicle?.id;
+    ok('a car can be put on the books', r.s === 201, `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
+    ok('with its plate', r.d.vehicle?.plate === 'ABC-123-XY', JSON.stringify(r.d.vehicle));
 
-    // --- Cancelled is cancelled -------------------------------------------
-    head('A cancelled appointment is not moved, it is remade:');
-    await boss('POST', `/bookings/${booking.id}/cancel`, {});
-    r = await boss('POST', `/bookings/${booking.id}/reschedule`, { startAt: '2027-06-18T09:00:00.000Z' });
-    ok('moving it is refused', r.s === 400, String(r.s));
-    ok('and says to make a new one', /new one/i.test(r.d?.error || ''), r.d?.error);
+    // Papers that lapse, judged by the SAME engine as a passport.
+    const soon = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+    const past = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+    const far = new Date(Date.now() + 900 * 86400000).toISOString().slice(0, 10);
+    ok('insurance can be recorded against it',
+      (await pa('POST', `/movement/${bossId}/vehicles/${carId}/papers`,
+        { kind: 'insurance', reference: 'POL-9911', expiresOn: soon })).s === 201);
+    await pa('POST', `/movement/${bossId}/vehicles/${carId}/papers`,
+      { kind: 'roadworthiness', reference: 'RW-22', expiresOn: past });
+    await pa('POST', `/movement/${bossId}/vehicles/${carId}/papers`,
+      { kind: 'licence', reference: 'LIC-1', expiresOn: far });
+    ok('an invented kind of paper is refused',
+      (await pa('POST', `/movement/${bossId}/vehicles/${carId}/papers`,
+        { kind: 'vibes', expiresOn: soon })).s === 400);
+
+    r = await pa('GET', `/movement/${bossId}/vehicles`);
+    const car = (r.d.vehicles || [])[0];
+    const paper = (k) => (car?.papers || []).find((p) => p.kind === k);
+    ok('the papers come back with the car', (car?.papers || []).length === 3,
+      JSON.stringify(car?.papers));
+    // THE POINT OF REUSING THE EXPIRY ENGINE: one idea of "nearly out of
+    // date", not a second one that drifts from the first.
+    ok('one already lapsed says so', paper('roadworthiness')?.state === 'expired',
+      paper('roadworthiness')?.state);
+    ok('one close to lapsing says so too', paper('insurance')?.state === 'expiring',
+      paper('insurance')?.state);
+    ok('and one with years on it says nothing', paper('licence')?.state === null,
+      String(paper('licence')?.state));
+
+    // ---- A movement ---------------------------------------------------------
+    head('A movement is arranged, and it is not the office\'s business:');
+    r = await pa('POST', `/movement/${bossId}/movements`, {
+      title: 'To the Lekki site',
+      departsFrom: 'Ikoyi residence',
+      destination: 'Lekki Phase 1',
+      departsAt: new Date(Date.now() + 3 * 3600000).toISOString(),
+      bufferMinutes: 20,
+      notes: 'Chairman prefers the coast road.',
+    });
+    const moveId = r.d.movement?.id;
+    ok('the assistant arranges it', r.s === 201, `${r.s} ${JSON.stringify(r.d).slice(0, 140)}`);
+
+    await pa('POST', `/movement/${bossId}/movements/${moveId}/vehicles`,
+      { vehicleId: carId, role: 'principal' });
+    await pa('POST', `/movement/${bossId}/movements/${moveId}/vehicles`,
+      { role: 'backup', plate: 'XYZ-777-AA', description: 'Silver Hilux' });
+    await pa('POST', `/movement/${bossId}/movements/${moveId}/people`,
+      { role: 'driver', name: 'Sunday Eze', phone: '+2348030000001' });
+    await pa('POST', `/movement/${bossId}/movements/${moveId}/people`,
+      { role: 'escort_lead', name: 'Inspector Musa', phone: '+2348030000002' });
+
+    r = await pa('GET', `/movement/${bossId}/movements/${moveId}`);
+    ok('the arranger sees all of it', r.d.movement?.access === 'full', r.d.movement?.access);
+    ok('with both cars and both people',
+      r.d.movement.vehicles.length === 2 && r.d.movement.people.length === 2,
+      JSON.stringify({ v: r.d.movement.vehicles.length, p: r.d.movement.people.length }));
+    // The plate is copied on rather than joined, so the record survives the car
+    // being sold.
+    ok('the car\'s plate is copied onto the movement',
+      r.d.movement.vehicles.some((v) => v.plate === 'ABC-123-XY'),
+      JSON.stringify(r.d.movement.vehicles));
+    ok('and the principal sees it too',
+      (await boss('GET', `/movement/${bossId}/movements/${moveId}`)).d.movement?.access === 'full');
+
+    // POSITIVE CONTROL FOR THE LIST, which is a SECOND query answering the same
+    // question as the gate, and two queries answering one question drift. If the
+    // list were simply broken, the emptiness asserted below would prove nothing.
+    ok('the arranger\'s own list has it',
+      ((await pa('GET', `/movement/${bossId}/movements`)).d.movements || [])
+        .some((m) => m.id === moveId));
+
+    // THE ASSERTION THIS FILE EXISTS FOR.
+    ok('the Chief of Staff, who sees the whole office, does not see this',
+      (await cos('GET', `/movement/${bossId}/movements/${moveId}`)).s === 404);
+    ok('and it is not in their list',
+      ((await cos('GET', `/movement/${bossId}/movements`)).d.movements || []).length === 0);
+    // POSITIVE CONTROL: they can reach the office's cars, so the 404 above is
+    // about the movement and not about them being shut out of everything.
+    ok('though the fleet is ordinary office information to them',
+      ((await cos('GET', `/movement/${bossId}/vehicles`)).d.vehicles || []).length === 1);
+
+    // ---- Covering for somebody ----------------------------------------------
+    head('And when the arranger is not there, it can be opened once:');
+    ok('the Chief of Staff cannot open it for themselves',
+      (await cos('POST', `/movement/${bossId}/movements/${moveId}/grants`,
+        { userId: cosId })).s === 404);
+    ok('a stranger to the office cannot be given it',
+      (await pa('POST', `/movement/${bossId}/movements/${moveId}/grants`,
+        { userId: 'nobody' })).s === 400);
+
+    r = await pa('POST', `/movement/${bossId}/movements/${moveId}/grants`,
+      { userId: cosId, reason: 'I am out on Thursday' });
+    ok('the arranger can hand it over for one journey', r.s === 201,
+      `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
+
+    r = await cos('GET', `/movement/${bossId}/movements/${moveId}`);
+    const seen = r.d.movement;
+    ok('and now they can open it', r.s === 200 && !!seen, String(r.s));
+    ok('but only as far as coordinating it', seen?.access === 'coordination', seen?.access);
+    // A grant nobody can find is not a grant. The stand-in was handed this
+    // because the arranger is away — there is no colleague to send them a link.
+    const covering = (await cos('GET', `/movement/${bossId}/movements`)).d.movements || [];
+    ok('and it turns up in their list, where they will actually look for it',
+      covering.length === 1 && covering[0].id === moveId, JSON.stringify(covering).slice(0, 200));
+    ok('still only the coordinating half of it',
+      covering[0]?.access === 'coordination' && !JSON.stringify(covering).includes('Musa'),
+      JSON.stringify(covering).slice(0, 200));
+
+    // WHAT THEY GET: enough to make the journey happen.
+    ok('they get when and from where', seen?.departsFrom === 'Ikoyi residence'
+      && !!seen?.departsAt, JSON.stringify({ f: seen?.departsFrom, a: seen?.departsAt }));
+    ok('and the driver to ring',
+      seen.people.length === 1 && seen.people[0].name === 'Sunday Eze',
+      JSON.stringify(seen.people));
+    ok('and the car the principal is in',
+      seen.vehicles.length === 1 && seen.vehicles[0].role === 'principal',
+      JSON.stringify(seen.vehicles));
+
+    // WHAT THEY DO NOT GET, which is the half worth protecting.
+    ok('the escort is not in it',
+      !JSON.stringify(seen).includes('Musa'), JSON.stringify(seen).slice(0, 300));
+    ok('nor the backup car', !JSON.stringify(seen).includes('XYZ-777-AA'));
+    ok('nor the principal\'s own notes', !JSON.stringify(seen).includes('coast road'));
+    // Silently redacted data is worse than none: the reader assumes they have
+    // everything and tells somebody there is no escort.
+    ok('and it says out loud that it is partial', seen?.partial === true);
+    ok('naming how much was withheld', seen?.withheld === 2, String(seen?.withheld));
+
+    // A stand-in coordinates; they do not rewrite.
+    ok('they cannot add to it',
+      (await cos('POST', `/movement/${bossId}/movements/${moveId}/people`,
+        { role: 'driver', name: 'Somebody else' })).s === 403);
+    ok('nor hand it on to anybody else',
+      (await cos('POST', `/movement/${bossId}/movements/${moveId}/grants`,
+        { userId: paId })).s === 403);
+    // Except this: the person covering is the one most likely to know.
+    r = await cos('POST', `/movement/${bossId}/movements/${moveId}/arrived`);
+    ok('but they can say the principal arrived', r.s === 200 && !!r.d.movement?.arrivedAt,
+      JSON.stringify(r.d.movement?.arrivedAt));
+
+    // ---- The principal finds out ---------------------------------------------
+    head('And the principal can see that it happened:');
+    const logged = await require(`${ROOT}/app/server/lib/db`).prepare(
+      "SELECT * FROM access_log WHERE subject_owner_id = ? AND action = 'grant'",
+    ).all(bossId);
+    ok('handing over sight of a movement is on the record',
+      logged.some((l) => /Tunde/.test(l.field || '')),
+      JSON.stringify(logged.map((l) => l.field)));
+
+    // ---- Taking it back ------------------------------------------------------
+    head('And it can be taken back before it lapses:');
+    r = await pa('GET', `/movement/${bossId}/movements/${moveId}/grants`);
+    const grantId = (r.d.grants || [])[0]?.id;
+    ok('the arranger can see who holds it', !!grantId && r.d.grants[0].live === true,
+      JSON.stringify(r.d.grants));
+    ok('and take it back',
+      (await pa('DELETE', `/movement/${bossId}/movements/${moveId}/grants/${grantId}`)).s === 204);
+    ok('after which the room is shut again',
+      (await cos('GET', `/movement/${bossId}/movements/${moveId}`)).s === 404);
+
+  } catch (err) {
+    fails++;
+    console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
     proc.kill();
   }
 
   console.log(fails === 0
-    ? '\nThe office can move an appointment, and cannot double-book one.'
+    ? '\nA movement is arranged, guarded like the vault, and opened once when somebody has to cover.'
     : `\n${fails} FAILURES`);
   process.exit(fails === 0 ? 0 : 1);
 })().catch((e) => { console.error('\nFAILED: ' + e.message); process.exit(1); });
