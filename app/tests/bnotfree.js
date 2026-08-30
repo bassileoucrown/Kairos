@@ -66,7 +66,7 @@ const dayOf = (dayOffset) => new Date(Date.now() + dayOffset * 86400000).toISOSt
   });
 
   try {
-    const deadline = Date.now() + 60000;
+    const deadline = Date.now() + 150000;
     for (;;) {
       try { if ((await (await fetch(`${BASE}/api/status`)).json()).databaseReady) break; } catch { /* not up */ }
       if (Date.now() > deadline) throw new Error('no server');

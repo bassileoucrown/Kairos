@@ -28,9 +28,17 @@ async function arm(p, code, roleText, uses) {
     env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT) },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
-  // A minute. Twenty seconds is plenty on an idle machine and not plenty on a
-  // loaded one, and "no server" on a green tree is a board crying wolf.
-  const deadline = Date.now() + 60000;
+  // Two and a half minutes. Twenty seconds was plenty on an idle machine and
+  // not plenty on a loaded one; a minute went the same way, twice in one day,
+  // on a box where a hundred suites run back to back and each one starts a
+  // server and half of them start a browser. "No server" on a green tree is a
+  // board crying wolf, and it costs an hour of hunting a product bug that was
+  // never there.
+  //
+  // Waiting longer is free when the tree is green — the loop exits the instant
+  // the server answers — and is only paid when something is genuinely broken,
+  // which is the right way round for this trade.
+  const deadline = Date.now() + 150000;
   for (;;) {
     try { const r = await (await fetch(`${BASE}/api/status`)).json(); if (r.databaseReady) break; }
     catch { /* not up */ }
