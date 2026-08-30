@@ -330,19 +330,21 @@ router.delete('/:spaceId/members/:memberId', requireSpaceAccess, async (req, res
 });
 
 router.get('/:spaceId/projects', requireSpaceAccess, async (req, res) => {
-  // Put away leaves the list; `?archived=1` is where it went. Both spellings
-  // count as archived — status was how projects said it before the column
-  // existed, and reading only the column would leave anything filed the old
-  // way sitting on the live list forever.
-  const shelf = req.query.archived === '1'
-    ? "(p.archived_at IS NOT NULL OR p.status = 'archived')"
-    : "(p.archived_at IS NULL AND p.status != 'archived')";
+  // EVERY project, archived or not, with archivedAt on each so the screen can
+  // group them — the same bargain this route already makes for threads, where
+  // the space page shows "Archived conversations" as a closed group beneath
+  // the live ones.
+  //
+  // Filtering here instead broke exactly that: the archived ones stopped
+  // arriving, so the heading that files them had nothing to render and a
+  // project archived from this page appeared to vanish from it. Being in the
+  // room is when you most want to see what was put away in it.
   const rows = await db.prepare(`
     SELECT p.*,
       (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id) AS stage_count,
       (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id AND s.status = 'done') AS done_count,
       (SELECT COUNT(*) FROM project_stages s WHERE s.project_id = p.id AND s.status = 'blocked') AS blocked_count
-    FROM projects p WHERE p.space_id = ? AND ${shelf} ORDER BY p.created_at DESC
+    FROM projects p WHERE p.space_id = ? ORDER BY p.created_at DESC
   `).all(req.space.id);
 
   res.json({

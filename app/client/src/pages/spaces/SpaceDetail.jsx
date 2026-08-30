@@ -142,8 +142,13 @@ export default function SpaceDetail() {
   // attention without ceasing to exist.
   const live = threads.filter((t) => !t.archivedAt);
   const archived = threads.filter((t) => t.archivedAt);
-  const liveProjects = projects.filter((p) => p.status !== 'archived');
-  const archivedProjects = projects.filter((p) => p.status === 'archived');
+  // BOTH SPELLINGS. archivedAt is how a project says it now; status was how it
+  // said it before that column existed. Reading only one leaves half the
+  // archived projects sitting in the live list, and which half depends on when
+  // they were filed.
+  const isFiled = (p) => !!p.archivedAt || p.status === 'archived';
+  const liveProjects = projects.filter((p) => !isFiled(p));
+  const archivedProjects = projects.filter(isFiled);
   const isPrivate = space.context === 'private';
 
   return (

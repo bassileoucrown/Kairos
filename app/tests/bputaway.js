@@ -301,20 +301,29 @@ function client() {
     ok('a project archived the old way is on it too',
       (shelf2.projects || []).some((x) => x.name === 'Old spelling'), JSON.stringify(shelf2.projects));
 
-    // AND OFF THE LIVE LIST, which is the other half — a thing that is on both
-    // has not been put away at all.
-    ok('and off the live list',
-      !((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
-        .some((x) => x.name === 'Old spelling'));
-    ok('while an ordinary project stays on it',
-      ((await boss('GET', `/spaces/${shelfRoomId}/projects?archived=1`)).d.projects || [])
-        .some((x) => x.name === 'Filed plan'));
+    // AND MARKED AS FILED WHERE IT LIVES, which is the other half. The space
+    // page deliberately still receives archived projects — it shows them as a
+    // closed "Archived projects" group, the same as archived conversations —
+    // so the test is that the row SAYS it is filed, not that it is missing.
+    // Asserting absence here is what broke that grouping the first time.
+    const inRoom = ((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
+      .find((x) => x.name === 'Old spelling');
+    ok('the room still receives it, marked as filed',
+      !!inRoom && (inRoom.status === 'archived' || !!inRoom.archivedAt), JSON.stringify(inRoom));
+    const filedNewWay = ((await boss('GET', `/spaces/${shelfRoomId}/projects`)).d.projects || [])
+      .find((x) => x.name === 'Filed plan');
+    ok('and one filed the new way carries a date rather than a status',
+      !!filedNewWay?.archivedAt && filedNewWay.status !== 'archived', JSON.stringify(filedNewWay));
 
     // Taken back out again, which is what makes it a shelf rather than a bin.
     ok('and it can be taken back out',
       (await boss('DELETE', `/projects/${legacy.d.project.id}/archive`)).s === 200);
+    const back = ((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
+      .find((x) => x.name === 'Old spelling');
     ok('after which it is live again',
-      ((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
+      !!back && !back.archivedAt && back.status !== 'archived', JSON.stringify(back));
+    ok('and off the shelf',
+      !(((await boss('GET', `/archive/${bossId}`)).d.putAway?.projects) || [])
         .some((x) => x.name === 'Old spelling'));
 
   } catch (err) {
