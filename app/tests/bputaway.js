@@ -258,6 +258,65 @@ function client() {
     ok('taking work again',
       (await boss('POST', `/spaces/${roomId}/threads`, { name: 'Something new' })).s === 201);
 
+    // ---- AND ALL OF IT IS FINDABLE IN ONE PLACE -----------------------------
+    //
+    // THE BUG THIS SECTION EXISTS FOR, reported exactly this way: "a project
+    // archived didn't show in ARCHIVE". The screen called Archive showed kept
+    // messages and archived documents and nothing else, so everything else put
+    // away went somewhere the person who put it there could not find it. A
+    // place named Archive that is not where archived things go answers the
+    // question wrongly, which is worse than not answering it.
+    head('And everything put away is on one shelf:');
+    const shelfRoom = await boss('POST', '/spaces', { name: `Shelf room ${ID}`, context: 'work' });
+    const shelfRoomId = shelfRoom.d.space.id;
+    const shelfProject = await boss('POST', `/spaces/${shelfRoomId}/projects`, { name: 'Filed plan' });
+    const shelfTask = await boss('POST', '/tasks', { spaceId: shelfRoomId, title: 'Filed task' });
+    const shelfThread = await boss('POST', `/spaces/${shelfRoomId}/threads`, { name: 'Filed talk' });
+
+    await boss('POST', `/projects/${shelfProject.d.project.id}/archive`);
+    await boss('POST', `/tasks/${shelfTask.d.task.id}/archive`);
+    await boss('POST', `/threads/${shelfThread.d.thread.id}/archive`);
+    // The room last, or archiving it would close the door on the rest.
+    await boss('POST', `/spaces/${shelfRoomId}/archive`);
+
+    const shelf = (await boss('GET', `/archive/${bossId}`)).d.putAway || {};
+    ok('the archived project is on it',
+      (shelf.projects || []).some((x) => x.name === 'Filed plan'), JSON.stringify(shelf.projects));
+    ok('and the archived task', (shelf.tasks || []).some((x) => x.name === 'Filed task'),
+      JSON.stringify(shelf.tasks));
+    ok('and the archived conversation',
+      (shelf.conversations || []).some((x) => x.name === 'Filed talk'), JSON.stringify(shelf.conversations));
+    ok('and the archived room', (shelf.rooms || []).some((x) => x.name === `Shelf room ${ID}`),
+      JSON.stringify(shelf.rooms));
+    // Each row has to say where it came from, or the shelf is a pile.
+    ok('each says which room it came from',
+      (shelf.projects || []).every((x) => !!x.spaceName), JSON.stringify(shelf.projects));
+
+    // A project put away the OLD way — status, before the column existed —
+    // must still be on the shelf, or this change empties it for everybody who
+    // had already archived something.
+    const legacy = await boss('POST', `/spaces/${spaceId}/projects`, { name: 'Old spelling' });
+    await boss('PATCH', `/projects/${legacy.d.project.id}`, { status: 'archived' });
+    const shelf2 = (await boss('GET', `/archive/${bossId}`)).d.putAway || {};
+    ok('a project archived the old way is on it too',
+      (shelf2.projects || []).some((x) => x.name === 'Old spelling'), JSON.stringify(shelf2.projects));
+
+    // AND OFF THE LIVE LIST, which is the other half — a thing that is on both
+    // has not been put away at all.
+    ok('and off the live list',
+      !((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
+        .some((x) => x.name === 'Old spelling'));
+    ok('while an ordinary project stays on it',
+      ((await boss('GET', `/spaces/${shelfRoomId}/projects?archived=1`)).d.projects || [])
+        .some((x) => x.name === 'Filed plan'));
+
+    // Taken back out again, which is what makes it a shelf rather than a bin.
+    ok('and it can be taken back out',
+      (await boss('DELETE', `/projects/${legacy.d.project.id}/archive`)).s === 200);
+    ok('after which it is live again',
+      ((await boss('GET', `/spaces/${spaceId}/projects`)).d.projects || [])
+        .some((x) => x.name === 'Old spelling'));
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));

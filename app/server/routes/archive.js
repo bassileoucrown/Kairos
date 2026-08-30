@@ -48,8 +48,84 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     principal: { id: req.principal.id, name: req.principal.name },
     canRead: true,
     kept: await keep.forOwner(req.principal.id),
+    putAway: await putAwayFor(req.principal.id),
   });
 });
+
+/**
+ * Everything the office has put away, gathered in the one place called Archive.
+ *
+ * WHY THIS WAS MISSING AND WHY IT MATTERED. The screen called Archive showed
+ * two things: messages somebody had kept, and documents put away. Everything
+ * else that could be archived — a room, a conversation, a project, a task —
+ * went somewhere else or nowhere, so a principal who archived a project could
+ * not find it afterwards and reasonably concluded it had been lost. A place
+ * named Archive that is not where archived things go is worse than no such
+ * place, because it answers the question wrongly instead of not at all.
+ *
+ * SCOPED TO THE PRINCIPAL'S OWN ROOMS, matching kept items, which file into
+ * the space owner's archive rather than the keeper's. An assistant's own
+ * private rooms are not their principal's to see, and this must not become the
+ * screen that shows them.
+ *
+ * ARCHIVED IS NOT DELETED, so every row carries where it came from and enough
+ * to go and find it. A shelf you cannot reach onto is a bin.
+ */
+async function putAwayFor(ownerId) {
+  const rooms = await db.prepare(`
+    SELECT id, name, archived_at FROM spaces
+     WHERE owner_id = ? AND archived_at IS NOT NULL
+     ORDER BY archived_at DESC LIMIT 100
+  `).all(ownerId);
+
+  const conversations = await db.prepare(`
+    SELECT t.id, t.name, t.archived_at, s.id AS space_id, s.name AS space_name
+      FROM threads t JOIN spaces s ON s.id = t.space_id
+     WHERE s.owner_id = ? AND t.archived_at IS NOT NULL
+     ORDER BY t.archived_at DESC LIMIT 100
+  `).all(ownerId);
+
+  // Both spellings. The column is the current one; status = 'archived' is what
+  // projects used before it existed, and a project put away that way is still
+  // put away — reading only the new column would have emptied the shelf for
+  // everybody who had already used the old one.
+  const projects = await db.prepare(`
+    SELECT p.id, p.name, p.archived_at, p.status, s.id AS space_id, s.name AS space_name
+      FROM projects p JOIN spaces s ON s.id = p.space_id
+     WHERE s.owner_id = ? AND (p.archived_at IS NOT NULL OR p.status = 'archived')
+     ORDER BY p.archived_at DESC, p.created_at DESC LIMIT 100
+  `).all(ownerId);
+
+  // Top-level only: a step is archived with its task, and listing both would
+  // show the same act twice under two names.
+  const tasks = await db.prepare(`
+    SELECT t.id, t.title, t.archived_at, t.status, s.id AS space_id, s.name AS space_name
+      FROM tasks t JOIN spaces s ON s.id = t.space_id
+     WHERE s.owner_id = ? AND t.archived_at IS NOT NULL AND t.parent_task_id IS NULL
+     ORDER BY t.archived_at DESC LIMIT 100
+  `).all(ownerId);
+
+  return {
+    rooms: rooms.map((r) => ({ id: r.id, name: r.name, archivedAt: r.archived_at })),
+    conversations: conversations.map((t) => ({
+      id: t.id, name: t.name, archivedAt: t.archived_at,
+      spaceId: t.space_id, spaceName: t.space_name,
+    })),
+    projects: projects.map((p) => ({
+      id: p.id, name: p.name, archivedAt: p.archived_at,
+      spaceId: p.space_id, spaceName: p.space_name,
+      // So a screen can say why it is here when the old spelling put it here.
+      byStatus: !p.archived_at && p.status === 'archived',
+    })),
+    tasks: tasks.map((t) => ({
+      id: t.id, name: t.title, archivedAt: t.archived_at,
+      // Whether the work was ever finished, which is exactly what a status
+      // value spelling of "archived" would have destroyed.
+      status: t.status,
+      spaceId: t.space_id, spaceName: t.space_name,
+    })),
+  };
+}
 
 /** Why this was worth keeping, added after the fact. */
 router.patch('/:ownerId/:itemId', requirePaAccess, async (req, res) => {

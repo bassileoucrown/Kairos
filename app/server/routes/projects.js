@@ -163,6 +163,41 @@ router.patch('/stages/:stageId', loadStage, async (req, res) => {
   res.json({ stages: await stagesFor(req.project.id) });
 });
 
+/**
+ * Put a project away, or bring it back.
+ *
+ * There WAS a way to do this — status: 'archived' — and it was the wrong
+ * shape, for the reason set out beside the column in lib/db.js: a project
+ * could be finished or filed, never both. Setting it still works and still
+ * counts as archived, so nothing anybody has already put away moves.
+ *
+ * Owner-only, like archiving a room. A project is the office's plan, not one
+ * person's list.
+ */
+router.post('/:projectId/archive', loadProject, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can put a project away.' });
+  }
+  if (req.project.archived_at) return res.json({ archivedAt: req.project.archived_at });
+  const at = new Date().toISOString();
+  await db.prepare('UPDATE projects SET archived_at = ? WHERE id = ?').run(at, req.project.id);
+  res.json({ archivedAt: at });
+});
+
+router.delete('/:projectId/archive', loadProject, async (req, res) => {
+  if (req.access.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the space owner can bring a project back.' });
+  }
+  // Clears the old status spelling too, or a project archived the previous way
+  // would come back off the shelf and immediately look archived again.
+  await db.prepare(`
+    UPDATE projects SET archived_at = NULL,
+           status = CASE WHEN status = 'archived' THEN 'active' ELSE status END
+     WHERE id = ?
+  `).run(req.project.id);
+  res.json({ archivedAt: null });
+});
+
 /** What deleting a project would take with it. */
 async function projectContents(projectId) {
   const stages = await db.prepare('SELECT COUNT(*) AS n FROM project_stages WHERE project_id = ?')

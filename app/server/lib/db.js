@@ -416,6 +416,12 @@ function ready() {
       // a blocker read differently in an archive, and once the room is gone
       // there is nothing left to ask — the copy has to carry it.
       await ensureColumn('kept_items', 'record_type', "TEXT NOT NULL DEFAULT ''");
+      // Projects had 'archived' as a STATUS, which is the same conflation the
+      // tasks column above exists to avoid: a project could be done, or filed,
+      // but never both, so filing one erased whether it had finished. The old
+      // value still counts as archived — see routes/archive.js — so nothing
+      // already put away disappears from the shelf when this lands.
+      await ensureColumn('projects', 'archived_at', 'TEXT');
       // Public, or the one the app keeps so the office can slot something into
       // the diary directly. See lib/internalBooking.js.
       await ensureColumn('meeting_types', 'kind', "TEXT NOT NULL DEFAULT 'public'");

@@ -32,6 +32,100 @@ function whenText(iso) {
  * answer to "who said this, where, and when" is a note to nobody — and by the
  * time anyone reads this the room it came from may not exist to be asked.
  */
+/**
+ * What the office has put away: rooms, conversations, projects, tasks.
+ *
+ * THIS SCREEN IS CALLED ARCHIVE AND DID NOT SHOW ARCHIVED THINGS. It showed
+ * kept messages and archived documents, so a principal who archived a project
+ * came here, did not find it, and reasonably concluded it had been lost. A
+ * place named Archive that is not where archived things go answers the
+ * question wrongly, which is worse than not answering it.
+ *
+ * Every row can be brought back from here, because that is what separates a
+ * shelf from a bin.
+ */
+function PutAwayGroup({ title, empty, rows, onRestore, link }) {
+  if (!rows?.length) return <p className="hint">{empty}</p>;
+  return (
+    <>
+      <h4 style={{ marginTop: 16, marginBottom: 8 }}>{title}</h4>
+      {rows.map((row) => (
+        <div className="card ess-row" key={row.id}>
+          <div className="ess-main">
+            <div className="ess-label">
+              {link ? <Link to={link(row)}>{row.name}</Link> : row.name}
+            </div>
+            <div className="hint">
+              {row.spaceName ? `in ${row.spaceName} · ` : ''}
+              {row.archivedAt ? `put away ${whenText(row.archivedAt)}` : 'put away'}
+              {/* Said plainly: the work's own state survived being filed, which
+                  is the whole reason archiving is not a status value. */}
+              {row.status ? ` · ${row.status}` : ''}
+            </div>
+          </div>
+          <div className="ess-buttons">
+            <button className="btn btn-sm" type="button" onClick={() => onRestore(row)}>
+              Take back out
+            </button>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function PutAway({ groups, onChanged, ownerId }) {
+  const g = groups || {};
+  const total = (g.rooms?.length || 0) + (g.conversations?.length || 0)
+    + (g.projects?.length || 0) + (g.tasks?.length || 0);
+
+  async function restore(kind, row) {
+    const path = {
+      rooms: `/spaces/${row.id}/archive`,
+      conversations: `/threads/${row.id}/archive`,
+      projects: `/projects/${row.id}/archive`,
+      tasks: `/tasks/${row.id}/archive`,
+    }[kind];
+    try { await api.del(path); } catch { /* reload will show the truth */ }
+    onChanged();
+  }
+
+  return (
+    <>
+      <h3>Put away</h3>
+      {total === 0 ? (
+        <div className="empty-state">
+          Nothing put away. A finished room, conversation, project or task can be
+          archived rather than deleted — it leaves the live list and waits here.
+        </div>
+      ) : (
+        <>
+          <PutAwayGroup
+            title="Rooms" rows={g.rooms} empty=""
+            onRestore={(r) => restore('rooms', r)}
+            link={(r) => `/spaces/${r.id}`}
+          />
+          <PutAwayGroup
+            title="Conversations" rows={g.conversations} empty=""
+            onRestore={(r) => restore('conversations', r)}
+            link={(r) => `/threads/${r.id}`}
+          />
+          <PutAwayGroup
+            title="Projects" rows={g.projects} empty=""
+            onRestore={(r) => restore('projects', r)}
+            link={(r) => `/projects/${r.id}`}
+          />
+          <PutAwayGroup
+            title="Tasks" rows={g.tasks} empty=""
+            onRestore={(r) => restore('tasks', r)}
+          />
+        </>
+      )}
+      {void ownerId}
+    </>
+  );
+}
+
 function KeptCard({ item, onNote, onRemove }) {
   return (
     <div className="card kept-card">
@@ -145,6 +239,7 @@ export default function Archive() {
   }
 
   const kept = data.kept || [];
+  const putAway = data.putAway || {};
   const documents = docs || [];
 
   return (
@@ -153,11 +248,13 @@ export default function Archive() {
       {error && <div className="alert alert-error">{error}</div>}
 
       <p className="hint" style={{ marginBottom: 16 }}>
-        Things kept out of conversations, and documents put away. Everything here
-        survives the room it came from being archived or deleted.
+        Everything the office has put away, and everything kept out of a room before it
+        closed. Nothing here is deleted — each of these can be taken back out.
       </p>
 
-      <h3>Kept from conversations</h3>
+      <PutAway groups={putAway} onChanged={load} ownerId={ownerId} />
+
+      <h3 style={{ marginTop: 24 }}>Kept from conversations</h3>
       {kept.length === 0 ? (
         <div className="empty-state">
           Nothing kept yet. In any conversation, tap a message and choose
