@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { useAsk } from '../../components/Ask.jsx';
 import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 import TaskList from './TaskList.jsx';
@@ -15,6 +16,7 @@ export default function ProjectDetail() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [ask, askDialog] = useAsk();
   const [error, setError] = useState('');
   const [stageName, setStageName] = useState('');
   const [stageDue, setStageDue] = useState('');
@@ -87,7 +89,39 @@ export default function ProjectDetail() {
     await act(() => api.patch(`/projects/${projectId}`, { name: next.trim() }));
   }
 
-  const setProjectStatus = (status) => act(() => api.patch(`/projects/${projectId}`, { status }));
+  // The dedicated endpoint rather than a status value. status is the state of
+  // the work — active, done — and archiving is a decision about the list; the
+  // old spelling could not express a project that was both finished and filed.
+  const putAway = (on) => act(() => (on
+    ? api.post(`/projects/${projectId}/archive`)
+    : api.del(`/projects/${projectId}/archive`)));
+
+  /**
+   * Deleting a project, which was not reachable at all before.
+   *
+   * The stages and the tasks go with it; the conversations do not, and the
+   * refusal says so. The confirmation IS the count, matching the server —
+   * somebody who has typed "5" has read that five things go, which a yes/no
+   * dialog does not tell them.
+   */
+  async function destroy() {
+    const { contents } = await api.get(`/projects/${projectId}/deletion`);
+    const going = contents.stages + contents.tasks;
+    const typed = await ask({
+      title: `Delete “${data.project.name}”?`,
+      hint: `${contents.stages} stage${contents.stages === 1 ? '' : 's'} and `
+        + `${contents.tasks} task${contents.tasks === 1 ? '' : 's'} go with it. `
+        + (contents.threads
+          ? `${contents.threads} conversation${contents.threads === 1 ? '' : 's'} stay in the space. `
+          : '')
+        + 'Archive it instead if you might want it back.',
+      label: going ? `Type ${going} to confirm` : 'Type DELETE to confirm',
+      confirmLabel: 'Delete',
+    });
+    if (going ? String(typed || '').trim() !== String(going) : String(typed || '').trim() !== 'DELETE') return;
+    await api.del(`/projects/${projectId}`, going ? { alsoDelete: going } : {});
+    navigate(`/spaces/${data.space.id}`);
+  }
 
   const setStatus = (id, status) => act(() => api.patch(`/projects/stages/${id}`, { status }));
   const move = (id, direction) => act(() => api.post(`/projects/stages/${id}/move`, { direction }));
@@ -96,7 +130,10 @@ export default function ProjectDetail() {
   if (error && !data) return <div className="spinner-page">{error}</div>;
   if (!data) return <div className="spinner-page">Loading…</div>;
 
-  const { project, space, stages, canWrite } = data;
+  const { project, space, stages, canWrite, isOwner } = data;
+  // Both spellings, for the same reason the space page reads both: a project
+  // filed before archived_at existed says so with its status.
+  const isFiled = !!project.archivedAt || project.status === 'archived';
   const doneCount = stages.filter((s) => s.status === 'done').length;
 
   /**
@@ -127,16 +164,23 @@ export default function ProjectDetail() {
       actions={(
         <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="pill">{doneCount} of {stages.length} stages done</span>
-          {canWrite && (project.status === 'archived' ? (
+          {canWrite && (isFiled ? (
             <button className="btn btn-secondary btn-sm" type="button"
-              onClick={() => setProjectStatus('active')}>Take out of the archive</button>
+              onClick={() => putAway(false)}>Take out of the archive</button>
           ) : (
             <>
               <button className="btn btn-secondary btn-sm" type="button" onClick={rename}>
                 Rename
               </button>
               <button className="btn btn-secondary btn-sm" type="button"
-                onClick={() => setProjectStatus('archived')}>Archive</button>
+                onClick={() => putAway(true)}>Archive</button>
+              {/* Only the owner may destroy it, so only they are shown it —
+                  a button that always refuses is worse than no button. */}
+              {isOwner && (
+                <button className="btn btn-danger btn-sm" type="button" onClick={destroy}>
+                  Delete
+                </button>
+              )}
             </>
           ))}
         </span>
@@ -149,7 +193,7 @@ export default function ProjectDetail() {
         </p>
         {error && <div className="alert alert-error">{error}</div>}
 
-        {project.status === 'archived' && (
+        {isFiled && (
           <div className="alert" style={{ marginTop: 8 }}>
             This project is archived — it has left the space's live list and everything
             in it is still here to read. Take it out of the archive to carry on.
@@ -304,6 +348,7 @@ export default function ProjectDetail() {
             <button className="btn btn-primary btn-sm" type="submit">Add stage</button>
           </form>
         )}
+    {askDialog}
     </AppShell>
   );
 }

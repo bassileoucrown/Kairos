@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
 import { MentionText } from '../../components/Mention.jsx';
+import { useAsk } from '../../components/Ask.jsx';
 
 export const TASK_STATUSES = [
   { value: 'open', label: 'Open' },
@@ -145,6 +146,8 @@ export default function TaskList({
   // controlled by server state, so without holding the intended value locally
   // the box springs back until the round-trip lands, which reads as broken.
   const [pending, setPending] = useState({});
+  // Above the early return, because hooks are not conditional.
+  const [ask, askDialog] = useAsk();
 
   async function update(id, patch) {
     setPending((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
@@ -159,18 +162,58 @@ export default function TaskList({
       });
     }
   }
-  async function remove(id) {
-    await api.del(`/tasks/${id}`);
+  /**
+   * Delete, which now has to ask about the steps.
+   *
+   * The server refuses the first attempt when a task has steps and says how
+   * many, because deleting the task deletes them. That refusal arrived after
+   * this button was written, so it silently did nothing for exactly the tasks
+   * where doing nothing was most confusing — the ones with work underneath.
+   *
+   * The confirmation IS the count, matching the server: somebody who has typed
+   * "3" has read that there were three, which a yes/no dialog does not tell
+   * them. Asked only when there is something to lose; a bare task still goes
+   * in one press.
+   */
+  async function remove(id, title) {
+    try {
+      await api.del(`/tasks/${id}`);
+    } catch (err) {
+      const steps = err?.data?.steps;
+      if (!steps) throw err;
+      const typed = await ask({
+        title: `Delete “${title}”?`,
+        hint: `It has ${steps} step${steps === 1 ? '' : 's'} under it, and they go too. `
+          + 'Archive it instead if you might want it back.',
+        label: `Type ${steps} to confirm`,
+        confirmLabel: 'Delete',
+      });
+      if (String(typed || '').trim() !== String(steps)) return;
+      await api.del(`/tasks/${id}`, { alsoDelete: steps });
+    }
+    await onChanged();
+  }
+
+  /** Put it away: off the list, still findable, back in one press. */
+  async function archive(id) {
+    await api.post(`/tasks/${id}/archive`);
     await onChanged();
   }
 
   if (tasks.length === 0) return <div className="empty-state">{emptyText}</div>;
 
   return (
+    <>
+    {askDialog}
     <ul className="task-list">
       {tasks.map((raw) => {
         const t = { ...raw, ...(pending[raw.id] || {}) };
         const due = dueState(t.dueAt, t.status);
+        // Per row where the server said so, falling back to the list's own
+        // flag. My Tasks spans spaces the viewer has different access to; a
+        // project or a thread is one room, and passes one answer for all of
+        // them.
+        const mayWrite = t.canWrite ?? canWrite;
         return (
           <li key={t.id} className={`task-row${t.status === 'done' ? ' is-done' : ''}${due ? ` is-${due}` : ''}`}>
             <input
@@ -259,19 +302,32 @@ export default function TaskList({
                   {stages.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
                 </select>
               )}
-              <button className="btn btn-danger btn-sm" type="button"
-                aria-label={`Delete ${t.title}`} onClick={() => remove(t.id)}>×</button>
+              {/* Archive first, and deliberately to the left of the delete:
+                  it is the one that should be reached for, and the one whose
+                  cost of being wrong is a single press.
+                  Both hidden where the viewer only reads — a select that
+                  refuses is a nuisance, a delete that refuses is an offer to
+                  destroy something that was never theirs. */}
+              {mayWrite && (
+                <>
+                  <button className="btn btn-sm" type="button"
+                    aria-label={`Archive ${t.title}`} onClick={() => archive(t.id)}>Archive</button>
+                  <button className="btn btn-danger btn-sm" type="button"
+                    aria-label={`Delete ${t.title}`} onClick={() => remove(t.id, t.title)}>×</button>
+                </>
+              )}
             </div>
 
             {/* Below the row rather than beside it: the steps belong to this
                 task and reading them as a second column of work is exactly the
                 confusion that made a five-step task look like five. */}
-            {(canWrite || (t.subtasks || []).length > 0) && (
-              <Steps task={t} onChanged={onChanged} viewerId={viewerId} canWrite={canWrite} />
+            {(mayWrite || (t.subtasks || []).length > 0) && (
+              <Steps task={t} onChanged={onChanged} viewerId={viewerId} canWrite={mayWrite} />
             )}
           </li>
         );
       })}
     </ul>
+    </>
   );
 }

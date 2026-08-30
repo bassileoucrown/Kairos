@@ -97,9 +97,18 @@ async function serializeAll(rows, viewerId) {
     bySpace.get(t.space_id).push(t);
   }
   const out = new Map();
+  // Whether this viewer may act on the task, answered per SPACE and carried on
+  // each row. My Tasks deliberately spans every space at once, so one flag for
+  // the whole list would be wrong in one direction or the other: either it
+  // offers to archive something in a room the viewer only reads, or it hides
+  // the control on the one list a PA actually lives in. The grouping is
+  // already here, so this costs one lookup per space rather than per task.
+  const writable = new Map();
   for (const [spaceId, tasks] of bySpace) {
     const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(spaceId);
     if (!space) continue;
+    const access = await resolveAccess(spaceId, viewerId);
+    writable.set(spaceId, !!access?.canWrite);
     const audience = await spaceAudience(space);
     const found = await mentions.forBodies(
       tasks.map((t) => t.title),
@@ -107,7 +116,7 @@ async function serializeAll(rows, viewerId) {
     );
     tasks.forEach((t, i) => out.set(t.id, found[i]));
   }
-  return rows.map((t) => serialize(t, out.get(t.id)));
+  return rows.map((t) => ({ ...serialize(t, out.get(t.id)), canWrite: !!writable.get(t.space_id) }));
 }
 
 /**

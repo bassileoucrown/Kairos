@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { useAsk } from '../../components/Ask.jsx';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import AppShell from '../../components/AppShell.jsx';
 import { CONTEXT_LABELS } from './SpacesHome.jsx';
@@ -19,6 +20,7 @@ export default function SpaceDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [ask, askDialog] = useAsk();
   const [threadName, setThreadName] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
   const [notice, setNotice] = useState('');
@@ -75,6 +77,47 @@ export default function SpaceDetail() {
     try {
       if (on) await api.post(`/threads/${threadId}/archive`);
       else await api.del(`/threads/${threadId}/archive`);
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  /**
+   * Destroying a conversation, which is not the same as finishing with one.
+   *
+   * The name typed exactly, matching the server — a confirm dialog is one
+   * mis-tap on a phone and this is a product used on phones between meetings.
+   * The count of what goes is in the question, and so is what SURVIVES: the
+   * records are copied to the Archive first, and somebody deciding this needs
+   * to know that or they will never press it.
+   */
+  async function destroyThread(t) {
+    setError('');
+    try {
+      const { contents } = await api.get(`/threads/${t.id}/deletion`);
+      const kept = contents.records
+        ? ` ${contents.records} record${contents.records === 1 ? '' : 's'} will be kept in the Archive.`
+        : '';
+      const typed = await ask({
+        title: `Delete “${t.name}”?`,
+        hint: `${contents.messages} message${contents.messages === 1 ? '' : 's'} go, and this cannot be undone.`
+          + `${kept} Archive it instead if you might want to read it again.`,
+        label: `Type the name to confirm`,
+        confirmLabel: 'Delete',
+      });
+      if (String(typed || '').trim() !== t.name) return;
+      await api.del(`/threads/${t.id}`, { confirmName: t.name });
+      await load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function putAway() {
+    setError('');
+    try {
+      // data.space, not space — the destructure happens further down the
+      // component, so reaching for it here would be a use-before-declaration
+      // that only throws when somebody presses the button.
+      if (data.space.archivedAt) await api.del(`/spaces/${spaceId}/archive`);
+      else await api.post(`/spaces/${spaceId}/archive`);
       await load();
     } catch (err) { setError(err.message); }
   }
@@ -162,6 +205,14 @@ export default function SpaceDetail() {
             <>
               <button className="btn btn-secondary btn-sm" type="button" onClick={rename}>
                 Rename
+              </button>
+              {/* BEFORE the danger button, because it is the one to reach for.
+                  Closing a space destroys every thread, record and task in it;
+                  putting it away costs one press to undo, and until now it was
+                  only reachable through the Archive screen — which meant the
+                  room could be burned down from here and not shelved. */}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={putAway}>
+                {space.archivedAt ? 'Bring back' : 'Put away'}
               </button>
               {/* Last, and the only danger-styled thing on the page. */}
               <button className="btn btn-danger btn-sm" type="button" onClick={closeSpace}>
@@ -259,6 +310,13 @@ export default function SpaceDetail() {
             {data.canWrite && (
               <button className="btn btn-secondary btn-sm" type="button"
                 onClick={() => archive(t.id, true)}>Archive</button>
+            )}
+            {/* Owner only, because destroying what everybody said in a room is
+                not one member's call — and the records in it survive, which
+                the dialog says before anybody decides. */}
+            {space.isOwner && (
+              <button className="btn btn-danger btn-sm" type="button"
+                aria-label={`Delete ${t.name}`} onClick={() => destroyThread(t)}>×</button>
             )}
           </div>
         ))}
@@ -389,6 +447,7 @@ export default function SpaceDetail() {
             )}
           </>
         )}
+    {askDialog}
     </AppShell>
   );
 }

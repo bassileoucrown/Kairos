@@ -70,10 +70,17 @@ router.get('/:projectId', loadProject, async (req, res) => {
       name: req.project.name,
       description: req.project.description,
       status: req.project.status,
+      // Put away, and separate from status for the reason in lib/db.js: a
+      // project can be finished AND filed, and one field cannot say both.
+      archivedAt: req.project.archived_at || null,
       spaceId: req.project.space_id,
     },
     space: { id: space.id, name: space.name, context: space.context },
     canWrite: req.access.canWrite,
+    // Who may destroy it, said by the server rather than guessed at by the
+    // screen. Only the space owner can, so only they should be offered it: a
+    // button that always refuses is worse than no button.
+    isOwner: req.access.role === 'owner',
     stages: await stagesFor(req.project.id),
   });
 });
