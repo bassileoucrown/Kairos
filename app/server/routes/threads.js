@@ -211,10 +211,34 @@ router.delete('/:threadId', loadThread, async (req, res) => {
       error: `Type the conversation's name to delete it: "${req.thread.name}".`,
       code: 'confirm_name',
       contents,
+      // Said before the decision rather than after it. Somebody weighing this
+      // up needs to know the decisions survive — otherwise they either never
+      // press it, or press it believing they are destroying more than they
+      // are.
+      recordsWillBeKept: contents.records,
     });
   }
+  // THE RECORD OUTLIVES THE ROOM.
+  //
+  // Copied out BEFORE the delete, which is the only order that works: after
+  // it, there is nothing left to copy. A room is a place people talked; a
+  // record is a decision the office took, and those were stored together only
+  // as an accident of where they were said. Deleting a duplicate thread should
+  // not be able to destroy an approval somebody is working under.
+  //
+  // Nothing is asked of the person deleting, deliberately. A prompt here would
+  // be a chance to answer wrong about something they cannot see the value of
+  // yet, and the cost of keeping a copy is one row.
+  const space = await db.prepare('SELECT * FROM spaces WHERE id = ?').get(req.thread.space_id);
+  const { preserved } = await keep.keepRecordsFrom({
+    thread: req.thread, space, actor: req.user,
+  });
+
   await db.prepare('DELETE FROM threads WHERE id = ?').run(req.thread.id);
-  res.json({ ok: true, deleted: contents });
+  // Said in the answer so the screen can tell somebody what survived. "3
+  // messages gone, 1 decision kept" is the sentence that makes this safe to
+  // use; silence would leave them assuming the worst and never pressing it.
+  res.json({ ok: true, deleted: contents, recordsKept: preserved });
 });
 
 router.get('/:threadId/messages', loadThread, async (req, res) => {

@@ -23,7 +23,7 @@ const db = require('./db');
  * returns the first item rather than refusing, so the button's promise ("this
  * is kept") is true either way.
  */
-async function keepMessage({ message, thread, space, keeper, note = '' }) {
+async function keepMessage({ message, thread, space, keeper, note = '', kind = 'message' }) {
   const existing = await db.prepare(
     'SELECT * FROM kept_items WHERE owner_id = ? AND source_message_id = ?',
   ).get(space.owner_id, message.id);
@@ -32,7 +32,11 @@ async function keepMessage({ message, thread, space, keeper, note = '' }) {
   const row = {
     id: crypto.randomUUID(),
     owner_id: space.owner_id,
-    kind: 'message',
+    kind,
+    // Carried on the copy, because once the room is deleted there is nothing
+    // left to join to. An archive that cannot tell a decision from a blocker
+    // is a pile of sentences.
+    record_type: message.register === 'record' ? (message.record_type || '') : '',
     // A voice note has no body. Say what it was rather than filing a blank —
     // the recording itself is not copied, and an archive entry that looked
     // empty would read as a bug rather than as "there was a recording here".
@@ -52,13 +56,13 @@ async function keepMessage({ message, thread, space, keeper, note = '' }) {
 
   await db.prepare(`
     INSERT INTO kept_items (
-      id, owner_id, kind, body, note,
+      id, owner_id, kind, record_type, body, note,
       source_message_id, source_thread_id, source_space_id,
       said_by_name, said_at, thread_name, space_name,
       kept_by, kept_by_name, kept_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    row.id, row.owner_id, row.kind, row.body, row.note,
+    row.id, row.owner_id, row.kind, row.record_type, row.body, row.note,
     row.source_message_id, row.source_thread_id, row.source_space_id,
     row.said_by_name, row.said_at, row.thread_name, row.space_name,
     row.kept_by, row.kept_by_name, row.kept_at,
@@ -86,6 +90,7 @@ function serialize(row) {
   return {
     id: row.id,
     kind: row.kind,
+    recordType: row.record_type || null,
     body: row.body,
     note: row.note,
     saidByName: row.said_by_name || null,
@@ -115,4 +120,52 @@ async function forOwner(ownerId) {
   return rows.map(serialize);
 }
 
-module.exports = { keepMessage, keptIdsInThread, forOwner, serialize };
+/**
+ * Save the record before the room goes.
+ *
+ * THE ASYMMETRY THIS EXISTS FOR. A conversation is a room, and rooms get made
+ * by mistake and want deleting. A record is not a room — it is a decision an
+ * office took, an approval somebody gave, a sign-off people are working under.
+ * Losing the first is tidying up. Losing the second is losing the thing this
+ * product is for, and it happened for the same reason both times: they were
+ * stored together, so one delete took both.
+ *
+ * They are separable because the archive was already built as COPIES rather
+ * than references — see the note at the top of this file and the schema. A
+ * kept item never depended on its room surviving, so a record moved here
+ * before the delete simply carries on existing, with its author, its date, the
+ * room it was said in and what kind of record it was.
+ *
+ * KEPT AUTOMATICALLY, AND SAID SO. The note is not the keeper's words, because
+ * there was no keeper — nobody chose this, the app did, on the way past. An
+ * archive of unexplained fragments is a pile, and "why is this here" must be
+ * answerable for a row nobody filed.
+ *
+ * ALREADY-KEPT RECORDS ARE LEFT ALONE. keepMessage dedupes on the source
+ * message, so a record somebody kept deliberately keeps their note and their
+ * name rather than having it overwritten by this.
+ */
+async function keepRecordsFrom({ thread, space, actor }) {
+  const records = await db.prepare(`
+    SELECT m.*, u.name AS author_name
+      FROM messages m JOIN users u ON u.id = m.author_id
+     WHERE m.thread_id = ? AND m.register = 'record'
+     ORDER BY m.created_at ASC
+  `).all(thread.id);
+
+  let preserved = 0;
+  for (const message of records) {
+    const { created } = await keepMessage({
+      message,
+      thread,
+      space,
+      keeper: actor,
+      kind: 'record',
+      note: `Kept automatically when "${thread.name}" was deleted.`,
+    });
+    if (created) preserved += 1;
+  }
+  return { preserved, records: records.length };
+}
+
+module.exports = { keepMessage, keepRecordsFrom, keptIdsInThread, forOwner, serialize };

@@ -65,8 +65,9 @@ function client() {
     }
 
     const boss = client();
-    await boss('POST', '/auth/signup',
+    const up = await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    const bossId = up.d.user.id;
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
@@ -162,6 +163,36 @@ function client() {
     ok('the name typed exactly goes through', r.s === 200, `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
     ok('and it says what it destroyed', r.d.deleted?.messages === 2, JSON.stringify(r.d));
     ok('after which it is gone', (await boss('GET', `/threads/${threadId}/messages`)).s === 404);
+
+    // ---- THE RECORD OUTLIVES THE ROOM ---------------------------------------
+    //
+    // A room is a place people talked and rooms get made by mistake. A record
+    // is a decision the office took, and those were stored together only as an
+    // accident of where they were said. Deleting a duplicate thread must not
+    // be able to destroy an approval somebody is working under.
+    ok('it says how many records it kept', r.d.recordsKept === 1, JSON.stringify(r.d));
+
+    const kept = (await boss('GET', `/archive/${bossId}`)).d.kept || [];
+    const survivor = kept.find((k) => /approved the Q3 agenda/.test(k.body || ''));
+    ok('and the decision is in the archive', !!survivor,
+      JSON.stringify(kept.map((k) => k.body)).slice(0, 200));
+    // Everything the copy has to carry, because there is nothing left to ask.
+    ok('carrying what kind of record it was', survivor?.recordType === 'decision',
+      JSON.stringify(survivor));
+    ok('and who said it, and where', survivor?.saidByName === 'Adaeze Okonkwo'
+      && survivor?.threadName === 'Board pack', JSON.stringify(survivor));
+    ok('and says it was kept because the room went',
+      /was deleted/.test(survivor?.note || ''), survivor?.note);
+    // The archive must not offer a way back into a room that is gone.
+    ok('and does not pretend the room is still there',
+      survivor?.sourceLive === false, JSON.stringify(survivor?.sourceLive));
+
+    // THE CONTROL. Ordinary talk is NOT preserved — otherwise "records
+    // survive" would be indistinguishable from "nothing is ever deleted",
+    // and the assertion above would prove nothing.
+    ok('while the ordinary messages did not survive',
+      !kept.some((k) => /Printer confirmed/.test(k.body || '')),
+      JSON.stringify(kept.map((k) => k.body)).slice(0, 200));
 
     // ---- A project ----------------------------------------------------------
     head('A project can be put away, and now removed as well:');

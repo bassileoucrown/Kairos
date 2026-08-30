@@ -412,6 +412,10 @@ function ready() {
       // which.
       await ensureColumn('tasks', 'archived_at', 'TEXT');
       await ensureColumn('spaces', 'archived_at', 'TEXT');
+      // What kind of record a kept item was, when it was one. A decision and
+      // a blocker read differently in an archive, and once the room is gone
+      // there is nothing left to ask — the copy has to carry it.
+      await ensureColumn('kept_items', 'record_type', "TEXT NOT NULL DEFAULT ''");
       // Public, or the one the app keeps so the office can slot something into
       // the diary directly. See lib/internalBooking.js.
       await ensureColumn('meeting_types', 'kind', "TEXT NOT NULL DEFAULT 'public'");
