@@ -967,7 +967,7 @@ export default function ThreadView() {
                 aria-label="Message"
                 placeholder={register === 'record'
                   ? 'State it plainly — this becomes part of the formal record.'
-                  : 'Write a message… @ to name someone'}
+                  : 'Write a message… @ to name someone, or start "Decision:"'}
                 required
               />
               <MentionPicker
@@ -980,6 +980,18 @@ export default function ThreadView() {
             <button className="btn btn-primary" type="submit" disabled={sending}>
               {sending ? 'Sending…' : register === 'record' ? 'File record' : 'Send'}
             </button>
+            {/* SHOWN, so it is learnable in one sighting rather than being
+                folklore one assistant happens to know. Only beside an ordinary
+                message: on the record composer the kind is already chosen from
+                the menu, and a marker there would be answering a question
+                nobody asked. */}
+            {register === 'note' && (
+              <p className="hint" style={{ flexBasis: '100%', marginTop: 6 }}>
+                Start a line with <strong>Decision:</strong> <strong>Approved:</strong>{' '}
+                <strong>Request:</strong> <strong>Update:</strong> <strong>Sign-off:</strong>{' '}
+                or <strong>Blocker:</strong> to file it as a record.
+              </p>
+            )}
           </form>
         )}
 

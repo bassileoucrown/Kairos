@@ -9,6 +9,7 @@ const voice = require('../lib/voiceNotes');
 const mentions = require('../lib/mentions');
 const webPush = require('../lib/webPush');
 const keep = require('../lib/keep');
+const records = require('../lib/records');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -441,6 +442,17 @@ async function nextRecordSeq(threadId) {
   return (row?.max || 0) + 1;
 }
 
+/**
+ * The words that file themselves, served rather than hardcoded on the screen.
+ *
+ * A vocabulary the app knows and the composer spells separately is a
+ * vocabulary that drifts, and the drift here is a person typing a marker that
+ * silently does nothing. One list, from the side that acts on it.
+ */
+router.get('/record-markers', async (req, res) => {
+  res.json({ markers: records.VOCABULARY });
+});
+
 router.post('/:threadId/messages', loadThread, async (req, res) => {
   if (!req.access.canWrite) return res.status(403).json({ error: 'You have read-only access here.' });
   if (refuseIfArchived(req, res)) return;
@@ -448,8 +460,20 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
   const { body, register, recordType, replyToId } = req.body || {};
   if (!body || !String(body).trim()) return res.status(400).json({ error: 'Write something first.' });
 
-  const isRecord = register === 'record';
-  if (isRecord && !RECORD_TYPES.has(recordType)) {
+  // A WORD THAT FILES ITSELF. "Decision: we go with the Lekki site" is filed
+  // as a decision, with the marker taken off the front. See lib/records.js
+  // for why this is a marker rather than a guess about the sentence.
+  //
+  // An explicit record wins, because the caller was specific and second-
+  // guessing them would be the same presumption from the other direction.
+  // Otherwise a marker promotes an ordinary message — the composer sends
+  // register: 'note' for everything, so requiring an absent register would
+  // mean the marker never fired from the app at all.
+  const marked = register === 'record' ? null : records.detect(body);
+  const isRecord = register === 'record' || !!marked;
+  const chosenType = marked ? marked.recordType : recordType;
+  const text = marked ? marked.body : String(body).trim();
+  if (isRecord && !RECORD_TYPES.has(chosenType)) {
     return res.status(400).json({ error: 'Choose what kind of record this is.' });
   }
 
@@ -466,17 +490,22 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
     INSERT INTO messages (id, thread_id, author_id, body, register, record_type, record_status, record_seq, reply_to_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, req.thread.id, req.user.id, String(body).trim(),
+    id, req.thread.id, req.user.id, text,
     isRecord ? 'record' : 'note',
-    isRecord ? recordType : null,
-    isRecord ? OPEN_STATUS_BY_TYPE[recordType] : null,
+    isRecord ? chosenType : null,
+    isRecord ? OPEN_STATUS_BY_TYPE[chosenType] : null,
     isRecord ? await nextRecordSeq(req.thread.id) : null,
     answers,
     new Date().toISOString(),
   );
 
+  // `text`, not `body` — the marker has been taken off, and the message people
+  // read must be the message the @s were resolved against and the message the
+  // notification previews. Three copies that can disagree is the shape of
+  // every drift bug in this codebase; a push saying "Decision: we go with
+  // Lekki" beside a record reading "we go with Lekki" is that bug, small.
   const told = await tellAddressed({
-    body: String(body).trim(),
+    body: text,
     thread: req.thread,
     space: req.access.space,
     author: req.user,
@@ -486,7 +515,7 @@ router.post('/:threadId/messages', loadThread, async (req, res) => {
     space: req.access.space,
     author: req.user,
     alreadyTold: told,
-    preview: previewOf(body),
+    preview: previewOf(text),
   });
 
   const stage = isRecord ? await syncStageFromRecords(req.thread.stage_id) : null;
