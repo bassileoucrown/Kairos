@@ -3275,3 +3275,12 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    both things you read in full or not at all. */
 .op-body { font-size: 0.9rem; overflow-wrap: anywhere; }
 .op-body code { font-size: 0.85em; }
+
+/* The open records on the weekly report. A list rather than a sentence,
+   because each line is a thing to go and do something about — and the whole
+   point of the change was that a count is a dead end. */
+.report-open-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.report-open-list li { padding: 5px 0; font-size: 0.9rem; line-height: 1.45; }
+.report-open-list li + li { border-top: 1px solid var(--line); }
+.report-open-list a { color: inherit; text-decoration: none; }
+.report-open-list a:hover { text-decoration: underline; }

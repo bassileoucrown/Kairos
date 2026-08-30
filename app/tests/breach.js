@@ -266,6 +266,47 @@ async function confirmWith(page, text) {
     ok('and asks who should be told anyway',
       /Who knows/.test(await page.locator('body').innerText()));
 
+    // ---- An open record on the report, followed to the record --------------
+    //
+    // The report said "1 record nobody has answered" and stopped there, which
+    // told the reader they had a problem and left them to go hunting through
+    // rooms for it — the exact work the screen exists to save.
+    head('An unanswered record on the report leads to the record:');
+    const room = await page.evaluate(async () => {
+      const post = async (p, b) => (await fetch(`/api${p}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        credentials: 'include', body: JSON.stringify(b),
+      })).json();
+      const space = await post('/spaces', { name: 'The board', context: 'work' });
+      const thread = await post(`/spaces/${space.space.id}/threads`, { name: 'Q3 budget' });
+      // An approval opens as 'open' and nobody has answered it.
+      await post(`/threads/${thread.thread.id}/messages`,
+        { body: 'Approved: the Ikoyi overspend', register: 'note' });
+      return { threadId: thread.thread.id };
+    });
+
+    await page.goto(`${BASE}/report`);
+    await page.waitForSelector('.report-open', { timeout: 20000 });
+    const openText = await page.locator('.report-open').innerText();
+    ok('the report still says how many are open',
+      /nobody has answered/.test(openText), openText.slice(0, 200));
+    // THE ASSERTION THIS SECTION EXISTS FOR: the line itself, not just a count.
+    ok('and shows the line rather than only a number',
+      /Ikoyi overspend/.test(openText), openText.slice(0, 240));
+
+    await page.locator('.report-open-list a').first().click();
+    await page.waitForURL(`**/threads/${room.threadId}**`, { timeout: 20000 });
+    ok('clicking it opens the room it is in', true);
+    // Landing at the foot of a room with a hundred messages is not landing on
+    // the record. The app already deep-links to a message; this proves the
+    // report uses it.
+    ok('at the record itself, not the top of the thread',
+      page.url().includes('#m-'), page.url());
+    await page.waitForFunction(
+      () => /Ikoyi overspend/.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('and the record is on the screen', true);
+
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
 
   } catch (err) {

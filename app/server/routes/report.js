@@ -43,6 +43,10 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const report = await buildReport(req.principal.id, {
     back,
     onlyUserId: seesEveryone ? null : req.user.id,
+    // WHO IS READING, which is not the same as whose week this is. The open
+    // records are links now, and a link to a room this reader cannot open
+    // reads as the app being broken rather than as the door being shut.
+    viewerId: req.user.id,
   });
   if (!report) return res.status(404).json({ error: 'Not found.' });
 

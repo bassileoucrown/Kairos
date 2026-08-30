@@ -1,7 +1,20 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
+
+// The six kinds of record, said the way a person would read them back rather
+// than as the value stored. sign_off is the one that would otherwise render
+// with an underscore in the middle of a sentence.
+const RECORD_LABEL = {
+  decision: 'Decision',
+  approval: 'Approval',
+  request: 'Request',
+  update: 'Update',
+  sign_off: 'Sign-off',
+  blocker: 'Blocker',
+};
 
 // What the office did last week.
 //
@@ -143,6 +156,34 @@ export default function Report() {
             open.tasksOverdue && `${open.tasksOverdue} task${open.tasksOverdue === 1 ? '' : 's'} past their date`,
             open.recordsOpen && `${open.recordsOpen} record${open.recordsOpen === 1 ? '' : 's'} nobody has answered`,
           ].filter(Boolean).join(' · ')}
+
+          {/* THE COUNT WAS A DEAD END.
+              "3 records nobody has answered" told the reader they had a
+              problem and left them to go hunting through rooms for it, which
+              is the exact work this screen exists to save. Each one is now the
+              line itself, linked to the message rather than to the foot of the
+              room it is in.
+              Oldest first: a decision nobody answered three weeks ago is more
+              wrong than one filed this morning. */}
+          {(open.records || []).length > 0 && (
+            <ul className="report-open-list">
+              {open.records.map((r) => (
+                <li key={r.id}>
+                  <Link to={`/threads/${r.threadId}#m-${r.id}`}>
+                    <span className={`pill pill-${r.recordType}`}>{RECORD_LABEL[r.recordType] || r.recordType}</span>
+                    {' '}{r.body}
+                  </Link>
+                  <span className="hint">
+                    {' — '}{r.authorName} in {r.threadName}
+                    {r.spaceName ? ` · ${r.spaceName}` : ''}
+                  </span>
+                </li>
+              ))}
+              {open.moreRecords > 0 && (
+                <li className="hint">and {open.moreRecords} more</li>
+              )}
+            </ul>
+          )}
         </div>
       ) : (
         <div className="alert alert-success report-open">

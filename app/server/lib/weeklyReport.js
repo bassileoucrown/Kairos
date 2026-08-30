@@ -1,6 +1,7 @@
 const db = require('./db');
 const { todayInZone, addCalendarDays, dayOfWeek, zonedTimeToUtc } = require('./timezone');
 const { isAssistantRole, roleLabel } = require('./roles');
+const { visibleThreads } = require('./spaceAccess');
 
 // What the office did last week.
 //
@@ -108,7 +109,7 @@ async function diaryWork(ownerId, window) {
   `).all(ownerId, window.startAt, window.endAt);
 }
 
-async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = null } = {}) {
+async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = null, viewerId = null } = {}) {
   const owner = await db.prepare('SELECT id, name, timezone FROM users WHERE id = ?').get(ownerId);
   if (!owner) return null;
   const window = weekWindow(owner.timezone, back, now);
@@ -124,7 +125,7 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
   const ids = office.map((m) => m.id);
 
   if (!ids.length) {
-    return { window, principal: { id: owner.id, name: owner.name }, people: [], stillOpen: await stillOpen(ownerId) };
+    return { window, principal: { id: owner.id, name: owner.name }, people: [], stillOpen: await stillOpen(ownerId, viewerId || ownerId) };
   }
   const marks = ids.map(() => '?').join(',');
 
@@ -255,7 +256,7 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
     window,
     principal: { id: owner.id, name: owner.name },
     people,
-    stillOpen: await stillOpen(ownerId),
+    stillOpen: await stillOpen(ownerId, viewerId || ownerId),
   };
 }
 
@@ -267,22 +268,73 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
  * outstanding on Monday is actionable, whereas one listing what was overdue
  * three days ago sends somebody chasing things that have since been done.
  */
-async function stillOpen(ownerId) {
+// Enough rows to act on, not enough to drown the page. An office with fifty
+// unanswered records has a different problem, and a report that renders all
+// fifty is not helping with it.
+const OPEN_RECORDS_SHOWN = 8;
+
+/**
+ * What is still open right now — and, for the records, WHICH ones.
+ *
+ * IT USED TO BE A COUNT AND NOTHING ELSE. "3 records nobody has answered" is
+ * the right sentence and a dead end: the reader now knows they have a problem
+ * and has to go hunting through rooms for it, which is exactly the work this
+ * screen exists to save. So the records come back with the thread they are in
+ * and the line they say, and the screen links each one to the message itself.
+ *
+ * SCOPED TO WHAT THE VIEWER CAN OPEN. The count was office-wide — every space
+ * the principal owns — but an assistant is not in all of them. Left that way,
+ * the report would offer a link to a room that answers "not found", which is
+ * worse than not offering it: it reads as the app being broken rather than as
+ * the door being closed. So both the list and the number are what THIS reader
+ * can actually do something about.
+ */
+async function stillOpen(ownerId, viewerId = null) {
   const now = new Date().toISOString();
-  const [waiting, overdue, unanswered] = await Promise.all([
+  const seen = await visibleThreads(viewerId || ownerId);
+  const ids = seen.map((t) => t.id);
+
+  const [waiting, overdue, records] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE owner_id = ? AND status = 'pending'")
       .get(ownerId).then((r) => Number(r?.n || 0)),
     db.prepare(`
       SELECT COUNT(*) AS n FROM tasks t JOIN spaces s ON s.id = t.space_id
       WHERE s.owner_id = ? AND t.status != 'done' AND t.due_at IS NOT NULL AND t.due_at < ?
     `).get(ownerId, now).then((r) => Number(r?.n || 0)),
-    db.prepare(`
-      SELECT COUNT(*) AS n FROM messages m
-      JOIN threads t ON t.id = m.thread_id JOIN spaces s ON s.id = t.space_id
-      WHERE s.owner_id = ? AND m.register = 'record' AND m.record_status = 'open'
-    `).get(ownerId).then((r) => Number(r?.n || 0)),
+    ids.length ? db.prepare(`
+      SELECT m.id, m.body, m.record_type, m.created_at,
+             t.id AS thread_id, t.name AS thread_name,
+             s.name AS space_name, u.name AS author_name
+        FROM messages m
+        JOIN threads t ON t.id = m.thread_id
+        JOIN spaces s ON s.id = t.space_id
+        JOIN users u ON u.id = m.author_id
+       WHERE m.register = 'record' AND m.record_status = 'open'
+         AND m.thread_id IN (${ids.map(() => '?').join(',')})
+       ORDER BY m.created_at ASC
+    `).all(...ids) : [],
   ]);
-  return { approvalsWaiting: waiting, tasksOverdue: overdue, recordsOpen: unanswered };
+
+  return {
+    approvalsWaiting: waiting,
+    tasksOverdue: overdue,
+    recordsOpen: records.length,
+    // The oldest first: a decision nobody answered three weeks ago is more
+    // wrong than one filed this morning.
+    records: records.slice(0, OPEN_RECORDS_SHOWN).map((r) => ({
+      id: r.id,
+      threadId: r.thread_id,
+      threadName: r.thread_name,
+      spaceName: r.space_name,
+      recordType: r.record_type,
+      authorName: r.author_name,
+      at: r.created_at,
+      body: String(r.body || '').slice(0, 160),
+    })),
+    // Said rather than silently truncated, so a long list does not look like
+    // a short one.
+    moreRecords: Math.max(0, records.length - OPEN_RECORDS_SHOWN),
+  };
 }
 
 module.exports = { buildReport, weekWindow, officeOf };
