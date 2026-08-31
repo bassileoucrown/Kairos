@@ -268,6 +268,77 @@ async function onboard(p, name, email, role) {
     ok('and leads to the journey',
       (await urgent.locator('a[href="/movements"]').count()) === 1);
 
+    // ---- The card the driver holds ------------------------------------------
+    head('And the driver gets a card that works on a phone with no account:');
+    // A FRESH journey. The one above was already marked arrived by the
+    // stand-in, and a card for a finished journey correctly shows no "we have
+    // arrived" button — which would make the click below assert nothing.
+    await page.evaluate(async () => {
+      const me = (await (await fetch('/api/auth/me')).json()).user.id;
+      await fetch(`/api/movement/${me}/movements`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'The evening run', departsFrom: 'Ikoyi', destination: 'Lekki',
+          departsAt: new Date(Date.now() - 600000).toISOString(), expectedMinutes: 60,
+        }),
+      });
+    });
+    await page.goto(`${BASE}/movements`);
+    await page.waitForSelector('.movement-row', { timeout: 20000 });
+    await page.click('.movement-row:has-text("The evening run")');
+    await page.waitForSelector('.movement-enroute', { timeout: 20000 });
+    ok('the office can reach the journey controls', true);
+
+    await page.click('button:has-text("Give the driver a card")');
+    await page.waitForSelector('.movement-enroute code', { timeout: 20000 });
+    const cardLink = await page.locator('.movement-enroute code').innerText();
+    ok('and is given a link to send', /\/drive\//.test(cardLink), cardLink);
+
+    // A PHONE, and a browser that has never signed in. If this needed a
+    // session the whole feature would be pointless.
+    const phoneCtx = await browser.newContext({
+      viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    });
+    const phone = await phoneCtx.newPage();
+    const phoneErrs = [];
+    phone.on('pageerror', (e) => phoneErrs.push(e.message));
+    await phone.goto(`${BASE}${cardLink.replace(/^.*(\/drive\/)/, '$1')}`);
+    await phone.waitForSelector('.drive-card', { timeout: 20000 });
+    const face = await phone.locator('.drive-card').innerText();
+    ok('the card opens with no account at all', /Lekki/.test(face), face.slice(0, 200));
+    // THE ASSERTION THIS SECTION EXISTS FOR. The link has no password.
+    ok('and it names nobody', !/Adaeze|Okonkwo|Musa/.test(face), face.slice(0, 300));
+
+    // The page must not scroll sideways on a phone at a kerb.
+    const wide = await phone.evaluate(() =>
+      document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+    ok('and does not run off the side of the phone', !wide);
+
+    await phone.click('button:has-text("We have arrived")');
+    await phone.waitForSelector('.drive-arrived', { timeout: 20000 });
+    ok('the driver can say they arrived', true);
+
+    // Two presses, never one. A single-tap alarm is one a pocket raises.
+    await phone.goto(`${BASE}${cardLink.replace(/^.*(\/drive\/)/, '$1')}`);
+    await phone.waitForSelector('.drive-duress', { timeout: 20000 });
+    await phone.click('.drive-duress');
+    await phone.waitForSelector('button:has-text("Yes — tell them now")', { timeout: 20000 });
+    ok('the alarm asks once before it fires', true);
+    await phone.click('button:has-text("Yes — tell them now")');
+    await phone.waitForFunction(
+      () => /something is wrong/i.test(document.body.innerText), null, { timeout: 20000 },
+    );
+    ok('and the card says the office has been told', true);
+
+    // And it reaches the office's own day sheet, loudly.
+    await page.goto(`${BASE}/today`);
+    await page.waitForSelector('.needs-card', { timeout: 20000 });
+    ok('the alarm is on the office\'s day sheet',
+      (await page.locator('.needs-card.is-duress').count()) === 1,
+      await page.locator('.app-body').innerText().catch(() => ''));
+
+    ok('nothing threw on the phone', phoneErrs.length === 0, phoneErrs.join(' | '));
     ok('nothing threw on the arranger\'s side', errs.length === 0, errs.join(' | '));
     ok('nor on the stand-in\'s', cosErrs.length === 0, cosErrs.join(' | '));
 

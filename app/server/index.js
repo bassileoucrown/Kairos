@@ -43,6 +43,7 @@ const rhythmRouter = require('./routes/rhythm');
 const accessCodesRouter = require('./routes/accessCodes');
 const tripsRouter = require('./routes/trips');
 const movementRouter = require('./routes/movement');
+const driveCardRouter = require('./routes/driveCard');
 const conciergeRouter = require('./routes/concierge');
 const connectorsRouter = require('./routes/connectors');
 const planRouter = require('./routes/plan');
@@ -172,6 +173,10 @@ app.use('/api/trips', tripsRouter);
 // than a branch of /trips: a movement is not always part of a trip — most are
 // an ordinary Tuesday across Lagos.
 app.use('/api/movement', movementRouter.router);
+// Deliberately NOT under the movement router: that one requires a session,
+// and a driver has no account. The token is the whole credential — see
+// routes/driveCard.js for why that trade is safe here.
+app.use('/api/drive', driveCardRouter.router);
 app.use('/api/concierge', conciergeRouter);
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/plan', planRouter);

@@ -336,6 +336,169 @@ function Grants({ ownerId, movementId }) {
   );
 }
 
+
+// While the journey is happening: the check calls, the card the driver holds,
+// and the one signal that means act now.
+function EnRoute({ ownerId, movementId, full }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [cardUrl, setCardUrl] = useState('');
+  const [cost, setCost] = useState({ kind: 'fuel', amount: '', currency: 'NGN', note: '' });
+
+  const base = `/movement/${ownerId}/movements/${movementId}`;
+  function load() {
+    return api.get(`${base}/route`).then(setData).catch((e) => setError(e.message));
+  }
+  useEffect(() => { load(); }, [ownerId, movementId]);
+
+  async function act(fn) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(e.message); }
+  }
+
+  if (!data) return <p className="hint">Loading the journey…</p>;
+
+  return (
+    <div className="movement-enroute">
+      {error && <div className="alert alert-error">{error}</div>}
+
+      {/* Loudest thing on the screen, deliberately. */}
+      {data.duressAt && (
+        <div className="alert alert-error">
+          <strong>Something is wrong on this journey.</strong>
+          {data.duressNote ? <div>{data.duressNote}</div> : null}
+          <div className="hint">Signalled {when(data.duressAt)}.</div>
+          {full && (
+            <button
+              className="btn btn-sm" type="button"
+              onClick={() => act(() => api.del(`${base}/duress`))}
+            >
+              Stand it down
+            </button>
+          )}
+        </div>
+      )}
+
+      {data.checks.length > 0 && (
+        <>
+          <h3>Check calls</h3>
+          <p className="hint">
+            Contact along the way, so a problem is found while somebody can still act on it —
+            not at the far end.
+          </p>
+          {data.checks.map((c) => (
+            <div className={`card movement-line${c.missed ? ' is-missed' : ''}`} key={c.id}>
+              <span className="pill">{when(c.dueAt)}</span>
+              {c.checkedAt
+                ? <span>Answered {when(c.checkedAt)}</span>
+                : c.missed
+                  ? <span><strong>Nobody answered this one.</strong></span>
+                  : <span>Not yet due</span>}
+              {!c.checkedAt && (
+                <button
+                  className="btn btn-sm" type="button"
+                  onClick={() => act(() => api.post(`${base}/checks/${c.id}`))}
+                >
+                  Contact made
+                </button>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+
+      {full && (
+        <>
+          <h3>The driver&rsquo;s card</h3>
+          <p className="hint">
+            A link the driver opens on their phone with no account. It shows the journey and the
+            car and names nobody &mdash; not the principal, not the escort, not your notes &mdash;
+            because a link with no password is a link that can be forwarded. They can answer
+            check calls, say they have arrived, and raise the alarm.
+          </p>
+          {cardUrl && (
+            <div className="alert alert-success">
+              Send them this: <code>{window.location.origin}{cardUrl}</code>
+            </div>
+          )}
+          <div className="movement-inline">
+            <button
+              className="btn btn-sm" type="button"
+              onClick={() => act(async () => {
+                const d = await api.post(`${base}/card`);
+                setCardUrl(d.url);
+              })}
+            >
+              {data.cardArmed ? 'Make a new link' : 'Give the driver a card'}
+            </button>
+            {data.cardArmed && (
+              <button
+                className="btn btn-sm" type="button"
+                onClick={() => act(async () => { await api.del(`${base}/card`); setCardUrl(''); })}
+              >
+                Take it down
+              </button>
+            )}
+          </div>
+
+          <h3>What it cost</h3>
+          {(data.costs?.items || []).map((c) => (
+            <div className="card movement-line" key={c.id}>
+              <span className="pill">{c.kind}</span>
+              <span>
+                {c.currency} {(c.amountMinor / 100).toLocaleString()}
+                {c.note ? ` · ${c.note}` : ''}
+              </span>
+            </div>
+          ))}
+          {Object.entries(data.costs?.totals || {}).map(([cur, total]) => (
+            <p className="hint" key={cur}>
+              <strong>{cur} {(total / 100).toLocaleString()}</strong> on this journey.
+            </p>
+          ))}
+          <form
+            className="movement-inline"
+            onSubmit={(e) => {
+              e.preventDefault();
+              act(() => api.post(`${base}/costs`, {
+                kind: cost.kind,
+                // Entered in whole units, stored in minor ones: a naira held
+                // as a float is a rounding error waiting to be argued about.
+                amountMinor: Math.round(Number(cost.amount || 0) * 100),
+                currency: cost.currency,
+                note: cost.note,
+              }));
+              setCost({ kind: 'fuel', amount: '', currency: 'NGN', note: '' });
+            }}
+          >
+            <select
+              aria-label="Kind of cost" value={cost.kind}
+              onChange={(e) => setCost({ ...cost, kind: e.target.value })}
+            >
+              {['fuel', 'toll', 'allowance', 'repair', 'other'].map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+            <input
+              type="number" step="0.01" min="0" required placeholder="Amount" aria-label="Amount"
+              value={cost.amount} onChange={(e) => setCost({ ...cost, amount: e.target.value })}
+            />
+            <input
+              type="text" placeholder="Currency" aria-label="Currency" maxLength={3}
+              value={cost.currency} onChange={(e) => setCost({ ...cost, currency: e.target.value })}
+            />
+            <input
+              type="text" placeholder="Note" aria-label="Cost note"
+              value={cost.note} onChange={(e) => setCost({ ...cost, note: e.target.value })}
+            />
+            <button className="btn btn-sm" type="submit">Record it</button>
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
 function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
   const [m, setM] = useState(null);
   const [error, setError] = useState('');
@@ -498,6 +661,8 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
           <div className="card"><p>{m.notes}</p></div>
         </>
       )}
+
+      <EnRoute ownerId={ownerId} movementId={movementId} full={full} />
 
       {full && <Grants ownerId={ownerId} movementId={movementId} />}
     </div>

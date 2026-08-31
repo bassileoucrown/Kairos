@@ -553,6 +553,32 @@ function ready() {
       // fires once rather than at every sweep for the rest of the day.
       await ensureColumn('movements', 'overdue_notified_at', 'TEXT');
 
+      // The card a driver holds. No account, no password — the token IS the
+      // credential, exactly as the arrivals-hall card works (lib/pickup.js).
+      // Held on the movement so it can be taken down the moment the driver
+      // changes, which is the only revocation a link like this can have.
+      await ensureColumn('movements', 'card_token', 'TEXT');
+
+      // Somebody said something is wrong, from the car.
+      //
+      // This is the one field in the product that means "act now". It is
+      // deliberately not a status with an 'ok' value — a movement either has a
+      // duress stamp or it does not, and there is no state machine to get
+      // stuck halfway through.
+      await ensureColumn('movements', 'duress_at', 'TEXT');
+      await ensureColumn('movements', 'duress_by', 'TEXT');
+      await ensureColumn('movements', 'duress_note', "TEXT NOT NULL DEFAULT ''");
+
+      // A journey that repeats: the school run, the Friday run, the standing
+      // office departure. These are the bulk of real movement and each one had
+      // to be typed again. The series id groups them so the whole pattern can
+      // be found and called off at once.
+      await ensureColumn('movements', 'series_id', 'TEXT');
+
+      // A driver from the roster rather than a name typed onto the journey, so
+      // their licence can be watched the way a car's insurance is.
+      await ensureColumn('movement_people', 'driver_id', 'TEXT');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');

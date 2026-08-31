@@ -3390,3 +3390,71 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .minute-dictate { flex: 1 1 100%; }
 .minute-drafted { margin: 0 0 0.35rem; }
+
+/* The one card in the product that means act now. Deliberately louder than
+   every other state: a duress signal that looks like an overdue task is a
+   duress signal somebody scrolls past. */
+.needs-card.is-duress {
+  border-color: var(--danger, #b3261e);
+  border-width: 2px;
+  background: color-mix(in srgb, var(--danger, #b3261e) 8%, transparent);
+}
+.needs-card.is-duress .needs-kind {
+  color: var(--danger, #b3261e);
+  font-weight: 700;
+}
+.needs-card.is-urgent { border-color: var(--warn); }
+
+/* ---- The driver's card ----
+   Built for a phone at a kerb: everything thumb-sized, nothing to scroll past,
+   and no explanation anybody has to read. */
+
+.drive-card {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  font-size: 1.05rem;
+}
+.drive-when { font-size: 2.4rem; font-weight: 700; line-height: 1.1; }
+.drive-leg { margin: 0.75rem 0; font-size: 1.15rem; }
+.drive-arrow { color: var(--text-muted); margin: 0.15rem 0; }
+.drive-car { color: var(--text-muted); margin: 0 0 1rem; }
+
+.drive-checks { margin: 1.25rem 0; }
+.drive-checks h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.drive-check {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.5rem;
+}
+.drive-check.is-done { opacity: 0.55; }
+.drive-check.is-missed { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+
+/* Big enough to hit without looking. */
+.drive-big {
+  display: block;
+  width: 100%;
+  padding: 1.1rem;
+  font-size: 1.15rem;
+  margin-top: 1rem;
+}
+.drive-arrived { margin-top: 1.5rem; font-weight: 600; }
+
+.drive-duress {
+  display: block;
+  width: 100%;
+  margin-top: 2.5rem;
+  color: var(--danger, #b3261e);
+  border-color: var(--danger, #b3261e);
+}
+.drive-duress-confirm { margin-top: 2.5rem; }
+.btn-danger {
+  background: var(--danger, #b3261e);
+  border-color: var(--danger, #b3261e);
+  color: #fff;
+}
+
+.movement-enroute { margin-top: 1.5rem; }
+.movement-line.is-missed { border-color: var(--warn); }

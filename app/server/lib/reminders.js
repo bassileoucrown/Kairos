@@ -1,6 +1,7 @@
 const db = require('./db');
 const { knock } = require('./knock');
 const movement = require('./movement');
+const enRoute = require('./enRoute');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
 const { buildReport, weekWindow } = require('./weeklyReport');
@@ -484,6 +485,65 @@ async function sweepMovements(now) {
   return sent;
 }
 
+/**
+ * A check call that nobody answered.
+ *
+ * THE SAME IDEA AS THE ARRIVAL ALARM, MOVED EARLIER. An arrival alarm on a
+ * ninety-minute run tells you something is wrong at the end of it. A check
+ * call at the halfway point tells you inside a window somebody can act in,
+ * which is the difference between a notification and a response.
+ *
+ * SAME AUDIENCE, for the same reason: who is being moved, and whether contact
+ * has been lost with them, is the most sensitive thing this product holds
+ * about a person. The principal, whoever arranged it, and anybody covering.
+ */
+async function sweepChecks(now) {
+  const rows = await db.prepare(`
+    SELECT c.*, m.title, m.owner_id, m.arranged_by, m.destination,
+           u.name AS owner_name
+      FROM movement_checks c
+      JOIN movements m ON m.id = c.movement_id
+      JOIN users u ON u.id = m.owner_id
+     WHERE c.checked_at IS NULL
+       AND c.missed_notified_at IS NULL
+       AND m.arrived_at IS NULL
+  `).all();
+
+  let sent = 0;
+  for (const c of rows) {
+    const due = Date.parse(c.due_at);
+    if (Number.isNaN(due)) continue;
+    if (now < due + enRoute.CHECK_GRACE_MINUTES * 60000) continue;
+
+    // Stamped first, as with the arrival alarm and for the same reason: an
+    // alarm that repeats every ten minutes is one somebody mutes.
+    await db.prepare('UPDATE movement_checks SET missed_notified_at = ? WHERE id = ?')
+      .run(new Date(now).toISOString(), c.id);
+
+    const grantees = await db.prepare(`
+      SELECT DISTINCT grantee_user_id AS id FROM movement_grants
+       WHERE movement_id = ? AND revoked_at IS NULL AND expires_at > ?
+    `).all(c.movement_id, new Date(now).toISOString());
+
+    for (const toUserId of new Set([c.owner_id, c.arranged_by, ...grantees.map((g) => g.id)]
+      .filter(Boolean))) {
+      await knock({
+        toUserId,
+        ownerId: c.owner_id,
+        author: null,
+        subject: `Missed check call: ${c.title}`,
+        line: toUserId === c.owner_id
+          ? `has a check call on "${c.title}" that nobody answered.`
+          : `${c.owner_name} has a check call on "${c.title}" that nobody answered.`,
+        url: '/movements',
+        category: 'movement_check_missed',
+      });
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
 async function runReminderSweep(now = Date.now()) {
   return {
     tasks: await sweepTasks(now),
@@ -491,6 +551,7 @@ async function runReminderSweep(now = Date.now()) {
     appointments: await sweepAppointments(now),
     essentials: await sweepEssentials(now),
     movements: await sweepMovements(now),
+    checks: await sweepChecks(now),
     weeklyReports: await sweepWeeklyReports(),
   };
 }
@@ -506,7 +567,7 @@ async function startReminderSweep() {
 }
 
 module.exports = {
-  runReminderSweep, startReminderSweep, sweepWeeklyReports, sweepMovements,
+  runReminderSweep, startReminderSweep, sweepWeeklyReports, sweepMovements, sweepChecks,
   dueBand, expiryBand, leadFor,
   LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, BOOKER_LEAD_MS,
   DOC_SOON_DAYS, DOC_URGENT_DAYS,

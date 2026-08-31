@@ -1080,6 +1080,84 @@ CREATE TABLE IF NOT EXISTS movement_grants (
 );
 CREATE INDEX IF NOT EXISTS idx_movement_grants ON movement_grants(grantee_user_id, expires_at);
 
+-- Timed check-ins along a journey.
+--
+-- WHY ONE ARRIVAL IS NOT ENOUGH. A ninety-minute run to the airport with no
+-- contact until the end is exactly the window that matters: if something
+-- happens twenty minutes in, nobody learns of it for over an hour. Ground
+-- movement for a protected principal is run on check calls, not on a single
+-- flag at the destination.
+--
+-- Each row is one expected contact. due_at is when it should happen;
+-- checked_at is when somebody actually confirmed. A row with a due_at in the
+-- past and no checked_at is the thing the sweep looks for — the same shape as
+-- the arrival alarm, and for the same reason: the ABSENCE is the signal.
+CREATE TABLE IF NOT EXISTS movement_checks (
+  id           TEXT PRIMARY KEY,
+  movement_id  TEXT NOT NULL REFERENCES movements(id) ON DELETE CASCADE,
+  due_at       TEXT NOT NULL,
+  checked_at   TEXT,
+  -- Null when the driver confirmed from the card, which carries no account.
+  checked_by   TEXT REFERENCES users(id),
+  note         TEXT NOT NULL DEFAULT '',
+  -- Stamped when somebody was told this check call was missed, so a sweep
+  -- every ten minutes does not become a message every ten minutes.
+  missed_notified_at TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movement_checks ON movement_checks(movement_id, due_at);
+
+-- What a journey cost.
+--
+-- A family office cannot account for what the fleet costs if the only record
+-- of a journey is that it happened. Kept per movement rather than per vehicle
+-- because the question asked is "what did last month's running come to", and
+-- the answer is a sum over journeys.
+--
+-- Stored in MINOR UNITS as an integer. A naira or a pound held as a float is a
+-- rounding error waiting to be argued about in front of a principal.
+CREATE TABLE IF NOT EXISTS movement_costs (
+  id           TEXT PRIMARY KEY,
+  movement_id  TEXT NOT NULL REFERENCES movements(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL DEFAULT 'other', -- fuel | toll | allowance | repair | other
+  amount_minor INTEGER NOT NULL DEFAULT 0,
+  currency     TEXT NOT NULL DEFAULT 'NGN',
+  note         TEXT NOT NULL DEFAULT '',
+  created_by   TEXT NOT NULL REFERENCES users(id),
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_movement_costs ON movement_costs(movement_id);
+
+-- The office's drivers, and their papers.
+--
+-- THE CARS HAD PAPERS AND THE PEOPLE DID NOT. A vehicle carries insurance and
+-- roadworthiness on the expiry engine; the driver's licence was free text on a
+-- movement, which meant an expired licence was discovered by a police officer
+-- rather than by Kairos. A driver is a person the office employs, not a string
+-- typed onto a journey.
+CREATE TABLE IF NOT EXISTS drivers (
+  id          TEXT PRIMARY KEY,
+  owner_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  phone       TEXT NOT NULL DEFAULT '',
+  notes       TEXT NOT NULL DEFAULT '',
+  archived_at TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drivers_owner ON drivers(owner_id);
+
+-- Judged by the SAME engine as a passport and a vehicle's insurance. A third
+-- idea of "nearly out of date" would drift from the other two.
+CREATE TABLE IF NOT EXISTS driver_papers (
+  id         TEXT PRIMARY KEY,
+  driver_id  TEXT NOT NULL REFERENCES drivers(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL, -- licence | permit | medical | training
+  reference  TEXT NOT NULL DEFAULT '',
+  expires_on TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_driver_papers ON driver_papers(driver_id);
+
 -- Who the principal has let in on a private trip.
 --
 -- A private trip is absent from the office entirely — see lib/tripPrivacy.js.

@@ -498,6 +498,25 @@ export default function Today() {
             <p className="today-nothing">Nothing waiting on you. Genuinely.</p>
           )}
 
+          {/* SOMEBODY IN A CAR HAS SAID SOMETHING IS WRONG. Above everything,
+              including the missing arrival, because it is the only item in
+              this product that means act now rather than deal with today. */}
+          {(needsYou.movementsDuress || []).map((m) => (
+            <div className="needs-card is-duress" key={`duress-${m.id}`}>
+              <div className="needs-kind">Something is wrong</div>
+              <div className="needs-title">{m.title}</div>
+              <div className="needs-meta">
+                Signalled from the car. {m.note && <strong>{m.note}</strong>}
+                {m.people?.[0]?.phone
+                  ? <> Ring {m.people[0].name} on <strong>{m.people[0].phone}</strong>.</>
+                  : ' Ring the driver now.'}
+              </div>
+              <div className="needs-actions">
+                <Link className="btn btn-primary btn-sm" to="/movements">Open the journey</Link>
+              </div>
+            </div>
+          ))}
+
           {/* NOBODY HAS SAID THEY ARRIVED. Above the invitations, and above
               everything else in this column, because it is the only item here
               that might matter within the hour — a principal half an hour past

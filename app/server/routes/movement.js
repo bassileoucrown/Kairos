@@ -5,6 +5,8 @@ const { requireAuth } = require('../lib/auth');
 const { requirePaAccess } = require('../lib/paAccess');
 const movement = require('../lib/movement');
 const { expiryState } = require('../lib/essentials');
+const enRoute = require('../lib/enRoute');
+const { knock } = require('../lib/knock');
 
 // The office's cars, and the journeys the principal is moved on.
 //
@@ -175,6 +177,10 @@ router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
   `).run(row.id, row.owner_id, row.arranged_by, row.trip_id, row.title, row.departs_from,
     row.destination, row.departs_at, row.buffer_minutes, row.notes,
     row.expected_minutes, row.booking_id, row.created_at);
+  // Laid out at creation, from the expected duration, rather than by somebody
+  // remembering to add them. A check call nobody set up is a check call nobody
+  // misses. See lib/enRoute.js for why short journeys get none.
+  await enRoute.planChecks(row);
   res.status(201).json({ movement: await movement.viewFor(row.id, req.user.id) });
 });
 
@@ -302,6 +308,74 @@ router.delete('/:ownerId/movements/:movementId/grants/:grantId', requirePaAccess
     await db.prepare('UPDATE movement_grants SET revoked_at = ? WHERE id = ? AND movement_id = ?')
       .run(new Date().toISOString(), req.params.grantId, req.movement.id);
     res.status(204).end();
+  }));
+
+// --- While it is happening ------------------------------------------------------
+
+/**
+ * Everything about a journey in progress: the check calls, the card, the money.
+ *
+ * Behind the movement gate like everything else, and behind requireFull for
+ * the money — a stand-in covering one journey has no business in the office's
+ * accounts. The check calls are deliberately NOT behind requireFull: knowing
+ * whether contact has been made is the coordinating half.
+ */
+router.get('/:ownerId/movements/:movementId/route', requirePaAccess, loadMovement,
+  async (req, res) => {
+    res.json({
+      checks: await enRoute.checksFor(req.movement.id),
+      duressAt: req.movement.duress_at || null,
+      duressNote: req.movementAccess === 'full' ? (req.movement.duress_note || '') : '',
+      cardArmed: !!req.movement.card_token,
+      costs: req.movementAccess === 'full' ? await enRoute.costsFor(req.movement.id) : null,
+    });
+  });
+
+/** Contact was made. Open to a stand-in: they are the one on the phone. */
+router.post('/:ownerId/movements/:movementId/checks/:checkId', requirePaAccess, loadMovement,
+  async (req, res) => {
+    const own = await db.prepare('SELECT id FROM movement_checks WHERE id = ? AND movement_id = ?')
+      .get(req.params.checkId, req.movement.id);
+    if (!own) return res.status(404).json({ error: 'Not found.' });
+    const result = await enRoute.confirmCheck(req.params.checkId,
+      { userId: req.user.id, note: req.body?.note });
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    res.json({ checks: await enRoute.checksFor(req.movement.id) });
+  });
+
+/** Give the driver a card, or take it down. */
+router.post('/:ownerId/movements/:movementId/card', requirePaAccess, loadMovement,
+  async (req, res) => requireFull(req, res, async () => {
+    const token = await enRoute.armCard(req.movement.id);
+    res.status(201).json({ url: `/drive/${token}` });
+  }));
+
+router.delete('/:ownerId/movements/:movementId/card', requirePaAccess, loadMovement,
+  async (req, res) => requireFull(req, res, async () => {
+    await enRoute.disarmCard(req.movement.id);
+    res.status(204).end();
+  }));
+
+/** Stand down a duress signal. Only from inside, and the record keeps it. */
+router.delete('/:ownerId/movements/:movementId/duress', requirePaAccess, loadMovement,
+  async (req, res) => requireFull(req, res, async () => {
+    await enRoute.clearDuress(req.movement, req.user.id);
+    res.status(204).end();
+  }));
+
+/** What the journey cost. Full access only — this is the office's accounts. */
+router.post('/:ownerId/movements/:movementId/costs', requirePaAccess, loadMovement,
+  async (req, res) => requireFull(req, res, async () => {
+    const result = await enRoute.addCost({
+      movementId: req.movement.id,
+      kind: req.body?.kind,
+      amountMinor: req.body?.amountMinor,
+      currency: req.body?.currency,
+      note: req.body?.note,
+      userId: req.user.id,
+    });
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    res.status(201).json({ costs: await enRoute.costsFor(req.movement.id) });
   }));
 
 module.exports = { router };

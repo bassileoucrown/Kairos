@@ -26,6 +26,7 @@ import Pad from './pages/Pad.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
 import Movements from './pages/Movements.jsx';
+import DriveCard from './pages/DriveCard.jsx';
 import Archive from './pages/Archive.jsx';
 import Report from './pages/Report.jsx';
 import CatchUp from './pages/CatchUp.jsx';
@@ -175,6 +176,9 @@ export default function App() {
 
       {/* No session, deliberately: the driver has no account. See lib/pickup.js. */}
       <Route path="/pickup/:token" element={<DriverCard />} />
+      {/* No RequireAuth, deliberately: a driver has no account. The token
+          is the whole credential — see routes/driveCard.js. */}
+      <Route path="/drive/:token" element={<DriveCard />} />
 
       <Route path="/book/manage/:id" element={<ManageBooking />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />

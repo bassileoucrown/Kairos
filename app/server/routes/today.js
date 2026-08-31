@@ -276,11 +276,34 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   // longer gets them there in time.
   const movementsLate = movements.filter((m) => m.lateByMinutes !== null);
   const movementsWrong = movements.filter((m) => m.fit && m.fit.fits === false);
+  // Somebody in a car has said something is wrong. Carried separately from
+  // everything else because it is the only thing in this response that means
+  // act now, and a screen has to be able to put it above the rest without
+  // scanning a list to find it.
+  const movementsDuress = [];
+  for (const m of movements) {
+    const row = await db.prepare(
+      'SELECT duress_at, duress_note FROM movements WHERE id = ?',
+    ).get(m.id);
+    if (row?.duress_at) {
+      movementsDuress.push({
+        id: m.id,
+        title: m.title,
+        destination: m.destination,
+        at: row.duress_at,
+        // The note only where the reader holds the journey in full. A
+        // stand-in gets that something is wrong, which is what they can act
+        // on, and not the principal's own words about it.
+        note: m.access === 'full' ? (row.duress_note || '') : '',
+        people: m.people || [],
+      });
+    }
+  }
 
   const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
     + unconfirmedInstructions.length + padWaking.length + padYourTurn.length
-    + movementsLate.length + movementsWrong.length
+    + movementsLate.length + movementsWrong.length + movementsDuress.length
     + invitesWaiting.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
@@ -310,7 +333,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       // The absence of an arrival is the only thing in this product that might
       // matter within the hour, so it belongs beside the approvals rather than
       // on a page somebody has to think to open.
-      movementsLate, movementsWrong,
+      movementsLate, movementsWrong, movementsDuress,
       invitesWaiting: invitesWaiting.map((i) => ({
         token: i.token,
         ownerName: i.owner_name,
