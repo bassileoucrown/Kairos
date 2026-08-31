@@ -1158,6 +1158,131 @@ CREATE TABLE IF NOT EXISTS driver_papers (
 );
 CREATE INDEX IF NOT EXISTS idx_driver_papers ON driver_papers(driver_id);
 
+-- Correspondence an assistant handles on a principal's behalf.
+--
+-- THE BOUNDARY IS AT INGEST, NOT AT READ. The instinct is to hold the whole
+-- mailbox and filter what an assistant sees. That cannot be made safe: an
+-- inbox has no structure to filter on, one missed rule leaks the bank's
+-- letter, and the tier promise this product makes about the vault would become
+-- a promise it cannot keep about mail.
+--
+-- So Kairos never holds the whole mailbox. The principal decides what crosses
+-- the boundary; inside it the assistant works with complete independence, and
+-- what is outside was never here at all — not hidden, not redacted, absent.
+-- That is a sentence a principal can be told and can check.
+--
+-- FOUR WAYS IN, and an account names which one it is:
+--   delegated — an office address the assistant legitimately owns.
+--   forwarded — the principal's own rules forward what matches here.
+--   gmail / graph — a synced label. Needs a connector and stays inert without.
+CREATE TABLE IF NOT EXISTS mail_accounts (
+  id            TEXT PRIMARY KEY,
+  owner_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL DEFAULT 'delegated', -- delegated | forwarded | gmail | graph
+  address       TEXT NOT NULL,
+  label         TEXT NOT NULL DEFAULT '',
+  -- The unguessable half of the address mail is forwarded to. Anyone who
+  -- learns it can post mail into this account, so it is a secret, it is per
+  -- account, and it can be rolled without touching anything else.
+  inbound_token TEXT,
+  status        TEXT NOT NULL DEFAULT 'live', -- live | paused
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mail_accounts_owner ON mail_accounts(owner_id);
+
+-- What one assistant may do with one account.
+--
+-- SIX VERBS, because "can they do email" is the wrong question — reading,
+-- filing, drafting and sending are four different amounts of trust, and an
+-- office that can only grant all of them will grant all of them.
+--
+-- SENDING IS NOT A FLAG. It has three states and the principal moves between
+-- them deliberately: draft (queued for their approval), on_behalf (leaves as
+-- "X on behalf of Y", so the recipient knows), and as (indistinguishable from
+-- the principal). All three are legitimate and offices really do run the
+-- third; what does not change is that Kairos records who actually pressed
+-- send, whatever the header says.
+CREATE TABLE IF NOT EXISTS mail_grants (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  owner_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  member_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  may_view       INTEGER NOT NULL DEFAULT 1,
+  may_organise   INTEGER NOT NULL DEFAULT 1,
+  may_draft      INTEGER NOT NULL DEFAULT 1,
+  may_delete     INTEGER NOT NULL DEFAULT 1,
+  send_mode      TEXT NOT NULL DEFAULT 'draft', -- draft | on_behalf | as
+  -- Narrower than the account when an office wants it: correspondence with
+  -- contacts at this relationship tier and below. Null means everything the
+  -- account holds. Reuses the tier contacts already carry rather than
+  -- inventing a second way to classify the same people.
+  scope_tier     TEXT,
+  granted_by     TEXT NOT NULL REFERENCES users(id),
+  created_at     TEXT NOT NULL,
+  revoked_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_mail_grants ON mail_grants(account_id, member_user_id);
+
+-- One correspondence, and where the office has got to with it.
+CREATE TABLE IF NOT EXISTS mail_threads (
+  id                  TEXT PRIMARY KEY,
+  account_id          TEXT NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  owner_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject             TEXT NOT NULL DEFAULT '',
+  correspondent_name  TEXT NOT NULL DEFAULT '',
+  correspondent_email TEXT NOT NULL DEFAULT '',
+  -- open — somebody still has to do something.
+  -- waiting — we have replied and are waiting on them.
+  -- done — finished.
+  state               TEXT NOT NULL DEFAULT 'open',
+  assigned_to         TEXT REFERENCES users(id),
+  snoozed_until       TEXT,
+  last_at             TEXT NOT NULL,
+  -- Quarantine. Mail that arrived from a sender the office does not know is
+  -- held rather than dropped: dropping it silently loses a first approach from
+  -- somebody who matters, and accepting it lets anybody who learns the address
+  -- put things in front of a principal.
+  quarantined         INTEGER NOT NULL DEFAULT 0,
+  deleted_at          TEXT,
+  deleted_by          TEXT REFERENCES users(id),
+  created_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mail_threads ON mail_threads(account_id, last_at);
+
+-- One message.
+--
+-- DELETING CLEARS THE BODY AND KEEPS THE ENVELOPE. "Gone, with a record that
+-- it existed": the words are removed, and who wrote to whom, about what, when,
+-- and who deleted it survive for the principal to read. A PA clearing an inbox
+-- is doing routine work; a principal discovering six months later that a
+-- message once existed and cannot find out anything about it is the failure
+-- this shape avoids. Same idea as records surviving a deleted thread.
+CREATE TABLE IF NOT EXISTS mail_messages (
+  id              TEXT PRIMARY KEY,
+  thread_id       TEXT NOT NULL REFERENCES mail_threads(id) ON DELETE CASCADE,
+  account_id      TEXT NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  direction       TEXT NOT NULL DEFAULT 'in', -- in | out
+  from_name       TEXT NOT NULL DEFAULT '',
+  from_email      TEXT NOT NULL DEFAULT '',
+  to_email        TEXT NOT NULL DEFAULT '',
+  subject         TEXT NOT NULL DEFAULT '',
+  body            TEXT NOT NULL DEFAULT '',
+  -- Who actually pressed send, always, whatever the header said. A recipient
+  -- may not be able to tell an assistant from the principal; the principal
+  -- always can.
+  sent_by_user_id TEXT REFERENCES users(id),
+  sent_as         TEXT, -- on_behalf | as | null for anything inbound
+  -- The sender's own Message-ID, so the same forward arriving twice does not
+  -- become two messages.
+  external_id     TEXT,
+  at              TEXT NOT NULL,
+  deleted_at      TEXT,
+  deleted_by      TEXT REFERENCES users(id),
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mail_messages ON mail_messages(thread_id, at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_messages_ext ON mail_messages(account_id, external_id);
+
 -- Who the principal has let in on a private trip.
 --
 -- A private trip is absent from the office entirely — see lib/tripPrivacy.js.

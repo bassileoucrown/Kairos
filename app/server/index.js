@@ -44,6 +44,8 @@ const accessCodesRouter = require('./routes/accessCodes');
 const tripsRouter = require('./routes/trips');
 const movementRouter = require('./routes/movement');
 const driveCardRouter = require('./routes/driveCard');
+const mailRouter = require('./routes/mail');
+const mailInboundRouter = require('./routes/mailInbound');
 const conciergeRouter = require('./routes/concierge');
 const connectorsRouter = require('./routes/connectors');
 const planRouter = require('./routes/plan');
@@ -177,6 +179,11 @@ app.use('/api/movement', movementRouter.router);
 // and a driver has no account. The token is the whole credential — see
 // routes/driveCard.js for why that trade is safe here.
 app.use('/api/drive', driveCardRouter.router);
+app.use('/api/mail', mailRouter.router);
+// The one door the public internet posts through. Its own router because it
+// has its own authentication — a provider signature and a per-account token,
+// not a session. See routes/mailInbound.js.
+app.use('/api/mail-inbound', mailInboundRouter.router);
 app.use('/api/concierge', conciergeRouter);
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/plan', planRouter);
