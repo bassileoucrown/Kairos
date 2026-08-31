@@ -263,8 +263,17 @@ async function confirmWith(page, text) {
     await page.click('button:has-text("Make it private")');
     await page.waitForSelector('button:has-text("Let the office see it")', { timeout: 20000 });
     ok('making it private says what that means', true);
-    ok('and asks who should be told anyway',
-      /Who knows/.test(await page.locator('body').innerText()));
+    // WAITED FOR, NOT READ INSTANTLY. The button above renders as soon as the
+    // trip is private; the "Who knows" panel below it has two more requests to
+    // make first. Reading the page between those two moments passed on SQLite
+    // and failed roughly one run in three on Postgres, which is slower — the
+    // recurring shape in this suite, where the thing waited on exists before
+    // the thing asserted does.
+    const asked = await page
+      .waitForFunction(() => /Who knows/.test(document.body.innerText), null, { timeout: 20000 })
+      .then(() => true).catch(() => false);
+    ok('and asks who should be told anyway', asked,
+      (await page.locator('body').innerText()).slice(0, 200));
 
     // ---- An open record on the report, followed to the record --------------
     //
