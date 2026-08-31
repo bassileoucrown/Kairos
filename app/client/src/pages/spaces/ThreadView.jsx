@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import SoonButton from '../../components/SoonButton.jsx';
 import AppShell from '../../components/AppShell.jsx';
+import AssistButton from '../../components/AssistButton.jsx';
 import VoiceRecorder from '../../components/VoiceRecorder.jsx';
 import { MentionText, MentionPicker } from '../../components/Mention.jsx';
 import { STAGE_STATUS_LABELS } from './ProjectDetail.jsx';
@@ -549,6 +550,8 @@ export default function ThreadView() {
   const [register, setRegister] = useState('note');
   const [recordType, setRecordType] = useState('decision');
   const [view, setView] = useState('all');
+  // Null until asked; an empty array is a real answer meaning nothing settled.
+  const [candidates, setCandidates] = useState(null);
   const [sending, setSending] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [members, setMembers] = useState([]);
@@ -866,6 +869,33 @@ export default function ThreadView() {
           </p>
         )}
         {error && <div className="alert alert-error">{error}</div>}
+
+        {/* A room where something was settled and nobody filed it is the exact
+            shape of the "records nobody answered" number on the report.
+            Candidates only — promoting stays the deliberate act it always was. */}
+        <div className="assist-control" style={{ margin: '6px 0' }}>
+          <AssistButton
+            feature="ai_record_candidates"
+            path={`/assist/threads/${threadId}/records`}
+            label="Anything decided here?"
+            onResult={(d) => setCandidates(d.candidates || [])}
+          />
+        </div>
+        {candidates !== null && (
+          candidates.length === 0
+            ? <p className="hint">Nothing in this room reads as settled.</p>
+            : (
+              <div className="assist-out">
+                <div className="assist-out-head">Looks settled — promote if you agree</div>
+                {candidates.map((c) => (
+                  <p key={c.messageId}>
+                    <strong>{c.recordType}</strong> — {c.body}
+                    <br /><span className="hint">{c.why}</span>
+                  </p>
+                ))}
+              </div>
+            )
+        )}
 
         <p className="tz-note" style={{ marginBottom: 14 }}>
           {view === 'records'

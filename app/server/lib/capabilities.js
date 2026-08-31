@@ -41,6 +41,15 @@ const SCREENS = {
   direct_line: 'Direct line',
   settings: 'Settings',
   concierge: 'Concierge',
+  // The seven asks sit where the work is rather than on one AI page, so the
+  // screens they sit on have to be nameable too. Two of these are not a fixed
+  // address — an appointment and a room are always a particular one — and the
+  // Coming page prints those as a place rather than as a link.
+  catch_up: 'While you were away',
+  appointment: 'An appointment',
+  mail: 'Correspondence',
+  report: 'Weekly report',
+  thread: 'A room',
 };
 
 function build() {
@@ -144,7 +153,7 @@ function build() {
   //
   // WHAT IS LISTED is everything that needs a model, so it is visibly absent
   // in the place it will occupy rather than quietly missing. One key turns all
-  // four on at once; they are separate entries because they will arrive
+  // of them on at once; they are separate entries because they will arrive
   // separately and somebody reading this should see what is coming.
   const aiReady = aiModel.isConfigured();
   const aiNeeds = ['ANTHROPIC_API_KEY'];
@@ -154,16 +163,6 @@ function build() {
     screen: 'ai_assist',
     label: 'Compose in the principal\'s voice',
     what: 'A message written the way this principal writes, learned from what they have actually sent — not a template with a name dropped into it.',
-    available: aiReady,
-    needs: aiNeeds,
-    state: 'needs_key',
-  });
-  add({
-    id: 'ai_reply',
-    control: 'Reply to this',
-    screen: 'ai_assist',
-    label: 'Reply to a message you paste in',
-    what: 'Paste what arrived and get an answer that reads as though a person wrote it, in the principal\'s register.',
     available: aiReady,
     needs: aiNeeds,
     state: 'needs_key',
@@ -184,6 +183,85 @@ function build() {
     screen: 'ai_assist',
     label: 'Summarise a long conversation',
     what: 'Sixty messages down to what was settled and what is still open. The records register already holds the formal half of this.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+
+  // The seven asks in lib/assist.js. Listed one by one rather than as "AI
+  // Assist" because they appear on five different screens, and somebody
+  // standing on the catch-up page deciding whether to rely on this needs to
+  // learn it is not open THERE — a single entry on a settings page they are
+  // not looking at tells them nothing.
+  add({
+    id: 'ai_catch_up',
+    control: 'Read it back to me',
+    screen: 'catch_up',
+    label: 'What happened while you were away, in a paragraph',
+    what: 'Forty rows as three short paragraphs: what changed, what needs you now, what can wait.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_meeting_brief',
+    control: 'Brief me',
+    screen: 'appointment',
+    label: 'The briefing note before a meeting',
+    what: 'Who they are, where you left it, what is outstanding — assembled from the meetings and minutes already held.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_minute_tasks',
+    control: 'Find the actions',
+    screen: 'appointment',
+    label: 'Turn what was agreed into tasks',
+    what: 'The "to do" half of a minute, proposed as tasks with owners and dates. A person still creates them.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_triage',
+    control: 'Sort this out',
+    screen: 'mail',
+    label: 'Triage correspondence',
+    what: 'What each message needs — the principal, the assistant, later, or nothing — with the reason in the office\'s own words.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  // Beside triage rather than on an AI page, because a reply is the thing you
+  // do NEXT after triage says a message needs answering — and a draft written
+  // where the correspondence is not is a draft somebody has to carry back.
+  add({
+    id: 'ai_reply',
+    control: 'Draft a reply',
+    screen: 'mail',
+    label: 'A reply in the principal\'s voice',
+    what: 'Say what the reply should do and get it written the way this principal writes, learned from what they have actually sent. It is a draft: nothing is sent, by anyone but a person.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_week_ahead',
+    control: 'Read the week',
+    screen: 'report',
+    label: 'What is worth knowing about next week',
+    what: 'Where the week is tight, what collides, and what would have to move if something slipped.',
+    available: aiReady,
+    needs: aiNeeds,
+    state: 'needs_key',
+  });
+  add({
+    id: 'ai_record_candidates',
+    control: 'Anything decided here?',
+    screen: 'thread',
+    label: 'Spot decisions in a conversation',
+    what: 'Lines that read as settled, offered for promoting to the formal record. Promoting stays the deliberate act it is.',
     available: aiReady,
     needs: aiNeeds,
     state: 'needs_key',

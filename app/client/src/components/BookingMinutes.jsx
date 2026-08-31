@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import AssistButton from './AssistButton.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 
 /**
@@ -34,6 +35,8 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
   const [draftedFrom, setDraftedFrom] = useState(null);
   const [dictating, setDictating] = useState(false);
   const [dictation, setDictation] = useState('');
+  // Whatever an ask came back with, shown beside the composer rather than in it.
+  const [aside, setAside] = useState(null);
 
   const base = `/pa/${ownerId}/bookings/${bookingId}`;
 
@@ -127,6 +130,30 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
         </div>
       ))}
 
+      {/* OUTSIDE the started/not-started split, deliberately. Everything below
+          is the record AFTERWARDS and correctly waits for the meeting to
+          begin. A briefing note is the opposite: it is what you read in the
+          car on the way there, and a control that only appears once the
+          meeting has started is a control that appears too late to be the
+          thing it is for. */}
+      <div className="minute-tools">
+        <AssistButton
+          feature="ai_meeting_brief"
+          path={`/assist/${ownerId}/meetings/${bookingId}/brief`}
+          label="Brief me"
+          onResult={(d) => setAside({ head: 'Before you go in', text: d.text })}
+        />
+      </div>
+
+      {/* Both asks land here. Proposals, never tasks — creating them is a
+          separate act somebody takes on the task screen. See lib/assist.js. */}
+      {aside && (
+        <div className="assist-out">
+          <div className="assist-out-head">{aside.head}</div>
+          {aside.text}
+        </div>
+      )}
+
       {started ? (
         <>
         {/* THE ORDER MATTERS. Dictating comes first because it is what somebody
@@ -161,6 +188,21 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
           <button className="btn btn-sm" type="button" onClick={askForDraft} disabled={drafting}>
             {drafting ? 'Writing…' : 'Draft the minutes for me'}
           </button>
+          {/* The actions AFTER. The briefing note is the other half and sits
+              above, outside this block — see there for why. */}
+          <AssistButton
+            feature="ai_minute_tasks"
+            path={`/assist/${ownerId}/meetings/${bookingId}/minute-tasks`}
+            label="Find the actions"
+            onResult={(d) => setAside({
+              head: 'Agreed in the minutes — make these tasks?',
+              text: (d.tasks || []).length
+                ? d.tasks.map((t) => `• ${t.title}`
+                  + (t.owner ? ` — ${t.owner}` : '')
+                  + (t.dueOn ? ` (by ${t.dueOn})` : '')).join('\n')
+                : 'The minutes do not record anybody agreeing to do anything.',
+            })}
+          />
         </div>
 
         <form onSubmit={file}>

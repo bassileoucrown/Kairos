@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import AssistButton from '../components/AssistButton.jsx';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell from '../components/AppShell.jsx';
@@ -40,6 +41,7 @@ const DIARY_WORDS = {
 export default function CatchUp() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [brief, setBrief] = useState('');
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -70,6 +72,24 @@ export default function CatchUp() {
   return (
     <AppShell title="While you were away">
       {error && <div className="alert alert-error">{error}</div>}
+
+      {/* The list below is correct and exhausting. This is the same thing with
+          the shape a person needed — and it sits above the list rather than
+          replacing it, because the list is the evidence for the paragraph. */}
+      <div className="assist-control" style={{ marginBottom: 12 }}>
+        <AssistButton
+          feature="ai_catch_up"
+          path="/assist/catch-up"
+          label="Read it back to me"
+          onResult={(d) => setBrief(d.empty ? 'Nothing happened while you were away.' : d.text)}
+        />
+      </div>
+      {brief && (
+        <div className="assist-out">
+          <div className="assist-out-head">While you were away</div>
+          {brief}
+        </div>
+      )}
 
       <div className="report-head">
         <div>

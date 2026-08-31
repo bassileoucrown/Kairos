@@ -266,6 +266,7 @@ const MEASURE = () => {
       ['PA calendar', '/pa?tab=calendar'],
       ['Contacts', '/pa?tab=contacts'],
       ['Briefs', '/pa?tab=briefs'],
+      ['Correspondence', '/mail'],
       ['Spaces', '/spaces'],
       ['Tasks', '/tasks'],
       ['Workspace', '/workspace'],

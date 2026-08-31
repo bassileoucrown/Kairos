@@ -29,6 +29,7 @@ import Movements from './pages/Movements.jsx';
 import DriveCard from './pages/DriveCard.jsx';
 import Archive from './pages/Archive.jsx';
 import Report from './pages/Report.jsx';
+import Correspondence from './pages/Correspondence.jsx';
 import CatchUp from './pages/CatchUp.jsx';
 import Operator from './pages/Operator.jsx';
 import Workspace from './pages/Workspace.jsx';
@@ -154,6 +155,7 @@ export default function App() {
       <Route path="/tasks" element={<RequireAuth><MyTasks /></RequireAuth>} />
       <Route path="/archive" element={<RequireAuth><Archive /></RequireAuth>} />
       <Route path="/report" element={<RequireAuth><Report /></RequireAuth>} />
+      <Route path="/mail" element={<RequireAuth><Correspondence /></RequireAuth>} />
       <Route path="/catch-up" element={<RequireAuth><CatchUp /></RequireAuth>} />
       <Route path="/operator" element={<RequireAuth><Operator /></RequireAuth>} />
       <Route path="/today" element={<RequireAuth><Today /></RequireAuth>} />

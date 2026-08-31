@@ -16,6 +16,10 @@ import AppShell from '../components/AppShell.jsx';
 // off this page and its placeholder disappears, in the same instant, from one
 // fact on the server.
 
+// Where each screen id actually is. `to` is optional, deliberately: an
+// appointment and a room are always a PARTICULAR one, so there is no address
+// to send somebody to and a link would have to invent a destination. Those
+// read as a place instead — which is still an answer, and a truthful one.
 const WHERE = {
   itinerary: { label: 'Itinerary', to: '/itinerary' },
   trips: { label: 'Trips', to: '/trips' },
@@ -23,6 +27,12 @@ const WHERE = {
   direct_line: { label: 'The direct line', to: '/today' },
   concierge: { label: 'Concierge', to: '/concierge' },
   settings: { label: 'Settings', to: '/dashboard?tab=settings' },
+  ai_assist: { label: 'AI Assist', to: '/pa?tab=ai_assist' },
+  catch_up: { label: 'While you were away', to: '/catch-up' },
+  mail: { label: 'Correspondence', to: '/mail' },
+  report: { label: 'the weekly report', to: '/report' },
+  appointment: { label: 'any appointment' },
+  thread: { label: 'any room' },
 };
 
 export default function Coming() {
@@ -67,7 +77,9 @@ export default function Coming() {
               <div className="meta">{c.what}</div>
               <div className="hint">
                 Appears on{' '}
-                {where ? <Link to={where.to}>{where.label}</Link> : c.screen}
+                {where?.to
+                  ? <Link to={where.to}>{where.label}</Link>
+                  : (where?.label || c.screen)}
                 {c.control && <> as <strong>{c.control}</strong></>}
                 {!soon && c.needs?.length > 0 && (
                   <> · waiting on {c.needs.map((n) => <code key={n}>{n}</code>)}</>

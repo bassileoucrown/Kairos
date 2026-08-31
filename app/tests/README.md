@@ -1,6 +1,6 @@
 # The suites
 
-Sixty-five end-to-end suites. No framework: each is a standalone Node script that
+A hundred and eight end-to-end suites. No framework: each is a standalone Node script that
 prints ticks and crosses, exits non-zero on failure, and ends with one sentence
 saying what it proved. That last line is the point — `Nobody held up a name, and
 nobody had to guess` tells you what broke; `12 assertions failed` does not.
@@ -11,7 +11,7 @@ through `playwright-core`.
 ## Running them
 
 ```sh
-bash app/tests/allsuites.sh     # all 65, sequentially
+bash app/tests/allsuites.sh     # all 108, sequentially
 node app/tests/btravel.js       # one
 ```
 

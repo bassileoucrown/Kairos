@@ -83,6 +83,12 @@ const NAV = [
   // Hiding it from them would mean the people the report is about are the only
   // people who cannot see what it says.
   { group: 'desk', to: '/report', label: 'Weekly report', icon: '▦', principalScoped: true },
+  // Principal-scoped, and shown to everybody — the screen itself says "no
+  // mailbox yet" to somebody nobody has put in one. Hiding the entry until a
+  // grant exists would mean the principal who has to CREATE the mailbox cannot
+  // find the place where mailboxes live. See lib/mailAccess.js for the gate
+  // that actually decides; this is a door, not a lock.
+  { group: 'desk', to: '/mail', label: 'Correspondence', icon: '✉', principalScoped: true },
 
   { group: 'work', to: '/spaces', label: 'Spaces', icon: '❑', badge: 'messages' },
   { group: 'work', to: '/tasks', label: 'Tasks', icon: '✓', badge: 'tasks' },

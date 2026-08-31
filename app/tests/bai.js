@@ -152,9 +152,20 @@ function client() {
     const caps = Object.fromEntries((r.d.capabilities || []).map((c) => [c.id, c]));
     ok('composing in the principal\'s voice is listed as unavailable',
       caps.ai_compose && caps.ai_compose.available === false, JSON.stringify(caps.ai_compose));
-    ok('and replying to a pasted message', caps.ai_reply?.available === false);
     ok('and reworking a draft', caps.ai_rewrite?.available === false);
     ok('and summarising a conversation', caps.ai_summary?.available === false);
+    // REPLYING MOVED, and this is where the move is pinned. It used to sit here
+    // as something planned; it is now built, and it sits on the correspondence
+    // screen — beside the triage that says a message needs answering, which is
+    // the moment somebody wants it. A capability whose declared screen is not
+    // the screen its control is on sends whoever reads the roadmap to the
+    // wrong place, so the screen is asserted rather than merely the existence.
+    const mail = Object.fromEntries(
+      ((await boss('GET', '/capabilities?screen=mail')).d.capabilities || [])
+        .map((c) => [c.id, c]));
+    ok('replying is on the correspondence screen, not this one',
+      !caps.ai_reply && mail.ai_reply?.available === false,
+      JSON.stringify({ here: !!caps.ai_reply, there: mail.ai_reply }));
     // An operator seeing a named variable is being handed a task; "coming
     // soon" would be asking them to wait for something already built.
     ok('each names the key that would turn it on',

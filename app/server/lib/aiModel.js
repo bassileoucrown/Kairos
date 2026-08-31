@@ -37,6 +37,20 @@ function isConfigured() {
   return !!(process.env.ANTHROPIC_API_KEY || '').trim();
 }
 
+/**
+ * Throw unless this deployment can call a model.
+ *
+ * FOR CALLERS THAT CAN ANSWER WITHOUT ASKING. Several asks in lib/assist.js
+ * return early when there is nothing to work on — an empty mailbox, a person
+ * who has not been away. Left alone, those paths answer "success, nothing to
+ * do" on a deployment with no model at all, which reports a working feature
+ * that does not exist. That is the exact failure this file was written to
+ * prevent, and the early return is where it sneaks back in.
+ */
+function requireConfigured() {
+  if (!isConfigured()) throw new NotConfigured();
+}
+
 /** What a screen should say when it cannot. */
 const UNAVAILABLE = 'This needs a language model, and none is configured for this deployment.';
 
@@ -255,7 +269,7 @@ async function draft({ instruction, material = '', voice = [], maxTokens = 2000 
 }
 
 module.exports = {
-  MODEL, isConfigured, UNAVAILABLE, REFUSAL, TIMEOUT_MS,
+  MODEL, isConfigured, requireConfigured, UNAVAILABLE, REFUSAL, TIMEOUT_MS,
   VaultRefusal, NotConfigured,
   asksForVault, refuseIfVault, mayRead, READABLE, voiceSample, draft,
 };

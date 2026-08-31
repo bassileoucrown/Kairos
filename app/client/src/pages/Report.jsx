@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
+import AssistButton from '../components/AssistButton.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 
 // The six kinds of record, said the way a person would read them back rather
@@ -103,7 +104,8 @@ const NEGLECT_LABEL = {
   task: 'Task', stage: 'Stage', record: 'Record', proposal: 'Waiting on you',
 };
 
-function WeekAhead({ ahead }) {
+function WeekAhead({ ahead, ownerId }) {
+  const [read, setRead] = useState('');
   const due = ahead.tasksDue.length + ahead.moreTasksDue;
   const stages = ahead.stagesDue.length + ahead.moreStagesDue;
   return (
@@ -112,6 +114,18 @@ function WeekAhead({ ahead }) {
         The week ahead
         <span className="hint"> · {ahead.window.startDate} to {ahead.window.endDate}</span>
       </h3>
+
+      {/* The counts are below. This is the observation on top of them — where
+          the week is tight, and what would have to move if something slipped. */}
+      <div className="assist-control" style={{ margin: '0 0 10px' }}>
+        <AssistButton
+          feature="ai_week_ahead"
+          path={`/assist/${ownerId}/week-ahead`}
+          label="Read the week"
+          onResult={(d) => setRead(d.empty ? 'There is nothing in the week ahead yet.' : d.text)}
+        />
+      </div>
+      {read && <div className="assist-out">{read}</div>}
 
       <div className="report-tiles">
         <div><strong>{ahead.appointments}</strong><span>appointment{ahead.appointments === 1 ? '' : 's'}</span></div>
@@ -286,7 +300,7 @@ export default function Report() {
         </div>
       )}
 
-      {data.ahead && <WeekAhead ahead={data.ahead} />}
+      {data.ahead && <WeekAhead ahead={data.ahead} ownerId={ownerId} />}
 
       {data.scope === 'self' && (
         <p className="hint">

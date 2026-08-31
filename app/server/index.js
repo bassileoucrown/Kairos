@@ -46,6 +46,7 @@ const movementRouter = require('./routes/movement');
 const driveCardRouter = require('./routes/driveCard');
 const mailRouter = require('./routes/mail');
 const mailInboundRouter = require('./routes/mailInbound');
+const assistRouter = require('./routes/assist');
 const conciergeRouter = require('./routes/concierge');
 const connectorsRouter = require('./routes/connectors');
 const planRouter = require('./routes/plan');
@@ -184,6 +185,7 @@ app.use('/api/mail', mailRouter.router);
 // has its own authentication — a provider signature and a per-account token,
 // not a session. See routes/mailInbound.js.
 app.use('/api/mail-inbound', mailInboundRouter.router);
+app.use('/api/assist', assistRouter.router);
 app.use('/api/concierge', conciergeRouter);
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/plan', planRouter);
