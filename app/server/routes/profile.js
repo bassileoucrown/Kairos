@@ -12,7 +12,7 @@ const router = asyncRouter();
 router.use(requireAuth);
 
 router.patch('/', async (req, res) => {
-  const { name, timezone, slug } = req.body || {};
+  const { name, timezone, slug, discoverable } = req.body || {};
   const updates = [];
   const values = [];
 
@@ -38,6 +38,16 @@ router.patch('/', async (req, res) => {
     }
     updates.push('slug = ?');
     values.push(claim.handle);
+  }
+
+  // Whether an exact handle resolves to your name for somebody who is not
+  // connected to you. On by default because a network nobody can see the edge
+  // of is not a network; off makes you answer exactly as a stranger does, which
+  // is what makes the default honest rather than a dark pattern. See
+  // routes/connections.js.
+  if (discoverable !== undefined) {
+    updates.push('discoverable = ?');
+    values.push(discoverable ? 1 : 0);
   }
 
   if (updates.length === 0) {

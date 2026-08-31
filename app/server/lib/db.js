@@ -579,6 +579,13 @@ function ready() {
       // their licence can be watched the way a car's insurance is.
       await ensureColumn('movement_people', 'driver_id', 'TEXT');
 
+      // Whether an exact handle resolves to a name for somebody not yet
+      // connected. ON by default, because a network where you cannot tell
+      // whether the person you are trying to reach is even here is not a
+      // network — see routes/connections.js for the trade this makes and why
+      // the opt-out is what keeps it defensible.
+      await ensureColumn('users', 'discoverable', 'INTEGER NOT NULL DEFAULT 1');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');

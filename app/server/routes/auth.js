@@ -63,6 +63,10 @@ function publicUser(u) {
     timezone: u.timezone,
     onboardingStep: u.onboarding_step,
     accountCategory: u.account_category,
+    // Whether an exact handle resolves to this person's name for somebody not
+    // connected to them. Carried on the user so the setting screen can show
+    // its real state rather than assuming the default.
+    discoverable: u.discoverable === undefined ? true : !!u.discoverable,
     // Whether this account can open the pilot screen. Read from the same
     // ANNOUNCEMENT_AUTHORS list the faults and feedback endpoints read, so the
     // rail and the endpoints cannot disagree about who the operator is — and

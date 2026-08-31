@@ -29,6 +29,10 @@ export default function Connections() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [handle, setHandle] = useState('');
+  // Who the typed handle belongs to, once looked up. Null before anybody has
+  // looked; { found: false } when nobody discoverable answers to it.
+  const [who, setWho] = useState(null);
+  const [looking, setLooking] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -37,11 +41,28 @@ export default function Connections() {
   }
   useEffect(() => { load(); }, []);
 
+  // WHY THIS EXISTS. Sending a request answers neutrally on purpose, so nobody
+  // can walk the alphabet and learn who is on Kairos. Carried into looking
+  // somebody up, that same rule made connections pointless: you typed a
+  // colleague's handle, got a shrug, and could not tell a typo from an absence.
+  // So an exact handle now resolves to a name — for anybody who has not turned
+  // that off. See routes/connections.js.
+  async function look() {
+    const h = handle.trim().replace(/^@/, '');
+    if (!h) return;
+    setLooking(true);
+    setError('');
+    try {
+      setWho(await api.get(`/connections/lookup?handle=${encodeURIComponent(h)}`));
+    } catch (err) { setError(err.message); } finally { setLooking(false); }
+  }
+
   async function request(e) {
     e.preventDefault();
     setError(''); setNotice(''); setBusy(true);
     try {
       const d = await api.post('/connections', { handle, note });
+      setWho(null);
       setNotice(d.message);
       setHandle(''); setNote('');
       load();
@@ -75,9 +96,33 @@ export default function Connections() {
             />
           </div>
           <p className="hint">
-            You need their exact handle — there is no directory to search, by design.
+            You need their exact handle — there is still no directory to search.
             Nothing about your principal is shared by connecting.
           </p>
+          <button
+            className="btn btn-sm" type="button" onClick={look}
+            disabled={looking || !handle.trim()}
+          >
+            {looking ? 'Looking…' : 'Who is this?'}
+          </button>
+
+          {/* Said before the request goes, so somebody can tell a mistyped
+              handle from a person who is not here — which is the whole
+              complaint this answers. */}
+          {who && who.found && (
+            <p className="alert alert-success conn-found">
+              <strong>{who.name}</strong> — @{who.handle}
+              {who.self && ' — that is you.'}
+              {who.status === 'accepted' && ' — you are already connected.'}
+              {who.status === 'pending' && ' — there is already a request between you.'}
+            </p>
+          )}
+          {who && !who.found && (
+            <p className="hint">
+              Nobody by that handle. Either it is mistyped, they are not on Kairos,
+              or they have chosen not to be found this way.
+            </p>
+          )}
         </div>
         <div className="field">
           <label htmlFor="conn-note">A line of context (optional)</label>

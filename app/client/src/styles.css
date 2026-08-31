@@ -880,10 +880,23 @@ textarea { resize: vertical; min-height: 70px; }
 }
 
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* STUCK TO THE TOP, and Back is the reason. Back lives in this header, and a
+   header that scrolls away means a thread with two hundred messages hides the
+   way out at the very top — so leaving required scrolling the whole
+   conversation first, which is the one thing somebody in a long thread is
+   least willing to do. The title and the register toggle come with it, which
+   is the right answer for the same reason: what page am I on, and what am I
+   looking at, are questions that do not stop mattering halfway down.
+
+   z-index above the page but below the floating dock and the nav scrim, so it
+   does not sit on top of the controls that are deliberately in front. */
 .app-header {
   display: flex; align-items: center; gap: 14px;
   padding: 18px 28px; border-bottom: 1px solid var(--border);
   background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 .app-header-title { flex: 1; min-width: 0; }
 .app-header h1 { font-size: 1.25rem; margin: 0; }
@@ -3460,3 +3473,6 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .movement-line.is-missed { border-color: var(--warn); }
 
 .movement-days { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+.handle-discoverable { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+.conn-found { margin: 0.5rem 0 0; }

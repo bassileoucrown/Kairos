@@ -163,6 +163,48 @@ function client() {
     ok('the booking page still loads', r.s === 200, String(r.s));
     ok('and says plainly that there is nothing to book',
       (r.d.meetingTypes || []).length === 0, JSON.stringify(r.d.meetingTypes));
+    // --- Who is behind a handle ----------------------------------------------
+    head('An exact handle says who it belongs to:');
+    // WHY THIS IS A DELIBERATE REVERSAL of the neutral answer a request gives.
+    // Carried into lookup, neutrality made connections pointless: you typed a
+    // colleague's handle, got a shrug, and could not tell a typo from somebody
+    // who simply is not here. Nobody builds a network they cannot see the edge
+    // of. See routes/connections.js for the three things that keep the trade
+    // defensible.
+    const ngoziHandle = (await other('GET', '/auth/me')).d.user.slug;
+    r = await boss('GET', `/connections/lookup?handle=${ngoziHandle}`);
+    ok('a real handle resolves to a name', r.d.found === true && !!r.d.name,
+      JSON.stringify(r.d));
+    // What comes back is enough to answer "is this the right person" and
+    // nothing that would make the endpoint worth harvesting for itself.
+    ok('and nothing beyond a name and a handle',
+      !r.d.email && !r.d.id, JSON.stringify(r.d));
+
+    ok('a handle nobody holds resolves to nothing',
+      (await boss('GET', '/connections/lookup?handle=nobody-at-all-here')).d.found === false);
+    // Every negative answers identically, so the shape of the refusal does not
+    // become the fact the refusal was hiding.
+    ok('and so does a malformed one',
+      (await boss('GET', '/connections/lookup?handle=..')).d.found === false);
+
+    // --- And it can be turned off ---------------------------------------------
+    head('Unless the person would rather not be found:');
+    // THE DEFAULT IS ONLY HONEST IF IT CAN BE CHANGED. A default that cannot be
+    // turned off is a policy dressed as a default.
+    ok('discoverable is on to begin with',
+      (await other('GET', '/auth/me')).d.user.discoverable === true);
+    ok('and can be turned off',
+      (await other('PATCH', '/profile', { discoverable: false })).s === 200);
+    // THE ASSERTION THIS SECTION EXISTS FOR: opting out answers exactly as a
+    // stranger does, so the choice is real rather than cosmetic.
+    ok('after which they answer exactly as a stranger does',
+      (await boss('GET', `/connections/lookup?handle=${ngoziHandle}`)).d.found === false);
+    // POSITIVE CONTROL: turning it back on restores them, so the false above
+    // was the setting and not a lookup that had simply stopped working.
+    await other('PATCH', '/profile', { discoverable: true });
+    ok('and turning it back on restores them',
+      (await boss('GET', `/connections/lookup?handle=${ngoziHandle}`)).d.found === true);
+
   } finally {
     proc.kill();
   }

@@ -294,6 +294,20 @@ async function confirmWith(page, text) {
       return { threadId: thread.thread.id };
     });
 
+    // A thread with a real amount in it, so the next section can ask whether
+    // the way out is reachable from the foot of it.
+    await page.evaluate(async (threadId) => {
+      for (let i = 0; i < 60; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(`/api/threads/${threadId}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ body: `Line ${i} of a long conversation`, register: 'note' }),
+        });
+      }
+    }, room.threadId);
+
     await page.goto(`${BASE}/report`);
     await page.waitForSelector('.report-open', { timeout: 20000 });
     const openText = await page.locator('.report-open').innerText();
@@ -315,6 +329,30 @@ async function confirmWith(page, text) {
       () => /Ikoyi overspend/.test(document.body.innerText), null, { timeout: 20000 },
     );
     ok('and the record is on the screen', true);
+
+    // ---- Getting out of a long thread ---------------------------------------
+    head('Back is reachable without scrolling to the top of a long thread:');
+    // Reached by clicking through from the report, which is a client-side
+    // navigation — Back appears only when there is somewhere inside Kairos to
+    // go back TO, so a direct page load correctly shows none.
+    await page.waitForSelector('.app-back', { timeout: 20000 });
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForFunction(() => window.scrollY > 200, null, { timeout: 20000 });
+
+    // MEASURED, NOT ASSUMED. "The element exists" was true before this change
+    // too — it existed at the top of a page nobody had scrolled back up to.
+    // The question is whether it is on screen NOW, at the foot of the thread.
+    const back = await page.locator('.app-back').boundingBox();
+    const tall = page.viewportSize().height;
+    ok('the way out is on screen from the foot of the thread',
+      !!back && back.y >= 0 && back.y + back.height <= tall,
+      JSON.stringify({ back, viewport: tall }));
+
+    await page.click('.app-back');
+    await page.waitForFunction(
+      () => !/\/threads\//.test(window.location.pathname), null, { timeout: 20000 },
+    );
+    ok('and pressing it leaves the thread', true);
 
     // ---- Taking the report away ---------------------------------------------
     head('And the report can be taken away as a file:');

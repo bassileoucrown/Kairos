@@ -113,6 +113,51 @@ export default function HandleCard() {
           </div>
         </form>
       )}
+
+      <Discoverable />
+    </div>
+  );
+}
+
+/**
+ * Whether an exact handle resolves to your name for somebody not connected.
+ *
+ * ON BY DEFAULT, because a network where you cannot tell whether the person
+ * you are trying to reach is even here is not a network — somebody types a
+ * colleague's handle, gets nothing, and cannot tell a typo from an absence.
+ *
+ * AND THE SWITCH IS WHAT MAKES THAT HONEST. A default that cannot be turned
+ * off is not a default, it is a policy dressed as one. Off puts you back to
+ * answering exactly as a stranger does.
+ */
+function Discoverable() {
+  const { user, updateUser } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const on = user?.discoverable !== false;
+
+  async function toggle() {
+    setSaving(true);
+    setError('');
+    try {
+      const { user: updated } = await api.patch('/profile', { discoverable: !on });
+      updateUser(updated);
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="handle-discoverable">
+      {error && <div className="alert alert-error">{error}</div>}
+      <p className="hint">
+        {on
+          ? 'Somebody who types your exact handle can see your name, so they know they have '
+            + 'the right person before asking to connect. There is still no directory and no search.'
+          : 'Your handle resolves to nothing for anyone you are not connected to. They cannot '
+            + 'tell whether you are on Kairos at all.'}
+      </p>
+      <button className="btn btn-sm" type="button" onClick={toggle} disabled={saving}>
+        {saving ? 'Saving…' : on ? 'Stop being findable by handle' : 'Let people find me by handle'}
+      </button>
     </div>
   );
 }

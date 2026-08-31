@@ -29,6 +29,76 @@ router.get('/', async (req, res) => {
   res.json(await listConnections(req.user.id));
 });
 
+// A HARDER LIMIT THAN A REQUEST, deliberately. A request costs the sender
+// something — the other person sees it and can decline — so twenty an hour is
+// self-limiting. A lookup costs nothing and returns a fact, which is exactly
+// the shape somebody automates. Thirty an hour is generous for a person
+// typing a colleague's name from a signature and useless for walking a list.
+const lookupLimiter = limit({
+  limit: 30,
+  windowMs: 60 * 60 * 1000,
+  keys: (req) => [`look:${req.user.id}`, `look-ip:${clientIp(req)}`],
+  message: 'Too many lookups. Try again later.',
+});
+
+/**
+ * Who is behind an exact handle, for somebody not yet connected to them.
+ *
+ * THIS IS A DELIBERATE REVERSAL and it is worth saying so plainly, because the
+ * rest of this file argues the other way. Requests answer neutrally — "if that
+ * handle belongs to someone" — so that nobody can walk the alphabet and learn
+ * who is on Kairos, which for a product holding this market's data is itself
+ * worth knowing to the wrong person.
+ *
+ * But carried into lookup, that rule makes connections pointless. You type a
+ * colleague's handle, get a shrug, and have no idea whether you mistyped it or
+ * whether they are simply not here. Nobody builds a network they cannot see
+ * the edge of, and an office that cannot confirm its counterpart is on Kairos
+ * goes back to email.
+ *
+ * THREE THINGS MAKE THE TRADE DEFENSIBLE:
+ *
+ *   IT IS THE PERSON'S OWN CHOICE. Discoverable is on by default because the
+ *   network has to work, and any principal who would rather be invisible turns
+ *   it off — after which they answer exactly as a stranger does. The opt-out
+ *   is real, not cosmetic.
+ *
+ *   IT COSTS AN EXACT HANDLE. There is still no search and no directory. You
+ *   have to already know what to type.
+ *
+ *   IT IS RATE LIMITED HARDER THAN SENDING. See above.
+ *
+ * WHAT COMES BACK IS A NAME AND A HANDLE. Not an email, not a company, not a
+ * photograph — enough to answer "is this the right person" and nothing that
+ * would make the endpoint worth harvesting for its own sake.
+ */
+router.get('/lookup', lookupLimiter, async (req, res) => {
+  const handle = normalizeHandle(req.query?.handle);
+  // Every negative answers identically: malformed, absent, not discoverable,
+  // and yourself. Anything else turns the shape of the refusal into the fact
+  // the refusal was meant to hide.
+  const nobody = () => res.json({ found: false });
+
+  if (handleProblem(handle)) return nobody();
+  const person = await db.prepare(
+    'SELECT id, name, slug, discoverable FROM users WHERE slug = ?',
+  ).get(handle);
+  if (!person || !person.discoverable) return nobody();
+  if (person.id === req.user.id) {
+    return res.json({ found: true, self: true, name: person.name, handle: person.slug });
+  }
+
+  // Whether you are already connected, so the screen can say "you already know
+  // them" rather than offering to send a request that would be refused.
+  const existing = await findBetween(req.user.id, person.id);
+  return res.json({
+    found: true,
+    name: person.name,
+    handle: person.slug,
+    status: existing ? existing.status : null,
+  });
+});
+
 router.post('/', requestLimiter, async (req, res) => {
   const handle = normalizeHandle(req.body?.handle);
   const note = String(req.body?.note || '').trim().slice(0, 280);
