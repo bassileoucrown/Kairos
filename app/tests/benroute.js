@@ -251,6 +251,107 @@ function client() {
       (await pa('POST', `/movement/${bossId}/movements/${runId}/costs`,
         { kind: 'vibes', amountMinor: 100 })).s === 400);
 
+    // ---- The drivers ---------------------------------------------------------
+    head('The people who drive have papers too:');
+    r = await pa('POST', `/movement/${bossId}/drivers`,
+      { name: 'Sunday Eze', phone: '+2348030000001' });
+    const driverId = r.d.driver?.id;
+    ok('a driver goes on the books', r.s === 201 && !!driverId, `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
+
+    const gone = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+    const near = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+    ok('a licence can be recorded',
+      (await pa('POST', `/movement/${bossId}/drivers/${driverId}/papers`,
+        { kind: 'licence', reference: 'LIC-9', expiresOn: near })).s === 201);
+    ok('an invented kind is refused',
+      (await pa('POST', `/movement/${bossId}/drivers/${driverId}/papers`,
+        { kind: 'vibes', expiresOn: near })).s === 400);
+
+    r = await pa('GET', `/movement/${bossId}/drivers`);
+    let driver = (r.d.drivers || []).find((d) => d.id === driverId);
+    // THE SAME ENGINE AS A PASSPORT AND A CAR'S INSURANCE. A third idea of
+    // "nearly out of date" would drift from the other two.
+    ok('and is judged by the same expiry engine',
+      driver?.papers?.[0]?.state === 'expiring', JSON.stringify(driver?.papers));
+    // POSITIVE CONTROL for the flag below: a driver with a valid licence is
+    // not flagged, so the flag means something when it appears.
+    ok('a driver whose papers are current is not flagged', driver?.lapsed === false,
+      String(driver?.lapsed));
+
+    await pa('POST', `/movement/${bossId}/drivers/${driverId}/papers`,
+      { kind: 'permit', reference: 'P-1', expiresOn: gone });
+    driver = ((await pa('GET', `/movement/${bossId}/drivers`)).d.drivers || [])
+      .find((d) => d.id === driverId);
+    ok('one with a lapsed paper is', driver?.lapsed === true, String(driver?.lapsed));
+
+    // It reaches the day sheet, where a passport's expiry already goes.
+    const today = await pa('GET', `/today/${bossId}`);
+    ok('and it turns up on Today',
+      (today.d.needsYou?.driversLapsed || []).some((d) => d.id === driverId),
+      JSON.stringify(today.d.needsYou?.driversLapsed));
+
+    // Putting a driver on a journey copies their details rather than joining,
+    // so the record survives them leaving the office.
+    r = await pa('POST', `/movement/${bossId}/movements/${runId}/people`,
+      { role: 'driver', driverId });
+    ok('a movement can take a driver from the roster', r.s === 201, String(r.s));
+    ok('and their name comes with them',
+      (r.d.movement.people || []).some((x) => x.name === 'Sunday Eze'),
+      JSON.stringify(r.d.movement.people));
+    ok('a driver from another office is refused',
+      (await pa('POST', `/movement/${bossId}/movements/${runId}/people`,
+        { role: 'driver', driverId: 'nobody' })).s === 400);
+
+    // ---- A journey that repeats ----------------------------------------------
+    head('A journey that repeats is laid down, not retyped:');
+    r = await pa('POST', `/movement/${bossId}/series`, {
+      title: 'The school run', departsFrom: 'Ikoyi', destination: 'Grange',
+      timeOfDay: '06:40', days: [1, 2, 3, 4, 5], expectedMinutes: 35,
+    });
+    const seriesId = r.d.seriesId;
+    ok('a pattern lays down four weeks of journeys', r.s === 201 && r.d.made >= 18,
+      `${r.s} ${JSON.stringify(r.d)}`);
+    ok('a pattern with no days is refused',
+      (await pa('POST', `/movement/${bossId}/series`,
+        { title: 'x', timeOfDay: '06:40', days: [] })).s === 400);
+    ok('and one with no time',
+      (await pa('POST', `/movement/${bossId}/series`,
+        { title: 'x', days: [1], timeOfDay: 'soon' })).s === 400);
+
+    // Run twice, and the week does not double.
+    const before2 = (await db.prepare(
+      'SELECT COUNT(*) AS n FROM movements WHERE series_id = ?',
+    ).get(seriesId)).n;
+    await pa('POST', `/movement/${bossId}/series`, {
+      title: 'The school run', departsFrom: 'Ikoyi', destination: 'Grange',
+      timeOfDay: '06:40', days: [1, 2, 3, 4, 5], expectedMinutes: 35,
+    });
+    const sameSeries = (await db.prepare(
+      'SELECT COUNT(*) AS n FROM movements WHERE series_id = ?',
+    ).get(seriesId)).n;
+    ok('laying the same pattern again does not double it',
+      Number(sameSeries) === Number(before2), `${before2} → ${sameSeries}`);
+
+    // Each occurrence is a real journey with its own access rule and its own
+    // arrival — not a rule evaluated at read time.
+    const one = await db.prepare(
+      'SELECT * FROM movements WHERE series_id = ? ORDER BY departs_at LIMIT 1',
+    ).get(seriesId);
+    ok('each occurrence is a real journey', !!one?.id);
+    ok('with its own expected arrival', one.expected_minutes === 35, String(one.expected_minutes));
+    ok('and the Chief of Staff sees none of them',
+      (await cos('GET', `/movement/${bossId}/movements/${one.id}`)).s === 404);
+
+    // Stopping the pattern leaves the past alone.
+    await db.prepare('UPDATE movements SET arrived_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), one.id);
+    r = await pa('DELETE', `/movement/${bossId}/series/${seriesId}`);
+    ok('stopping it removes what has not happened', r.d.removed > 0, JSON.stringify(r.d));
+    // THE ASSERTION THIS SECTION EXISTS FOR. A movement is a safety record and
+    // cancelling a pattern must never erase a journey that took place.
+    const kept = await db.prepare('SELECT id FROM movements WHERE id = ?').get(one.id);
+    ok('but never one that already happened', !!kept, JSON.stringify(kept));
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));

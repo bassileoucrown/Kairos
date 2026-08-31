@@ -6,6 +6,8 @@ const { requirePaAccess } = require('../lib/paAccess');
 const movement = require('../lib/movement');
 const { expiryState } = require('../lib/essentials');
 const enRoute = require('../lib/enRoute');
+const drivers = require('../lib/drivers');
+const series = require('../lib/movementSeries');
 const { knock } = require('../lib/knock');
 
 // The office's cars, and the journeys the principal is moved on.
@@ -238,16 +240,33 @@ router.post('/:ownerId/movements/:movementId/vehicles', requirePaAccess, loadMov
 
 router.post('/:ownerId/movements/:movementId/people', requirePaAccess, loadMovement,
   async (req, res) => requireFull(req, res, async () => {
-    const { role, name, phone } = req.body || {};
-    if (!String(name || '').trim()) return res.status(400).json({ error: 'Who is it?' });
+    const { role, name, phone, driverId } = req.body || {};
     if (role && !movement.PERSON_ROLES.has(role)) {
       return res.status(400).json({ error: 'That is not a role on a movement.' });
     }
+
+    // FROM THE ROSTER, OR TYPED. Choosing a driver copies their name and
+    // number onto the journey rather than joining at read time — the same
+    // decision the plate gets, and for the same reason: a driver can leave the
+    // office and the record still has to say who drove.
+    let who = String(name || '').trim();
+    let ring = String(phone || '').trim();
+    let fromRoster = null;
+    if (driverId) {
+      const d = await db.prepare('SELECT * FROM drivers WHERE id = ? AND owner_id = ?')
+        .get(driverId, req.principal.id);
+      if (!d) return res.status(400).json({ error: 'That driver is not in the roster.' });
+      who = who || d.name;
+      ring = ring || d.phone;
+      fromRoster = d.id;
+    }
+    if (!who) return res.status(400).json({ error: 'Who is it?' });
+
     await db.prepare(`
-      INSERT INTO movement_people (id, movement_id, role, name, phone, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO movement_people (id, movement_id, role, name, phone, driver_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), req.movement.id, role || 'driver',
-      String(name).trim(), String(phone || '').trim(), new Date().toISOString());
+      who, ring, fromRoster, new Date().toISOString());
     res.status(201).json({ movement: await movement.viewFor(req.movement.id, req.user.id) });
   }));
 
@@ -377,5 +396,89 @@ router.post('/:ownerId/movements/:movementId/costs', requirePaAccess, loadMoveme
     if (!result.ok) return res.status(result.status).json({ error: result.error });
     res.status(201).json({ costs: await enRoute.costsFor(req.movement.id) });
   }));
+
+// --- The drivers ----------------------------------------------------------------
+//
+// Under requirePaAccess like the fleet, and deliberately NOT behind the
+// movement gate. Which drivers an office employs and whether their licences
+// are current is ordinary office information; it is where they are TAKING
+// somebody that is the safety record.
+
+router.get('/:ownerId/drivers', requirePaAccess, async (req, res) => {
+  res.json({ drivers: await drivers.list(req.principal.id, { archived: req.query.archived === '1' }) });
+});
+
+router.post('/:ownerId/drivers', requirePaAccess, async (req, res) => {
+  const result = await drivers.create(req.principal.id, req.body || {});
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ driver: result.driver });
+});
+
+router.post('/:ownerId/drivers/:driverId/papers', requirePaAccess, async (req, res) => {
+  const own = await db.prepare('SELECT id FROM drivers WHERE id = ? AND owner_id = ?')
+    .get(req.params.driverId, req.principal.id);
+  if (!own) return res.status(404).json({ error: 'Not found.' });
+  const result = await drivers.addPaper(req.params.driverId, req.body || {});
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ ok: true });
+});
+
+router.post('/:ownerId/drivers/:driverId/archive', requirePaAccess, async (req, res) => {
+  const own = await db.prepare('SELECT id FROM drivers WHERE id = ? AND owner_id = ?')
+    .get(req.params.driverId, req.principal.id);
+  if (!own) return res.status(404).json({ error: 'Not found.' });
+  res.json({ archivedAt: await drivers.archive(req.params.driverId) });
+});
+
+// --- A journey that repeats -------------------------------------------------------
+
+/**
+ * Lay down a repeating journey.
+ *
+ * Each occurrence is a real movement, arranged by whoever set the pattern —
+ * so the access rule needs no special case: a repeating school run is visible
+ * to exactly the two people any single journey is.
+ */
+router.post('/:ownerId/series', requirePaAccess, async (req, res) => {
+  const { title, departsFrom, destination, timeOfDay, days, expectedMinutes, notes } = req.body || {};
+  if (!String(title || '').trim()) return res.status(400).json({ error: 'Give it a name.' });
+  const onDays = series.validDays(days);
+  if (!onDays) return res.status(400).json({ error: 'Which days does it run?' });
+  if (!/^\d{1,2}:\d{2}$/.test(String(timeOfDay || ''))) {
+    return res.status(400).json({ error: 'What time does it leave?' });
+  }
+
+  const seriesId = crypto.randomUUID();
+  const made = await series.generate({
+    seriesId,
+    owner: req.principal,
+    template: {
+      arranged_by: req.user.id,
+      title: String(title).trim(),
+      departs_from: String(departsFrom || '').trim(),
+      destination: String(destination || '').trim(),
+      buffer_minutes: 0,
+      notes: String(notes || '').trim(),
+      expected_minutes: Number.isInteger(expectedMinutes) && expectedMinutes > 0 ? expectedMinutes : 0,
+    },
+    days: onDays,
+    timeOfDay,
+  });
+  for (const m of made) await enRoute.planChecks(m);
+  res.status(201).json({ seriesId, made: made.length });
+});
+
+/**
+ * Stop a pattern.
+ *
+ * What has already happened stays, and so does anything under way — see
+ * lib/movementSeries.js. A count comes back rather than a bare ok, because
+ * "we removed nothing" and "we removed eleven" are different answers and the
+ * screen has to be able to say which.
+ */
+router.delete('/:ownerId/series/:seriesId', requirePaAccess, async (req, res) => {
+  const removed = await series.stop(req.params.seriesId, req.principal.id);
+  res.json({ removed });
+});
 
 module.exports = { router };

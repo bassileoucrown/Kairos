@@ -3458,3 +3458,5 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 
 .movement-enroute { margin-top: 1.5rem; }
 .movement-line.is-missed { border-color: var(--warn); }
+
+.movement-days { display: flex; gap: 0.35rem; flex-wrap: wrap; }

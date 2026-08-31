@@ -13,6 +13,7 @@ const { dueBand } = require('../lib/reminders');
 const { timezoneOn: tripTimezoneOn, tripOn } = require('../lib/trips');
 const pad = require('../lib/pad');
 const movement = require('../lib/movement');
+const drivers = require('../lib/drivers');
 const { roleLabel } = require('../lib/roles');
 
 const router = asyncRouter();
@@ -280,6 +281,13 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   // everything else because it is the only thing in this response that means
   // act now, and a screen has to be able to put it above the rest without
   // scanning a list to find it.
+  // A driver whose licence has run out is the fleet's version of an expired
+  // passport, and it belongs in the same place: on Today, before a checkpoint
+  // finds it. Ordinary office information, so it is not behind the movement
+  // gate — see lib/drivers.js.
+  const driversLapsed = (await drivers.lapsedFor(req.principal.id))
+    .map((d) => ({ id: d.id, name: d.name }));
+
   const movementsDuress = [];
   for (const m of movements) {
     const row = await db.prepare(
@@ -304,6 +312,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     + blockedStages.length + itineraryRequests.length + expiring.length
     + unconfirmedInstructions.length + padWaking.length + padYourTurn.length
     + movementsLate.length + movementsWrong.length + movementsDuress.length
+    + driversLapsed.length
     + invitesWaiting.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
@@ -333,7 +342,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
       // The absence of an arrival is the only thing in this product that might
       // matter within the hour, so it belongs beside the approvals rather than
       // on a page somebody has to think to open.
-      movementsLate, movementsWrong, movementsDuress,
+      movementsLate, movementsWrong, movementsDuress, driversLapsed,
       invitesWaiting: invitesWaiting.map((i) => ({
         token: i.token,
         ownerName: i.owner_name,

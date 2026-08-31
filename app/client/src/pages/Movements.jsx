@@ -42,6 +42,8 @@ const PAPER_KINDS = [
   ['permit', 'Permit'],
 ];
 
+const DAY_LABELS = [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun']];
+
 function label(pairs, key) {
   return (pairs.find(([k]) => k === key) || [null, key])[1];
 }
@@ -224,6 +226,154 @@ function Fleet({ ownerId }) {
             </button>
           </div>
           <Papers ownerId={ownerId} vehicle={v} onChanged={load} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+const DRIVER_PAPERS = [
+  ['licence', 'Licence'],
+  ['permit', 'Permit'],
+  ['medical', 'Medical'],
+  ['training', 'Training'],
+];
+
+// The people who drive, and their papers.
+//
+// THE CARS HAD PAPERS AND THE PEOPLE DID NOT. A driver used to be a name and a
+// number typed onto one journey and retyped onto the next, which meant their
+// licence expired somewhere nobody could see it. Same expiry engine as a
+// passport and a car's insurance — one idea of "nearly out of date", not three.
+function Drivers({ ownerId }) {
+  const [list, setList] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '' });
+  const [paperFor, setPaperFor] = useState(null);
+  const [paper, setPaper] = useState({ kind: 'licence', reference: '', expiresOn: '' });
+  const [error, setError] = useState('');
+
+  function load() {
+    return api.get(`/movement/${ownerId}/drivers`)
+      .then((d) => setList(d.drivers || []))
+      .catch((e) => setError(e.message));
+  }
+  useEffect(() => { load(); }, [ownerId]);
+
+  async function act(fn) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(e.message); }
+  }
+
+  if (!list) return <p className="hint">Loading the drivers…</p>;
+
+  return (
+    <div className="movement-fleet">
+      {error && <div className="alert alert-error">{error}</div>}
+      <p className="hint">
+        The people who drive. Their licences go on the same watch as a passport and a car&rsquo;s
+        insurance, so one running out turns up on Today rather than at a checkpoint.
+      </p>
+
+      {creating ? (
+        <form
+          className="card trip-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            act(async () => {
+              await api.post(`/movement/${ownerId}/drivers`, form);
+              setForm({ name: '', phone: '' });
+              setCreating(false);
+            });
+          }}
+        >
+          <div className="code-row">
+            <div className="field">
+              <label htmlFor="drv-name">Name</label>
+              <input
+                id="drv-name" type="text" required placeholder="Sunday Eze"
+                value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="drv-phone">Phone</label>
+              <input
+                id="drv-phone" type="text" placeholder="+234…"
+                value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="code-actions">
+            <button className="btn btn-primary btn-sm" type="submit">Add the driver</button>
+            <button className="btn btn-sm" type="button" onClick={() => setCreating(false)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating(true)}>
+          Add a driver
+        </button>
+      )}
+
+      {list.length === 0 && !creating && (
+        <div className="empty-state">No drivers on the books yet.</div>
+      )}
+
+      {list.map((d) => (
+        <div className="card movement-vehicle" key={d.id}>
+          <div className="movement-vehicle-head">
+            <div>
+              <strong>{d.name}</strong>
+              {/* Said once, by the server, rather than worked out here from the
+                  list of papers below — three screens want this answer. */}
+              {d.lapsed && <span className="pill is-off">Should not be driving</span>}
+              <div className="meta">{d.phone || '—'}</div>
+            </div>
+            <button className="btn btn-sm" type="button"
+              onClick={() => act(() => api.post(`/movement/${ownerId}/drivers/${d.id}/archive`))}>
+              Put away
+            </button>
+          </div>
+          <div className="movement-papers">
+            {d.papers.length === 0 && (
+              <p className="hint">No papers recorded. A licence lapses quietly.</p>
+            )}
+            {d.papers.map((p) => (
+              <div className="movement-paper" key={p.id}>
+                <span>{label(DRIVER_PAPERS, p.kind)}{p.reference ? ` · ${p.reference}` : ''}</span>
+                <PaperPill paper={p} />
+              </div>
+            ))}
+            {paperFor === d.id ? (
+              <form
+                className="movement-inline"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  act(async () => {
+                    await api.post(`/movement/${ownerId}/drivers/${d.id}/papers`, paper);
+                    setPaper({ kind: 'licence', reference: '', expiresOn: '' });
+                    setPaperFor(null);
+                  });
+                }}
+              >
+                <select aria-label="Kind of paper" value={paper.kind}
+                  onChange={(e) => setPaper({ ...paper, kind: e.target.value })}>
+                  {DRIVER_PAPERS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+                <input type="text" placeholder="Reference" aria-label="Paper reference"
+                  value={paper.reference}
+                  onChange={(e) => setPaper({ ...paper, reference: e.target.value })} />
+                <input type="date" aria-label="Paper expires on" value={paper.expiresOn}
+                  onChange={(e) => setPaper({ ...paper, expiresOn: e.target.value })} />
+                <button className="btn btn-primary btn-sm" type="submit">Record</button>
+                <button className="btn btn-sm" type="button" onClick={() => setPaperFor(null)}>Cancel</button>
+              </form>
+            ) : (
+              <button className="btn btn-sm" type="button" onClick={() => setPaperFor(d.id)}>
+                Record a paper
+              </button>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -503,8 +653,9 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
   const [m, setM] = useState(null);
   const [error, setError] = useState('');
   const [cars, setCars] = useState([]);
+  const [roster, setRoster] = useState([]);
   const [vForm, setVForm] = useState({ vehicleId: '', role: 'principal', plate: '' });
-  const [pForm, setPForm] = useState({ role: 'driver', name: '', phone: '' });
+  const [pForm, setPForm] = useState({ role: 'driver', name: '', phone: '', driverId: '' });
 
   function load() {
     return api.get(`/movement/${ownerId}/movements/${movementId}`)
@@ -514,6 +665,7 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
   useEffect(() => {
     load();
     api.get(`/movement/${ownerId}/vehicles`).then((d) => setCars(d.vehicles || [])).catch(() => {});
+    api.get(`/movement/${ownerId}/drivers`).then((d) => setRoster(d.drivers || [])).catch(() => {});
   }, [ownerId, movementId]);
 
   async function act(fn) {
@@ -634,7 +786,7 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
           onSubmit={(e) => {
             e.preventDefault();
             act(() => api.post(`/movement/${ownerId}/movements/${movementId}/people`, pForm));
-            setPForm({ role: 'driver', name: '', phone: '' });
+            setPForm({ role: 'driver', name: '', phone: '', driverId: '' });
           }}
         >
           <select
@@ -643,8 +795,22 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
           >
             {PERSON_ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
+          {/* From the roster, so their licence is watched — or typed, because
+              an office should not have to enrol somebody to record a one-off
+              lift. Choosing one copies the name and number onto the journey. */}
+          <select
+            aria-label="From the roster" value={pForm.driverId}
+            onChange={(e) => setPForm({ ...pForm, driverId: e.target.value })}
+          >
+            <option value="">Not from the roster</option>
+            {roster.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}{d.lapsed ? ' — papers lapsed' : ''}
+              </option>
+            ))}
+          </select>
           <input
-            type="text" required placeholder="Name" aria-label="Name"
+            type="text" placeholder="Name" aria-label="Name"
             value={pForm.name} onChange={(e) => setPForm({ ...pForm, name: e.target.value })}
           />
           <input
@@ -678,7 +844,13 @@ export default function Movements() {
   const [ownerId, setOwnerId] = useState(null);
   const [list, setList] = useState(null);
   const [openId, setOpenId] = useState(params.get('movement') || null);
+  const [made, setMade] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [repeating, setRepeating] = useState(false);
+  const [series, setSeries] = useState({
+    title: '', departsFrom: '', destination: '', timeOfDay: '06:40',
+    days: [1, 2, 3, 4, 5], expectedMinutes: '',
+  });
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     title: '', departsFrom: '', destination: '', departsAt: '', notes: '',
@@ -719,6 +891,27 @@ export default function Movements() {
     } catch (err) { setError(err.message); }
   }
 
+  async function createSeries(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      const d = await api.post(`/movement/${ownerId}/series`, {
+        ...series,
+        expectedMinutes: series.expectedMinutes
+          ? Number.parseInt(series.expectedMinutes, 10) : undefined,
+      });
+      setRepeating(false);
+      setSeries({
+        title: '', departsFrom: '', destination: '', timeOfDay: '06:40',
+        days: [1, 2, 3, 4, 5], expectedMinutes: '',
+      });
+      await load();
+      // Said as a number. "We made 20 journeys" and "we made none" look
+      // identical on a list that is already long.
+      setMade(d.made);
+    } catch (err) { setError(err.message); }
+  }
+
   function go(next) {
     const p = new URLSearchParams(params);
     p.set('tab', next);
@@ -735,12 +928,25 @@ export default function Movements() {
     <AppShell
       title="Movements"
       active="movements"
-      actions={tab === 'journeys' && !openId && !creating
-        ? <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating(true)}>Arrange a journey</button>
+      actions={tab === 'journeys' && !openId && !creating && !repeating
+        ? (
+          <>
+            <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating(true)}>
+              Arrange a journey
+            </button>
+            <button className="btn btn-sm" type="button" onClick={() => setRepeating(true)}>
+              One that repeats
+            </button>
+          </>
+        )
         : null}
     >
       <Tabs
-        tabs={[{ id: 'journeys', label: 'Journeys' }, { id: 'fleet', label: 'The cars' }]}
+        tabs={[
+          { id: 'journeys', label: 'Journeys' },
+          { id: 'fleet', label: 'The cars' },
+          { id: 'drivers', label: 'The drivers' },
+        ]}
         active={tab}
         onChange={go}
         label="Movements"
@@ -749,6 +955,7 @@ export default function Movements() {
       {error && <div className="alert alert-error">{error}</div>}
 
       {tab === 'fleet' && <Fleet ownerId={ownerId} />}
+      {tab === 'drivers' && <Drivers ownerId={ownerId} />}
 
       {tab === 'journeys' && (openId ? (
         <MovementDetail
@@ -764,6 +971,91 @@ export default function Movements() {
             Only you and whoever arranged it can see one — not the wider office — because an
             escort roster is a pattern of somebody&rsquo;s movements.
           </p>
+
+          {made !== null && (
+            <div className="alert alert-success">
+              {made === 0
+                ? 'Nothing was added — those days may already be laid out.'
+                : `${made} journeys laid down for the next four weeks.`}
+              {' '}
+              <button className="btn btn-sm" type="button" onClick={() => setMade(null)}>Right</button>
+            </div>
+          )}
+
+          {repeating && (
+            <form className="card trip-form" onSubmit={createSeries}>
+              <div className="field">
+                <label htmlFor="sr-title">What to call it</label>
+                <input
+                  id="sr-title" type="text" required placeholder="The school run"
+                  value={series.title}
+                  onChange={(e) => setSeries({ ...series, title: e.target.value })}
+                />
+              </div>
+              <div className="code-row">
+                <div className="field">
+                  <label htmlFor="sr-from">From</label>
+                  <input
+                    id="sr-from" type="text" placeholder="Ikoyi residence"
+                    value={series.departsFrom}
+                    onChange={(e) => setSeries({ ...series, departsFrom: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="sr-to">To</label>
+                  <input
+                    id="sr-to" type="text" placeholder="Grange School"
+                    value={series.destination}
+                    onChange={(e) => setSeries({ ...series, destination: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="sr-at">Leaving at</label>
+                  <input
+                    id="sr-at" type="time" required value={series.timeOfDay}
+                    onChange={(e) => setSeries({ ...series, timeOfDay: e.target.value })}
+                  />
+                  {/* A wall time in the principal's zone, not an instant —
+                      otherwise the school run drifts by an hour twice a year. */}
+                  <p className="hint">In the principal&rsquo;s own timezone.</p>
+                </div>
+                <div className="field">
+                  <label htmlFor="sr-mins">How long it takes</label>
+                  <input
+                    id="sr-mins" type="number" min="1" max="1440" placeholder="35"
+                    value={series.expectedMinutes}
+                    onChange={(e) => setSeries({ ...series, expectedMinutes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="field">
+                <label>Which days</label>
+                <div className="movement-days">
+                  {DAY_LABELS.map(([n, l]) => {
+                    const day = Number(n);
+                    const on = series.days.includes(day);
+                    return (
+                      <button
+                        key={n} type="button"
+                        className={`btn btn-sm${on ? ' btn-primary' : ''}`}
+                        aria-pressed={on}
+                        onClick={() => setSeries({
+                          ...series,
+                          days: on ? series.days.filter((d) => d !== day) : [...series.days, day],
+                        })}
+                      >
+                        {l}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="code-actions">
+                <button className="btn btn-primary btn-sm" type="submit">Lay it down</button>
+                <button className="btn btn-sm" type="button" onClick={() => setRepeating(false)}>Cancel</button>
+              </div>
+            </form>
+          )}
 
           {creating && (
             <form className="card trip-form" onSubmit={create}>

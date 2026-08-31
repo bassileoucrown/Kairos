@@ -338,6 +338,47 @@ async function onboard(p, name, email, role) {
       (await page.locator('.needs-card.is-duress').count()) === 1,
       await page.locator('.app-body').innerText().catch(() => ''));
 
+    // ---- The drivers, and a journey that repeats -----------------------------
+    head('The drivers are on the books, and a repeating run is laid down:');
+    await page.goto(`${BASE}/movements?tab=drivers`);
+    await page.waitForSelector('button:has-text("Add a driver")', { timeout: 20000 });
+    await page.click('button:has-text("Add a driver")');
+    await page.fill('#drv-name', 'Sunday Eze');
+    await page.fill('#drv-phone', '+2348030000001');
+    await page.click('button:has-text("Add the driver")');
+    await page.waitForSelector('.movement-vehicle:has-text("Sunday Eze")', { timeout: 20000 });
+    ok('a driver can be added by hand', true);
+
+    await page.click('.movement-vehicle button:has-text("Record a paper")');
+    await page.waitForSelector('select[aria-label="Kind of paper"]', { timeout: 20000 });
+    await page.selectOption('select[aria-label="Kind of paper"]', 'licence');
+    await page.fill('input[aria-label="Paper reference"]', 'LIC-9');
+    await page.fill('input[aria-label="Paper expires on"]', past);
+    await page.click('button:has-text("Record")');
+    await page.waitForSelector('.movement-paper', { timeout: 20000 });
+    const dText = await page.locator('.movement-vehicle:has-text("Sunday Eze")').innerText();
+    // The same verdict a passport gets, and the same words.
+    ok('a lapsed licence says so on the screen', /expired/i.test(dText), dText.slice(0, 200));
+    ok('and the driver is flagged as one who should not be driving',
+      /should not be driving/i.test(dText), dText.slice(0, 200));
+
+    await page.goto(`${BASE}/movements`);
+    await page.waitForSelector('button:has-text("One that repeats")', { timeout: 20000 });
+    await page.click('button:has-text("One that repeats")');
+    await page.fill('#sr-title', 'The school run');
+    await page.fill('#sr-from', 'Ikoyi residence');
+    await page.fill('#sr-to', 'Grange School');
+    await page.fill('#sr-mins', '35');
+    await page.click('button:has-text("Lay it down")');
+    await page.waitForSelector('.alert-success', { timeout: 20000 });
+    const laid = await page.locator('.alert-success').innerText();
+    // Said as a number: "we made 20" and "we made none" look identical on a
+    // list that is already long.
+    ok('the repeating run says how many journeys it laid down',
+      /\d+ journeys laid down/.test(laid), laid);
+    ok('and they are in the list',
+      (await page.locator('.movement-row:has-text("The school run")').count()) > 0);
+
     ok('nothing threw on the phone', phoneErrs.length === 0, phoneErrs.join(' | '));
     ok('nothing threw on the arranger\'s side', errs.length === 0, errs.join(' | '));
     ok('nor on the stand-in\'s', cosErrs.length === 0, cosErrs.join(' | '));
