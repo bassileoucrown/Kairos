@@ -96,12 +96,80 @@ function PersonCard({ person }) {
   );
 }
 
+// What the reader is actually deciding about on a Monday morning: not what
+// happened, but what is coming and what has been sitting untouched. The
+// backward half of this screen is a record; this half is the reason to read it.
+const NEGLECT_LABEL = {
+  task: 'Task', stage: 'Stage', record: 'Record', proposal: 'Waiting on you',
+};
+
+function WeekAhead({ ahead }) {
+  const due = ahead.tasksDue.length + ahead.moreTasksDue;
+  const stages = ahead.stagesDue.length + ahead.moreStagesDue;
+  return (
+    <div className="report-ahead">
+      <h3>
+        The week ahead
+        <span className="hint"> · {ahead.window.startDate} to {ahead.window.endDate}</span>
+      </h3>
+
+      <div className="report-tiles">
+        <div><strong>{ahead.appointments}</strong><span>appointment{ahead.appointments === 1 ? '' : 's'}</span></div>
+        <div><strong>{due}</strong><span>task{due === 1 ? '' : 's'} fall due</span></div>
+        <div><strong>{stages}</strong><span>stage{stages === 1 ? '' : 's'} fall due</span></div>
+      </div>
+
+      {ahead.trips.length > 0 && (
+        <p className="hint">
+          Away: {ahead.trips.map((t) => `${t.name} (${t.startsOn}–${t.endsOn})`).join(', ')}
+        </p>
+      )}
+      {ahead.expiring.length > 0 && (
+        <div className="alert alert-warning">
+          <strong>Lapsing this week:</strong>{' '}
+          {ahead.expiring.map((e) => `${e.label} (${e.expiresOn})`).join(', ')}
+        </div>
+      )}
+
+      {/* Each line carries WHY it is here. A list headed "needs attention"
+          that does not say why cannot be argued with, and the first thing a
+          reader does with a list they cannot argue with is stop reading it. */}
+      {ahead.neglected.items.length > 0 ? (
+        <>
+          <h4>
+            Needs attention
+            {ahead.neglected.total > ahead.neglected.items.length
+              && <span className="hint"> · showing {ahead.neglected.items.length} of {ahead.neglected.total}</span>}
+          </h4>
+          <ul className="report-open-list">
+            {ahead.neglected.items.map((n) => (
+              <li key={`${n.kind}-${n.id}`}>
+                <Link to={n.href}>
+                  <span className="pill">{NEGLECT_LABEL[n.kind] || n.kind}</span>{' '}{n.title}
+                </Link>
+                <span className="hint">{' — '}{n.why}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        // Said out loud. An empty section reads as a section that failed to
+        // load; this one is the good outcome and should look like it.
+        <p className="hint">Nothing is sitting untouched.</p>
+      )}
+    </div>
+  );
+}
+
 export default function Report() {
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [back, setBack] = useState(1);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  // Whose copy to download. Only offered to somebody who may see everyone —
+  // and the server ignores it for anybody else rather than trusting this.
+  const [who, setWho] = useState('');
 
   useEffect(() => { resolveActivePrincipal(user).then(setOwnerId); }, [user]);
 
@@ -117,6 +185,8 @@ export default function Report() {
 
   const open = data.stillOpen || {};
   const anythingOpen = open.approvalsWaiting || open.tasksOverdue || open.recordsOpen;
+  // Built once so the two links cannot drift into asking for different weeks.
+  const query = `?week=${back}${who ? `&person=${encodeURIComponent(who)}` : ''}`;
 
   return (
     <AppShell title="Weekly report">
@@ -141,6 +211,31 @@ export default function Report() {
             Later →
           </button>
         </div>
+      </div>
+
+      {/* PLAIN LINKS, not fetch-and-blob. The session is a cookie and the
+          server sends Content-Disposition, so the browser saves the file
+          itself — which also means it works on a phone, where a blob URL
+          built in JavaScript often does not. `download` is deliberately NOT
+          set: the server names the file, and letting the markup override it
+          would put the naming rule in two places. */}
+      <div className="report-download">
+        <span className="hint">Take it away:</span>
+        {data.canSeeEveryone && (
+          <select
+            aria-label="Whose report" value={who}
+            onChange={(e) => setWho(e.target.value)}
+          >
+            <option value="">Everyone</option>
+            {data.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+        <a className="btn btn-sm" href={`/api/report/${ownerId}/export${query}`}>
+          Document
+        </a>
+        <a className="btn btn-sm" href={`/api/report/${ownerId}/export${query}&format=csv`}>
+          Spreadsheet
+        </a>
       </div>
 
       {/* THE HALF THE PRINCIPAL IS ACTUALLY READING FOR. A list of things
@@ -190,6 +285,8 @@ export default function Report() {
           Nothing outstanding — no requests waiting, no work past its date.
         </div>
       )}
+
+      {data.ahead && <WeekAhead ahead={data.ahead} />}
 
       {data.scope === 'self' && (
         <p className="hint">

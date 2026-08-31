@@ -307,6 +307,36 @@ async function confirmWith(page, text) {
     );
     ok('and the record is on the screen', true);
 
+    // ---- Taking the report away ---------------------------------------------
+    head('And the report can be taken away as a file:');
+    await page.goto(`${BASE}/report`);
+    await page.waitForSelector('.report-download', { timeout: 20000 });
+    ok('the week ahead is on the screen',
+      (await page.locator('.report-ahead').count()) === 1);
+    ok('with what needs attention, or the fact that nothing does',
+      /Needs attention|Nothing is sitting untouched/.test(
+        await page.locator('.report-ahead').innerText()));
+
+    // A link is not a download. Chrome will happily navigate to a URL that
+    // returns an error page, and the assertion "the link is there" would pass
+    // for a broken route — so this waits for the browser to actually save a
+    // file and reads the name it was given.
+    const [file] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20000 }),
+      page.click('.report-download a:has-text("Document")'),
+    ]);
+    ok('clicking Document saves a file', !!file);
+    ok('named for the principal and the week',
+      /^kairos-.+-\d{4}-\d{2}-\d{2}\.html$/.test(file.suggestedFilename()),
+      file.suggestedFilename());
+
+    const [sheet] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20000 }),
+      page.click('.report-download a:has-text("Spreadsheet")'),
+    ]);
+    ok('and Spreadsheet saves a csv', /\.csv$/.test(sheet.suggestedFilename()),
+      sheet.suggestedFilename());
+
     ok('nothing threw while doing any of it', errs.length === 0, errs.join(' | '));
 
   } catch (err) {
