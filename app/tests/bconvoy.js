@@ -237,6 +237,37 @@ async function onboard(p, name, email, role) {
     ok('after which the journey is gone from their list',
       (await cos.locator('.movement-row').count()) === 0);
 
+    // ---- The alarm, on the day sheet ----------------------------------------
+    head('And a journey nobody confirmed arrived reaches the day sheet:');
+    // A journey that departed three hours ago and should have taken 45
+    // minutes. Built through the API because this section is about whether the
+    // ALARM is reachable, not about the form, which is exercised above.
+    await page.evaluate(async (owner) => {
+      await fetch(`/api/movement/${owner}/movements`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'To the airport',
+          departsFrom: 'Ikoyi', destination: 'MMIA',
+          departsAt: new Date(Date.now() - 3 * 3600000).toISOString(),
+          expectedMinutes: 45,
+        }),
+      });
+    }, await page.evaluate(async () => (await (await fetch('/api/auth/me')).json()).user.id));
+
+    await page.goto(`${BASE}/today`);
+    await page.waitForSelector('.needs-card', { timeout: 20000 });
+    const urgent = await page.locator('.needs-card:has-text("No arrival yet")');
+    ok('the missing arrival is on Today', (await urgent.count()) === 1,
+      await page.locator('.app-body').innerText().catch(() => ''));
+    const alarm = await urgent.innerText();
+    ok('and says where they should have been', /MMIA/.test(alarm), alarm);
+    ok('and how late', /minutes ago/.test(alarm), alarm);
+    // A card with no way out of it is a card that tells somebody they have a
+    // problem and leaves them to go hunting for it.
+    ok('and leads to the journey',
+      (await urgent.locator('a[href="/movements"]').count()) === 1);
+
     ok('nothing threw on the arranger\'s side', errs.length === 0, errs.join(' | '));
     ok('nor on the stand-in\'s', cosErrs.length === 0, cosErrs.join(' | '));
 

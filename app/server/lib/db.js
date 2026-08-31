@@ -538,6 +538,21 @@ function ready() {
       // document and there is no way to work it out after the fact.
       await ensureColumn('booking_notes', 'drafted_by_ai', 'INTEGER NOT NULL DEFAULT 0');
 
+      // A movement that knows when it should have arrived, and what it is for.
+      //
+      // expected_minutes turns a departure into an expected arrival, which is
+      // what makes the ABSENCE of an arrival mean something. Without it a
+      // movement is a logbook; with it, it is a watch — see lib/movement.js.
+      //
+      // booking_id is deliberately not a foreign key with a cascade: a
+      // movement is a safety record and must outlive the appointment it was
+      // arranged for, exactly as it outlives its trip.
+      await ensureColumn('movements', 'expected_minutes', 'INTEGER NOT NULL DEFAULT 0');
+      await ensureColumn('movements', 'booking_id', 'TEXT');
+      // Stamped when somebody has been told the arrival is late, so the alarm
+      // fires once rather than at every sweep for the rest of the day.
+      await ensureColumn('movements', 'overdue_notified_at', 'TEXT');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');

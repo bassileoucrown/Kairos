@@ -67,6 +67,9 @@ function fullView(movement, { vehicles, people }) {
     destination: movement.destination,
     departsAt: movement.departs_at,
     bufferMinutes: movement.buffer_minutes,
+    expectedMinutes: movement.expected_minutes || 0,
+    expectedArrival: expectedArrival(movement),
+    lateByMinutes: lateBy(movement),
     arrivedAt: movement.arrived_at || null,
     notes: movement.notes,
     tripId: movement.trip_id || null,
@@ -114,6 +117,13 @@ function coordinationView(movement, { vehicles, people }) {
     destination: movement.destination,
     departsAt: movement.departs_at,
     bufferMinutes: movement.buffer_minutes,
+    // GIVEN, not withheld. A stand-in is covering this journey; when it should
+    // land and whether it is already late is the coordinating half, not the
+    // roster. Withholding it would leave somebody running a movement with no
+    // idea it had gone wrong.
+    expectedMinutes: movement.expected_minutes || 0,
+    expectedArrival: expectedArrival(movement),
+    lateByMinutes: lateBy(movement),
     arrivedAt: movement.arrived_at || null,
     vehicles: keptVehicles.map((v) => ({
       id: v.id, vehicleId: v.vehicle_id, role: v.role,
@@ -185,7 +195,135 @@ async function grant({ movement, granteeId, grantedBy, reason = '', now = Date.n
   return row;
 }
 
+// --- Who may see one, as SQL ---------------------------------------------------
+
+/**
+ * The same rule accessFor applies, written once as a WHERE fragment.
+ *
+ * THERE ARE NOW THREE CALLERS asking "which movements may this person see" —
+ * the list, the day sheet, and the overdue sweep — and each of them wants it
+ * in a query rather than by loading every row and filtering after. Written out
+ * three times it would be three rules, and the way that fails is silent: one
+ * of them quietly widens and a Chief of Staff sees an escort roster on Today.
+ *
+ * accessFor stays the authority for a SINGLE movement, and every caller here
+ * still passes its rows through viewFor. This fragment is an optimisation over
+ * that, so drift can only ever make a list NARROWER than the gate, never
+ * wider. That is the safe direction, and it is deliberate.
+ */
+function visibleWhere(alias = 'm') {
+  return `(
+    ${alias}.owner_id = ? OR ${alias}.arranged_by = ?
+    OR EXISTS (
+      SELECT 1 FROM movement_grants g
+       WHERE g.movement_id = ${alias}.id AND g.grantee_user_id = ?
+         AND g.revoked_at IS NULL AND g.expires_at > ?
+    )
+  )`;
+}
+const visibleParams = (viewerId, now = Date.now()) =>
+  [viewerId, viewerId, viewerId, new Date(now).toISOString()];
+
+// --- When it should have arrived ------------------------------------------------
+
+// How late is late. Lagos traffic does not run to a timetable, and an alarm
+// that fires the minute a journey overruns is an alarm somebody turns off. A
+// principal twenty minutes past where they should be is worth a question.
+const GRACE_MINUTES = 20;
+
+/** When this movement should be over, or null if nobody said how long it takes. */
+function expectedArrival(m) {
+  if (!m || !m.expected_minutes) return null;
+  const departs = Date.parse(m.departs_at);
+  if (Number.isNaN(departs)) return null;
+  return new Date(departs + m.expected_minutes * 60000).toISOString();
+}
+
+/**
+ * Minutes past the point where somebody should be asking, or null.
+ *
+ * THE ABSENCE IS THE SIGNAL, and this is the whole reason the module is worth
+ * having. An arrival that gets pressed is a logbook entry. An arrival that
+ * does NOT get pressed, on a journey that should have finished half an hour
+ * ago, is the only thing in this product that might matter within the hour.
+ *
+ * Returns null for a movement already marked arrived, one with no expected
+ * duration, and one still inside its grace — three different reasons to say
+ * nothing, all of which mean the same thing to the caller.
+ */
+function lateBy(m, now = Date.now()) {
+  if (!m || m.arrived_at) return null;
+  const due = expectedArrival(m);
+  if (!due) return null;
+  const past = now - (Date.parse(due) + GRACE_MINUTES * 60000);
+  return past > 0 ? Math.round(past / 60000) : null;
+}
+
+/**
+ * Has the appointment this movement serves moved out from under it?
+ *
+ * The commonest way a car goes wrong is not the car. It is the 8am moving to
+ * 9am on Thursday afternoon while the driver is still booked for 7. Nothing
+ * connected the two before, so nobody found out until somebody was standing
+ * outside a building.
+ *
+ * A tolerance rather than an equality: a movement is not "wrong" because it
+ * arrives eleven minutes early. It is wrong when it no longer gets the
+ * principal there.
+ */
+const FIT_TOLERANCE_MINUTES = 15;
+
+function fitsBooking(m, booking) {
+  if (!m || !booking) return { fits: true };
+  const arrive = expectedArrival(m);
+  const starts = Date.parse(booking.start_at);
+  if (!arrive || Number.isNaN(starts)) return { fits: true };
+  const slack = Math.round((starts - Date.parse(arrive)) / 60000);
+  if (slack >= -FIT_TOLERANCE_MINUTES) return { fits: true, slack };
+  return {
+    fits: false,
+    slack,
+    // Said in the words somebody would use, because a screen showing "-42" has
+    // told the reader they have a problem and left them to work out which.
+    why: `Arrives about ${Math.abs(slack)} minutes after it starts`,
+  };
+}
+
+/** Movements this viewer may see in a window, already shaped for them. */
+async function forWindow(ownerId, viewerId, startIso, endIso, now = Date.now()) {
+  const rows = await db.prepare(`
+    SELECT m.* FROM movements m
+     WHERE m.owner_id = ? AND m.departs_at >= ? AND m.departs_at < ?
+       AND ${visibleWhere('m')}
+     ORDER BY m.departs_at
+  `).all(ownerId, startIso, endIso, ...visibleParams(viewerId, now));
+
+  const out = [];
+  for (const row of rows) {
+    // Through viewFor, always. A day sheet that built its own shape would be a
+    // second answer to "what may this person see of this journey", and the
+    // coordination redaction is exactly the kind of thing that gets forgotten
+    // in the second copy.
+    const view = await viewFor(row.id, viewerId, now);
+    if (!view) continue;
+    const booking = row.booking_id
+      ? await db.prepare('SELECT id, start_at FROM bookings WHERE id = ?').get(row.booking_id)
+      : null;
+    out.push({
+      ...view,
+      expectedMinutes: row.expected_minutes || 0,
+      expectedArrival: expectedArrival(row),
+      lateByMinutes: lateBy(row, now),
+      bookingId: row.booking_id || null,
+      fit: fitsBooking(row, booking),
+    });
+  }
+  return out;
+}
+
 module.exports = {
   VEHICLE_ROLES, PERSON_ROLES, COORDINATION_ROLES, GRANT_HOURS,
+  GRACE_MINUTES, FIT_TOLERANCE_MINUTES,
   accessFor, viewFor, fullView, coordinationView, grant,
+  visibleWhere, visibleParams, expectedArrival, lateBy, fitsBooking, forWindow,
 };

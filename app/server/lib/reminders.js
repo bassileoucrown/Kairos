@@ -1,5 +1,6 @@
 const db = require('./db');
 const { knock } = require('./knock');
+const movement = require('./movement');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
 const { buildReport, weekWindow } = require('./weeklyReport');
@@ -413,12 +414,83 @@ function describe(counts) {
   return say.join('\n');
 }
 
+/**
+ * A principal who should have arrived and has not.
+ *
+ * THIS IS THE ONE ALARM IN THE PRODUCT THAT MIGHT MATTER WITHIN THE HOUR, and
+ * it is built on an ABSENCE, which is why it needed a sweep rather than a
+ * screen. Everything else here nudges about something that exists — a task, a
+ * document, a meeting. This one fires because a button was NOT pressed on a
+ * journey that should have finished half an hour ago.
+ *
+ * WHO IS TOLD IS THE MOVEMENT'S OWN RULE, NOT THE OFFICE'S. The principal and
+ * whoever arranged it. Not the wider office, and not a Chief of Staff — an
+ * alert saying "Adaeze has not arrived at the Lekki site" is a statement about
+ * a principal's whereabouts and their failure to reach a place, which is
+ * precisely the information lib/movement.js exists to keep narrow. A stand-in
+ * holding a live grant is told too, because they are the person covering.
+ *
+ * ONCE. overdue_notified_at is stamped before anybody is told, so a sweep
+ * every ten minutes does not become a message every ten minutes for the rest
+ * of the day.
+ */
+async function sweepMovements(now) {
+  const rows = await db.prepare(`
+    SELECT m.*, u.name AS owner_name
+      FROM movements m
+      JOIN users u ON u.id = m.owner_id
+     WHERE m.arrived_at IS NULL
+       AND m.overdue_notified_at IS NULL
+       AND m.expected_minutes > 0
+  `).all();
+
+  let sent = 0;
+  for (const m of rows) {
+    const late = movement.lateBy(m, now);
+    if (late === null) continue;
+
+    // Stamped FIRST. If telling somebody throws halfway through, the
+    // alternative is this row being retried on every sweep forever — and an
+    // alarm that cries wolf every ten minutes is an alarm somebody mutes,
+    // which is worse than one that missed a person.
+    await db.prepare('UPDATE movements SET overdue_notified_at = ? WHERE id = ?')
+      .run(new Date(now).toISOString(), m.id);
+
+    const grantees = await db.prepare(`
+      SELECT DISTINCT grantee_user_id AS id FROM movement_grants
+       WHERE movement_id = ? AND revoked_at IS NULL AND expires_at > ?
+    `).all(m.id, new Date(now).toISOString());
+
+    const tell = new Set([m.owner_id, m.arranged_by, ...grantees.map((g) => g.id)]
+      .filter(Boolean));
+    for (const toUserId of tell) {
+      await knock({
+        toUserId,
+        ownerId: m.owner_id,
+        // Nobody is behind this — it is the app noticing a clock.
+        author: null,
+        subject: `No arrival yet: ${m.title}`,
+        line: toUserId === m.owner_id
+          ? `has not been marked arrived at ${m.destination || 'the destination'}, `
+            + `about ${late} minutes past when it should have.`
+          : `${m.owner_name} has not been marked arrived at `
+            + `${m.destination || 'the destination'}, about ${late} minutes late.`,
+        url: '/movements',
+        category: 'movement_overdue',
+      });
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
 async function runReminderSweep(now = Date.now()) {
   return {
     tasks: await sweepTasks(now),
     stages: await sweepStages(now),
     appointments: await sweepAppointments(now),
     essentials: await sweepEssentials(now),
+    movements: await sweepMovements(now),
     weeklyReports: await sweepWeeklyReports(),
   };
 }
@@ -434,7 +506,8 @@ async function startReminderSweep() {
 }
 
 module.exports = {
-  runReminderSweep, startReminderSweep, sweepWeeklyReports, dueBand, expiryBand, leadFor,
+  runReminderSweep, startReminderSweep, sweepWeeklyReports, sweepMovements,
+  dueBand, expiryBand, leadFor,
   LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, BOOKER_LEAD_MS,
   DOC_SOON_DAYS, DOC_URGENT_DAYS,
 };

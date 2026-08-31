@@ -498,6 +498,47 @@ export default function Today() {
             <p className="today-nothing">Nothing waiting on you. Genuinely.</p>
           )}
 
+          {/* NOBODY HAS SAID THEY ARRIVED. Above the invitations, and above
+              everything else in this column, because it is the only item here
+              that might matter within the hour — a principal half an hour past
+              where they should be, on a journey somebody arranged. Everything
+              else in this list waits until tomorrow.
+
+              Only ever visible to the two people entitled to the movement and
+              to a stand-in holding a live grant; the server decides that. See
+              lib/movement.js. */}
+          {(needsYou.movementsLate || []).map((m) => (
+            <div className="needs-card is-urgent" key={`late-${m.id}`}>
+              <div className="needs-kind">No arrival yet</div>
+              <div className="needs-title">{m.title}</div>
+              <div className="needs-meta">
+                Should have reached {m.destination || 'the destination'} about{' '}
+                {m.lateByMinutes} minutes ago.
+                {m.people?.length > 0 && ` Driver: ${m.people[0].name}`}
+                {m.people?.[0]?.phone ? ` · ${m.people[0].phone}` : ''}
+              </div>
+              <div className="needs-actions">
+                <Link className="btn btn-sm" to="/movements">Open the journey</Link>
+              </div>
+            </div>
+          ))}
+
+          {/* The car no longer gets them there. The commonest way a movement
+              goes wrong is not the car — it is the meeting moving while the
+              driver stays booked for the old time. */}
+          {(needsYou.movementsWrong || []).map((m) => (
+            <div className="needs-card" key={`fit-${m.id}`}>
+              <div className="needs-kind">The car no longer fits</div>
+              <div className="needs-title">{m.title}</div>
+              <div className="needs-meta">
+                {m.fit?.why}. The meeting it was arranged for has moved.
+              </div>
+              <div className="needs-actions">
+                <Link className="btn btn-sm" to="/movements">Fix the journey</Link>
+              </div>
+            </div>
+          ))}
+
           {/* Somebody has asked you to work for them. Top of the column
               because nothing else here works until it is answered: until an
               invite is accepted there is no link between the two accounts at

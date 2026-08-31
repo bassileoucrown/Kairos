@@ -256,6 +256,85 @@ function client() {
     ok('after which the room is shut again',
       (await cos('GET', `/movement/${bossId}/movements/${moveId}`)).s === 404);
 
+    // ---- The arrival that did not happen -------------------------------------
+    head('A journey that should have finished, and nobody said it did:');
+    const { runReminderSweep } = require(`${ROOT}/app/server/lib/reminders`);
+
+    // A journey with no expected duration is a logbook entry: it can be late
+    // forever and nothing should fire, because nobody ever said when it was
+    // due. THE POSITIVE CONTROL for everything below.
+    let mk = await pa('POST', `/movement/${bossId}/movements`, {
+      title: 'The school run', departsFrom: 'Ikoyi', destination: 'Falomo',
+      departsAt: new Date(Date.now() - 4 * 3600000).toISOString(),
+    });
+    const openEnded = mk.d.movement.id;
+    ok('a journey with no expected time is still recorded', mk.s === 201, String(mk.s));
+    ok('and is never called late, because nobody said when it was due',
+      mk.d.movement.lateByMinutes === null, String(mk.d.movement.lateByMinutes));
+
+    // One that WAS given a duration, departed three hours ago, expected to
+    // take 45 minutes. Well past the grace.
+    mk = await pa('POST', `/movement/${bossId}/movements`, {
+      title: 'To the airport', departsFrom: 'Ikoyi', destination: 'MMIA',
+      departsAt: new Date(Date.now() - 3 * 3600000).toISOString(),
+      expectedMinutes: 45,
+    });
+    const lateId = mk.d.movement.id;
+    ok('one with an expected time knows when it should have landed',
+      !!mk.d.movement.expectedArrival, JSON.stringify(mk.d.movement).slice(0, 200));
+    ok('and says how late it is', mk.d.movement.lateByMinutes > 100,
+      String(mk.d.movement.lateByMinutes));
+
+    const swept = await runReminderSweep();
+    ok('the sweep raises it', swept.movements > 0, JSON.stringify(swept));
+
+    // WHO WAS TOLD is the movement's rule, not the office's. An alert saying
+    // the principal has not arrived somewhere is a statement about their
+    // whereabouts, which is exactly what the gate protects.
+    // Read from the emails table, which is where knock leaves its trail — it
+    // sends mail and pushes, and the mail is recorded whether or not a
+    // provider is configured. See lib/email.js.
+    const told = await require(`${ROOT}/app/server/lib/db`).prepare(
+      "SELECT to_email FROM emails WHERE category = 'movement_overdue'",
+    ).all();
+    const toldTo = new Set(told.map((t) => t.to_email));
+    ok('the principal is told', toldTo.has(`ada${ID}@x.com`), JSON.stringify([...toldTo]));
+    ok('and whoever arranged it', toldTo.has(`ngozi${ID}@x.com`), JSON.stringify([...toldTo]));
+    // THE ASSERTION THIS SECTION EXISTS FOR. "Adaeze has not arrived at the
+    // airport" is a statement about a principal's whereabouts and their
+    // failure to reach a place, which is precisely what the gate protects.
+    ok('the Chief of Staff, who arranged nothing, is not',
+      !toldTo.has(`tunde${ID}@x.com`), JSON.stringify([...toldTo]));
+
+    // Once. A sweep every ten minutes must not become a message every ten
+    // minutes for the rest of the day.
+    const again = await runReminderSweep();
+    ok('and it is raised once, not at every sweep', again.movements === 0, JSON.stringify(again));
+
+    // Marking it arrived ends it.
+    await pa('POST', `/movement/${bossId}/movements/${lateId}/arrived`);
+    r = await pa('GET', `/movement/${bossId}/movements/${lateId}`);
+    ok('once somebody says they arrived it stops being late',
+      r.d.movement.lateByMinutes === null && !!r.d.movement.arrivedAt,
+      JSON.stringify({ l: r.d.movement.lateByMinutes, a: r.d.movement.arrivedAt }));
+
+    // ---- On the day sheet ----------------------------------------------------
+    head('And the day sheet knows about the car:');
+    const today = await pa('GET', `/today/${bossId}`);
+    const ids = (today.d.movements || []).map((m) => m.id);
+    ok('the arranger sees their journeys on Today',
+      ids.includes(openEnded), JSON.stringify(ids));
+    ok('and the principal does too',
+      ((await boss('GET', `/today/${bossId}`)).d.movements || []).some((m) => m.id === openEnded));
+    // THE SAME GATE AS EVERYWHERE ELSE. A day sheet that joined movements in
+    // without the rule would put an escort roster in front of the whole office.
+    ok('the Chief of Staff sees none of them on Today',
+      ((await cos('GET', `/today/${bossId}`)).d.movements || []).length === 0,
+      JSON.stringify((await cos('GET', `/today/${bossId}`)).d.movements));
+    // POSITIVE CONTROL: their Today works, it is just movement-free.
+    ok('though their Today is otherwise a working page',
+      (await cos('GET', `/today/${bossId}`)).s === 200);
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));

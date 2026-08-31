@@ -121,20 +121,16 @@ router.post('/:ownerId/vehicles/:vehicleId/archive', requirePaAccess, async (req
  * fetched in order to be thrown away.
  */
 router.get('/:ownerId/movements', requirePaAccess, async (req, res) => {
-  const now = new Date().toISOString();
+  // The visibility rule comes from lib/movement.js rather than being spelled
+  // out here. It used to be written out in this query, and there are now three
+  // callers asking the same question — this list, the day sheet, and the
+  // overdue sweep. Three copies is three rules, and the way that fails is a
+  // Chief of Staff seeing an escort roster on Today.
   const rows = await db.prepare(`
     SELECT m.* FROM movements m
-     WHERE m.owner_id = ?
-       AND (
-         m.owner_id = ? OR m.arranged_by = ?
-         OR EXISTS (
-           SELECT 1 FROM movement_grants g
-            WHERE g.movement_id = m.id AND g.grantee_user_id = ?
-              AND g.revoked_at IS NULL AND g.expires_at > ?
-         )
-       )
+     WHERE m.owner_id = ? AND ${movement.visibleWhere('m')}
      ORDER BY m.departs_at DESC LIMIT 100
-  `).all(req.principal.id, req.user.id, req.user.id, req.user.id, now);
+  `).all(req.principal.id, ...movement.visibleParams(req.user.id));
 
   const movements = [];
   for (const m of rows) movements.push(await movement.viewFor(m.id, req.user.id));
@@ -142,7 +138,8 @@ router.get('/:ownerId/movements', requirePaAccess, async (req, res) => {
 });
 
 router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
-  const { title, departsFrom, destination, departsAt, bufferMinutes, notes, tripId } = req.body || {};
+  const { title, departsFrom, destination, departsAt, bufferMinutes, notes, tripId,
+          expectedMinutes, bookingId } = req.body || {};
   if (!String(title || '').trim()) return res.status(400).json({ error: 'Give the movement a name.' });
   const when = new Date(departsAt);
   if (!departsAt || Number.isNaN(when.getTime())) {
@@ -161,15 +158,23 @@ router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
     destination: String(destination || '').trim(),
     departs_at: when.toISOString(),
     buffer_minutes: Number.isInteger(bufferMinutes) ? bufferMinutes : 0,
+    // How long the journey should take. Without it a movement is a logbook;
+    // with it, the absence of an arrival means something. See lib/movement.js.
+    expected_minutes: Number.isInteger(expectedMinutes) && expectedMinutes > 0 ? expectedMinutes : 0,
+    // The appointment it exists to get them to, so the two can be checked
+    // against each other when one of them moves.
+    booking_id: bookingId || null,
     notes: String(notes || '').trim(),
     created_at: new Date().toISOString(),
   };
   await db.prepare(`
     INSERT INTO movements (id, owner_id, arranged_by, trip_id, title, departs_from,
-                           destination, departs_at, buffer_minutes, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           destination, departs_at, buffer_minutes, notes,
+                           expected_minutes, booking_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(row.id, row.owner_id, row.arranged_by, row.trip_id, row.title, row.departs_from,
-    row.destination, row.departs_at, row.buffer_minutes, row.notes, row.created_at);
+    row.destination, row.departs_at, row.buffer_minutes, row.notes,
+    row.expected_minutes, row.booking_id, row.created_at);
   res.status(201).json({ movement: await movement.viewFor(row.id, req.user.id) });
 });
 

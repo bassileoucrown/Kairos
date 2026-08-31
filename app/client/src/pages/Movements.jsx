@@ -399,7 +399,16 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
         </div>
         {m.arrivedAt
           ? <p className="hint">Arrived {when(m.arrivedAt)}.</p>
-          : <p className="hint">Not marked arrived yet.</p>}
+          : m.lateByMinutes !== null && m.lateByMinutes !== undefined
+            ? (
+              <p className="alert alert-warning">
+                <strong>No arrival yet.</strong> Should have been there about{' '}
+                {m.lateByMinutes} minutes ago.
+              </p>
+            )
+            : m.expectedArrival
+              ? <p className="hint">Due to arrive {when(m.expectedArrival)}.</p>
+              : <p className="hint">Not marked arrived yet. No expected time was set.</p>}
         {/* Deliberately open to a stand-in too: they are the one most likely to
             be the person who knows. */}
         <button
@@ -508,6 +517,7 @@ export default function Movements() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     title: '', departsFrom: '', destination: '', departsAt: '', notes: '',
+    expectedMinutes: '',
   });
 
   useEffect(() => { resolveActivePrincipal(user).then(setOwnerId); }, [user]);
@@ -528,9 +538,17 @@ export default function Movements() {
         ...form,
         // The form collects local wall time; the server stores an instant.
         departsAt: form.departsAt ? new Date(form.departsAt).toISOString() : '',
+        // Sent as a number or not at all. An empty string would be stored as
+        // zero, which reads as "we know it takes no time" rather than "nobody
+        // said" — and zero switches the arrival watch off silently.
+        expectedMinutes: form.expectedMinutes
+          ? Number.parseInt(form.expectedMinutes, 10) : undefined,
       });
       setCreating(false);
-      setForm({ title: '', departsFrom: '', destination: '', departsAt: '', notes: '' });
+      setForm({
+        title: '', departsFrom: '', destination: '', departsAt: '', notes: '',
+        expectedMinutes: '',
+      });
       await load();
       setOpenId(d.movement.id);
     } catch (err) { setError(err.message); }
@@ -616,6 +634,20 @@ export default function Movements() {
                     onChange={(e) => setForm({ ...form, departsAt: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="field">
+                <label htmlFor="mv-mins">How long it should take</label>
+                <input
+                  id="mv-mins" type="number" min="1" max="1440" placeholder="45"
+                  value={form.expectedMinutes}
+                  onChange={(e) => setForm({ ...form, expectedMinutes: e.target.value })}
+                />
+                {/* Said plainly, because it is the field that turns this from a
+                    logbook into a watch and nobody would guess that. */}
+                <p className="hint">
+                  In minutes. Leave it blank and Kairos records the journey but cannot
+                  tell you when nobody has confirmed they arrived.
+                </p>
               </div>
               <div className="field">
                 <label htmlFor="mv-notes">Notes</label>

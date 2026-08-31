@@ -12,6 +12,7 @@ const { serializeInstruction } = require('../lib/household');
 const { dueBand } = require('../lib/reminders');
 const { timezoneOn: tripTimezoneOn, tripOn } = require('../lib/trips');
 const pad = require('../lib/pad');
+const movement = require('../lib/movement');
 const { roleLabel } = require('../lib/roles');
 
 const router = asyncRouter();
@@ -250,12 +251,40 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
      ORDER BY m.created_at DESC
   `).all(String(req.user.email || '').toLowerCase());
 
+  // GETTING THERE, not just being due there. A movement was reachable only
+  // from its own screen, which meant the day sheet showed an 8am across town
+  // and said nothing about the car — so the car being wrong was discovered by
+  // standing outside a building.
+  //
+  // SCOPED TO THE READER, and that scoping is the whole reason this is not a
+  // simple join. A movement is a safety record: the principal and whoever
+  // arranged it, plus a one-day stand-in. An assistant who arranged nothing
+  // sees nothing here, and a Chief of Staff who can otherwise see the whole
+  // office sees nothing either. See lib/movement.js.
+  //
+  // A GENEROUS WINDOW, THEN FILTERED BY DAY-IN-ZONE, exactly as buildDay does
+  // and for the same reason: "this calendar day in Lagos" is not a UTC range,
+  // and trying to write it as one is how an early-morning journey lands on
+  // yesterday.
+  const mFrom = new Date(Date.parse(`${todayKey}T00:00:00Z`) - 36 * 3600000).toISOString();
+  const mTo = new Date(Date.parse(`${todayKey}T00:00:00Z`) + 60 * 3600000).toISOString();
+  const inZone = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
+  const movements = (await movement.forWindow(req.principal.id, req.user.id, mFrom, mTo))
+    .filter((m) => inZone.format(new Date(m.departsAt)) === todayKey);
+  // Two things worth pulling out of the list rather than leaving the screen to
+  // scan for them: a journey nobody has confirmed arrived, and one that no
+  // longer gets them there in time.
+  const movementsLate = movements.filter((m) => m.lateByMinutes !== null);
+  const movementsWrong = movements.filter((m) => m.fit && m.fit.fits === false);
+
   const needsYouCount = approvals.length + recordsAwaiting.length + dueTasks.length
     + blockedStages.length + itineraryRequests.length + expiring.length
     + unconfirmedInstructions.length + padWaking.length + padYourTurn.length
+    + movementsLate.length + movementsWrong.length
     + invitesWaiting.length;
 
   const directLine = await directLineFor(req.principal.id, req.user.id);
+
 
   res.json({
     date: todayKey,
@@ -271,12 +300,17 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     viewerIsPrincipal,
     schedule,
     nextUp,
+    movements,
     needsYou: {
       approvals, recordsAwaiting, dueTasks, blockedStages, itineraryRequests,
       // Kept under the old name so an older client still shows something
       // sensible rather than an empty section during a rolling deploy.
       overdueTasks: dueTasks.filter((t) => t.band === 'overdue'),
       expiring, unconfirmedInstructions, padWaking, padYourTurn,
+      // The absence of an arrival is the only thing in this product that might
+      // matter within the hour, so it belongs beside the approvals rather than
+      // on a page somebody has to think to open.
+      movementsLate, movementsWrong,
       invitesWaiting: invitesWaiting.map((i) => ({
         token: i.token,
         ownerName: i.owner_name,
