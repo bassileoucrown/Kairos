@@ -26,6 +26,14 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  // Tracks that THIS text came from a draft, so the filed minute can say so.
+  // Cleared the moment the box is emptied, because a minute typed from scratch
+  // after discarding a draft was not drafted by anything.
+  const [fromDraft, setFromDraft] = useState(false);
+  const [draftedFrom, setDraftedFrom] = useState(null);
+  const [dictating, setDictating] = useState(false);
+  const [dictation, setDictation] = useState('');
 
   const base = `/pa/${ownerId}/bookings/${bookingId}`;
 
@@ -36,13 +44,45 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
   }
   useEffect(load, [ownerId, bookingId]);
 
+  // Asks for a draft. Writes nothing on the server — what comes back lands in
+  // the box below for a person to edit, and filing it is a separate act.
+  async function askForDraft() {
+    setError('');
+    setDrafting(true);
+    try {
+      const d = await api.post(`${base}/minutes/draft`);
+      setBody(d.draft);
+      setFromDraft(true);
+      setDraftedFrom(d.from);
+    } catch (err) {
+      // The server distinguishes "no model here" from "the model failed" from
+      // "you asked for something out of the vault", and each wants different
+      // words. Passing err.message through keeps all three.
+      setError(err.message);
+    } finally { setDrafting(false); }
+  }
+
+  async function saveDictation(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await api.post(`${base}/dictation`, { body: dictation });
+      setDictation('');
+      setDictating(false);
+      load();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
   async function file(e) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await api.post(`${base}/minutes`, { body });
+      await api.post(`${base}/minutes`, { body, draftedByAi: fromDraft });
       setBody('');
+      setFromDraft(false);
+      setDraftedFrom(null);
       load();
       onChanged?.();
     } catch (err) { setError(err.message); } finally { setBusy(false); }
@@ -74,17 +114,74 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
               {' · '}{timeLabelInZone(m.createdAt, timezone || 'UTC')}
             </span>
           </div>
+          {/* Said on the document itself, permanently. Whether a machine
+              wrote the first version of a minute somebody is relying on six
+              months later is a fact about that minute, not a detail of how it
+              was composed. */}
+          {m.draftedByAi && (
+            <span className="pill is-warn" title="Drafted by Kairos, edited and filed by a person">
+              AI-drafted
+            </span>
+          )}
           <div className="minute-body">{m.body}</div>
         </div>
       ))}
 
       {started ? (
+        <>
+        {/* THE ORDER MATTERS. Dictating comes first because it is what somebody
+            actually does — thirty seconds in the car, before any of it is
+            gone — and asking them to write the formal minute at that moment is
+            how meetings go unrecorded. */}
+        <div className="minute-tools">
+          {dictating ? (
+            <form className="minute-dictate" onSubmit={saveDictation}>
+              <textarea
+                aria-label="What happened, in your own words"
+                rows={3}
+                value={dictation}
+                onChange={(e) => setDictation(e.target.value)}
+                placeholder="He'll come back on the second tranche. Wants the audit first…"
+              />
+              <p className="hint">
+                Raw and unedited — material for the minutes, not the minutes themselves.
+              </p>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={busy || !dictation.trim()}>
+                Save it
+              </button>
+              <button className="btn btn-sm" type="button" onClick={() => setDictating(false)}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <button className="btn btn-sm" type="button" onClick={() => setDictating(true)}>
+              Say what happened
+            </button>
+          )}
+          <button className="btn btn-sm" type="button" onClick={askForDraft} disabled={drafting}>
+            {drafting ? 'Writing…' : 'Draft the minutes for me'}
+          </button>
+        </div>
+
         <form onSubmit={file}>
+          {/* What it was written FROM. A thin minute off two notes is not the
+              same as a thin minute off a bad model, and the person about to put
+              their name to it is entitled to know which. */}
+          {fromDraft && (
+            <p className="hint minute-drafted">
+              Drafted from {draftedFrom?.notes || 0} note{draftedFrom?.notes === 1 ? '' : 's'}
+              {draftedFrom?.dictation ? ' and what you said afterwards' : ''}.
+              {' '}Read it before you file it — it will be filed as yours, marked as AI-drafted.
+            </p>
+          )}
           <textarea
             aria-label="Minutes of this meeting"
-            rows={4}
+            rows={fromDraft ? 12 : 4}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => {
+              setBody(e.target.value);
+              if (!e.target.value.trim()) setFromDraft(false);
+            }}
             placeholder="What was agreed, what was asked for, what happens next…"
           />
           <p className="hint">
@@ -94,6 +191,7 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
             {busy ? 'Filing…' : 'File the minutes'}
           </button>
         </form>
+        </>
       ) : (
         <p className="hint">
           Minutes can be written once the meeting has started. Until then, an office

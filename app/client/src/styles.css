@@ -3379,3 +3379,14 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   line-height: 1.1;
 }
 .report-tiles span { color: var(--text-muted); font-size: 0.8rem; }
+
+/* ---- Minutes: dictate, draft, file ---- */
+
+.minute-tools {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.minute-dictate { flex: 1 1 100%; }
+.minute-drafted { margin: 0 0 0.35rem; }

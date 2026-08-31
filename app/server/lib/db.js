@@ -523,6 +523,21 @@ function ready() {
       await ensureColumn('bookings', 'counter_format', 'TEXT');
       await ensureColumn('bookings', 'counter_format_note', 'TEXT');
 
+      // Recording a meeting, which is never on by default and never silent.
+      // 'off' is both the default and the only default — see lib/minutes.js
+      // for why there is deliberately no 'auto' state. recording_by is kept so
+      // the meeting can say who turned it on, which is the question anybody
+      // asks afterwards.
+      await ensureColumn('bookings', 'recording_state', "TEXT NOT NULL DEFAULT 'off'");
+      await ensureColumn('bookings', 'recording_started_at', 'TEXT');
+      await ensureColumn('bookings', 'recording_by', 'TEXT');
+
+      // Whether a minute was drafted by a model before a person edited and
+      // filed it. Stored on the note rather than inferred, because six months
+      // later "did a machine write this" is a question about a specific
+      // document and there is no way to work it out after the fact.
+      await ensureColumn('booking_notes', 'drafted_by_ai', 'INTEGER NOT NULL DEFAULT 0');
+
       // Trips. An itinerary item belongs to a journey, and a travel leg needs
       // to say who is meeting the principal and how — see lib/trips.js.
       await ensureColumn('itinerary_items', 'trip_id', 'TEXT');

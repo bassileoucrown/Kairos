@@ -570,6 +570,33 @@ function client() {
     ok('but the minutes are still there to read',
       /second tranche/.test(page), page.slice(0, 300));
 
+    // WRITING IT UP, BY HAND, ON THE SCREEN. bminute proves the rules — that a
+    // draft writes nothing, that the vault stops it, that a recording never
+    // starts itself. Every one of those would pass with no controls on any
+    // page, which is the failure breach.js exists to catch.
+    ok('there is a way to say what happened without typing it up',
+      (await p.locator('button:has-text("Say what happened")').count()) === 1);
+    ok('and a way to ask for a draft',
+      (await p.locator('button:has-text("Draft the minutes for me")').count()) === 1);
+
+    await p.click('button:has-text("Say what happened")');
+    await p.waitForSelector('.minute-dictate textarea', { timeout: 20000 });
+    await p.fill('.minute-dictate textarea', 'He wants the audit before the tranche.');
+    await p.click('.minute-dictate button:has-text("Save it")');
+    await p.waitForFunction(
+      () => !document.querySelector('.minute-dictate'), null, { timeout: 20000 },
+    );
+    ok('a dictation can be saved from the screen', true);
+
+    // No key in this environment, so the honest outcome is the refusal — and
+    // the refusal has to REACH the person. A failure swallowed into an empty
+    // box teaches somebody the button does nothing and never says why.
+    await p.click('button:has-text("Draft the minutes for me")');
+    await p.waitForSelector('.booking-minutes .alert-error', { timeout: 30000 });
+    const refusal = await p.locator(".booking-minutes .alert-error").innerText();
+    ok('asking for a draft with no model says so out loud',
+      /language model/i.test(refusal), refusal.slice(0, 160));
+
     // ---- On a phone -------------------------------------------------------
     //
     // WHY THIS NEEDED ITS OWN PASS. blayout walks every screen at phone widths

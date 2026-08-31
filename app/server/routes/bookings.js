@@ -1,5 +1,6 @@
 const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
+const minuteHandlers = require('./minuteHandlers');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const history = require('../lib/bookingHistory');
@@ -170,20 +171,19 @@ router.post('/:id/notes', loadOwn, async (req, res) => {
   res.status(201).json({ note: result.note });
 });
 
-// A principal minuting their own meeting. Rarer than the delegated case below
-// — the whole point is an account written by whoever was in the room for
-// somebody who was not — but a principal who took the meeting alone and wants
-// it on the record should not have to ask an assistant to type it.
-router.post('/:id/minutes', loadOwn, async (req, res) => {
-  const result = await notes.minute({
-    booking: req.booking,
-    owner: req.user,
-    author: req.user,
-    body: req.body?.body,
-  });
-  if (!result.ok) return res.status(result.status).json({ error: result.error });
-  res.status(201).json({ note: result.note });
-});
+// A principal minuting their own meeting. Rarer than the delegated case — the
+// whole point is an account written by whoever was in the room for somebody
+// who was not — but a principal who took the meeting alone and wants it on the
+// record should not have to ask an assistant to type it.
+//
+// All four handlers are shared with the assistant's door in routes/pa.js. See
+// routes/minuteHandlers.js: the only difference between the two mounts is who
+// the owner is, and letting each router answer that separately is how they
+// drift.
+router.post('/:id/minutes', loadOwn, minuteHandlers.file(minuteHandlers.own));
+router.post('/:id/minutes/draft', loadOwn, minuteHandlers.draft(minuteHandlers.own));
+router.post('/:id/dictation', loadOwn, minuteHandlers.dictate(minuteHandlers.own));
+router.post('/:id/recording', loadOwn, minuteHandlers.recording(minuteHandlers.own));
 
 router.post('/:id/follow-up', loadOwn, async (req, res) => {
   const result = await notes.followUp({

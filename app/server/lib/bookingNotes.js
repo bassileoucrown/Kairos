@@ -20,7 +20,15 @@ const { knock } = require('./knock');
  */
 
 const VISIBILITIES = new Set(['office', 'shared']);
-const KINDS = new Set(['note', 'minute']);
+// note     — preparation, written before: what the principal needs walking in.
+// minute   — the account of what happened, written after, by whoever was there.
+// dictation— what somebody said into their phone walking out of the room.
+//
+// A DICTATION IS NOT A MINUTE and is deliberately its own kind. It is raw: a
+// half-sentence, a name mispronounced, "he'll come back to us on the second
+// thing". It is material FOR a minute, and filing it as one would put an
+// unedited ramble into the office's formal record of a meeting.
+const KINDS = new Set(['note', 'minute', 'dictation']);
 
 /** Everything about this appointment — both registers. Office eyes only. */
 async function forOffice(ownerId, bookingId) {
@@ -55,6 +63,10 @@ function serialize(n) {
     body: n.body,
     visibility: n.visibility || 'shared',
     kind: n.kind || 'note',
+    // Said on the note itself. Six months later "did a machine write this"
+    // is a question about one specific document, and there is no way to work
+    // it out after the fact if it was not recorded at the time.
+    draftedByAi: !!n.drafted_by_ai,
     // The booker has no account, so an absent author is the booker rather than
     // an unknown. Said as a name so no screen has to work it out.
     authorName: n.author_name || null,
@@ -63,7 +75,7 @@ function serialize(n) {
   };
 }
 
-async function add({ bookingId, ownerId, visibility, authorUserId = null, body, kind = 'note' }) {
+async function add({ bookingId, ownerId, visibility, authorUserId = null, body, kind = 'note', draftedByAi = false }) {
   const text = String(body || '').trim();
   if (!text) return { ok: false, status: 400, error: 'Write something first.' };
   if (!VISIBILITIES.has(visibility)) {
@@ -78,12 +90,14 @@ async function add({ bookingId, ownerId, visibility, authorUserId = null, body, 
   // be a minute handed to its subject through a link they can forward. Forced
   // here rather than validated, because the caller has no business having an
   // opinion about it.
-  const seenBy = kind === 'minute' ? 'office' : visibility;
+  const seenBy = kind === 'minute' || kind === 'dictation' ? 'office' : visibility;
   const id = crypto.randomUUID();
   await db.prepare(`
-    INSERT INTO booking_notes (id, booking_id, owner_id, visibility, kind, author_user_id, body, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, bookingId, ownerId, seenBy, kind, authorUserId, text.slice(0, 4000), new Date().toISOString());
+    INSERT INTO booking_notes
+      (id, booking_id, owner_id, visibility, kind, author_user_id, body, drafted_by_ai, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, bookingId, ownerId, seenBy, kind, authorUserId, text.slice(0, 4000),
+    draftedByAi ? 1 : 0, new Date().toISOString());
   const row = await db.prepare(`
     SELECT n.*, u.name AS author_name FROM booking_notes n
     LEFT JOIN users u ON u.id = n.author_user_id WHERE n.id = ?
@@ -162,7 +176,7 @@ async function followUp({ booking, owner, authorUserId, body }) {
  *
  * NEVER TO THE BOOKER. Enforced in add() rather than here; see the note there.
  */
-async function minute({ booking, owner, author, body }) {
+async function minute({ booking, owner, author, body, draftedByAi = false }) {
   if (Date.parse(booking.start_at) > Date.now()) {
     return {
       ok: false,
@@ -179,6 +193,7 @@ async function minute({ booking, owner, author, body }) {
     kind: 'minute',
     authorUserId: author.id,
     body,
+    draftedByAi,
   });
   if (!added.ok) return added;
 

@@ -19,6 +19,7 @@ const { getOpenSlots } = require('../lib/availability');
 const { logAccess } = require('./essentials');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const aiModel = require('../lib/aiModel');
+const minuteHandlers = require('./minuteHandlers');
 const history = require('../lib/bookingHistory');
 const { cancelBooking } = require('../lib/cancelBooking');
 const { rescheduleBooking, setDuration } = require('../lib/rescheduleBooking');
@@ -116,6 +117,13 @@ function serializeBooking(b) {
     usualFormat: b.location_type || null,
     usualFormatLabel: b.location_type ? formats.label(b.location_type) : null,
     formats: formats.offer(b.location_type),
+    // Whether this meeting is being recorded, said on the meeting itself.
+    // Somebody who was in the room is entitled to find out afterwards that it
+    // was taped and by whom — a consent notice shown only at the moment of
+    // pressing is a notice the recorded person never saw.
+    recordingState: b.recording_state || 'off',
+    recordingStartedAt: b.recording_started_at || null,
+    recordingBy: b.recording_by || null,
     createdAt: b.created_at,
   };
 }
@@ -561,16 +569,16 @@ router.post('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipa
 // principal was not, or was and was not writing. The principal is told — see
 // lib/bookingNotes.js — because minutes nobody is pointed at are minutes
 // nobody reads.
-router.post('/:ownerId/bookings/:bookingId/minutes', requirePaAccess, loadPrincipalBooking, async (req, res) => {
-  const result = await bookingNotes.minute({
-    booking: req.booking,
-    owner: req.principal,
-    author: req.user,
-    body: req.body?.body,
-  });
-  if (!result.ok) return res.status(result.status).json({ error: result.error });
-  res.status(201).json({ note: result.note });
-});
+// Shared with the principal's own door — see routes/minuteHandlers.js.
+const forThem = minuteHandlers.forPrincipal;
+router.post('/:ownerId/bookings/:bookingId/minutes',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.file(forThem));
+router.post('/:ownerId/bookings/:bookingId/minutes/draft',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.draft(forThem));
+router.post('/:ownerId/bookings/:bookingId/dictation',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.dictate(forThem));
+router.post('/:ownerId/bookings/:bookingId/recording',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.recording(forThem));
 
 router.post('/:ownerId/bookings/:bookingId/follow-up', requirePaAccess, loadPrincipalBooking, async (req, res) => {
   const result = await bookingNotes.followUp({

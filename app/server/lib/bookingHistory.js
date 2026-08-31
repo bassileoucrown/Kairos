@@ -77,6 +77,14 @@ function serialize(b) {
     // booker's choice no longer holds the booking, so the choices travel with
     // the row rather than being fetched a second time to draw one picker.
     formats: formats.offer(b.location_type),
+    // Whether this meeting is being recorded, and by whom. On the meeting
+    // itself rather than only on the button that starts it: a consent notice
+    // seen only at the moment of pressing is a notice the person being
+    // recorded never saw, and "was that meeting taped" is a question asked
+    // afterwards. See lib/minutes.js.
+    recordingState: b.recording_state || 'off',
+    recordingStartedAt: b.recording_started_at || null,
+    recordingBy: b.recording_by || null,
     hasBrief: !!b.has_brief,
     trailLength: Number(b.trail_length || 0),
     createdAt: b.created_at,
