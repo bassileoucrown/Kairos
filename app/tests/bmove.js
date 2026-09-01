@@ -263,9 +263,20 @@ function client() {
     // A journey with no expected duration is a logbook entry: it can be late
     // forever and nothing should fire, because nobody ever said when it was
     // due. THE POSITIVE CONTROL for everything below.
+    // ANCHORED TO THE DAY THE APP IS SHOWING, not to "four hours ago".
+    //
+    // This used to be Date.now() - 4h, which is on today's sheet for
+    // twenty-one hours out of twenty-four and on yesterday's for the other
+    // three. The suite passed every evening and failed just after midnight —
+    // and the failure said "the arranger cannot see their journeys", which is
+    // an alarming and completely false claim about the access rule this
+    // section exists to prove. A journey belongs to the day it departs on;
+    // the fixture now says which day that is instead of hoping.
+    const showing = (await pa('GET', `/today/${bossId}`)).d;
+    const middayToday = new Date(`${showing.date}T12:00:00Z`).toISOString();
     let mk = await pa('POST', `/movement/${bossId}/movements`, {
       title: 'The school run', departsFrom: 'Ikoyi', destination: 'Falomo',
-      departsAt: new Date(Date.now() - 4 * 3600000).toISOString(),
+      departsAt: middayToday,
     });
     const openEnded = mk.d.movement.id;
     ok('a journey with no expected time is still recorded', mk.s === 201, String(mk.s));
@@ -334,6 +345,39 @@ function client() {
     // POSITIVE CONTROL: their Today works, it is just movement-free.
     ok('though their Today is otherwise a working page',
       (await cos('GET', `/today/${bossId}`)).s === 200);
+
+    // ---- The car that has not come back ------------------------------------
+    head('A car that left last night and never arrived is still on Today:');
+    // WHY THIS IS ITS OWN ASSERTION. A journey belongs to the day it departs
+    // on, and the list above is right to be scoped that way. An unanswered
+    // "where are they" is not a diary entry: at half past midnight it is the
+    // most urgent thing the office has, and scoping it to the calendar day
+    // made it disappear at the stroke of twelve — the exact hour it matters.
+    //
+    // Departing twenty-two hours ago, so it is unambiguously yesterday in any
+    // zone, however late in the day this suite runs.
+    const overnight = (await pa('POST', `/movement/${bossId}/movements`, {
+      title: 'Back from Abeokuta', departsFrom: 'Abeokuta', destination: 'Ikoyi',
+      departsAt: new Date(Date.now() - 22 * 3600000).toISOString(),
+      expectedMinutes: 90,
+    })).d.movement.id;
+
+    let sheet = (await pa('GET', `/today/${bossId}`)).d;
+    ok('it is not on the day\'s journeys, because it is not today\'s journey',
+      !(sheet.movements || []).some((m) => m.id === overnight),
+      JSON.stringify((sheet.movements || []).map((m) => m.id)));
+    ok('but the office is still told nobody has confirmed the arrival',
+      (sheet.needsYou?.movementsLate || []).some((m) => m.id === overnight),
+      JSON.stringify(sheet.needsYou?.movementsLate));
+
+    // AND IT STOPS WHEN THE THING IS RESOLVED, not when the date changes.
+    // Without this the assertion above would pass just as well on a screen
+    // that never lets go of an alarm at all.
+    await pa('POST', `/movement/${bossId}/movements/${overnight}/arrived`);
+    sheet = (await pa('GET', `/today/${bossId}`)).d;
+    ok('and it goes the moment somebody says they got there',
+      !(sheet.needsYou?.movementsLate || []).some((m) => m.id === overnight),
+      JSON.stringify(sheet.needsYou?.movementsLate));
 
   } catch (err) {
     fails++;

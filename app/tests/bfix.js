@@ -233,9 +233,22 @@ function dayKey(offset) {
     // actually happened is that there is no appointment.
     ok('the appointment was booked', !!booked.booking?.id, JSON.stringify(booked).slice(0, 200));
 
+    // THE DAY IN THE PRINCIPAL'S ZONE, not the UTC prefix of the timestamp.
+    //
+    // Slicing the ISO string reads the day in UTC, and the itinerary reads it
+    // in the principal's own zone — so an appointment at 00:30 Lagos is the
+    // 4th to the app and the 3rd to this suite, and the assertions below fail
+    // saying the controls are missing when the day sheet is simply on another
+    // date. The endpoint says which zone it is working in; use it.
+    const zone = (await p.evaluate(async () => (await (await fetch('/api/today', {
+      credentials: 'include',
+    })).json()).timezone)) || 'UTC';
+    const bookedDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone })
+      .format(new Date(future.startAt));
+
     await p.goto(`${BASE}/itinerary`);
     await p.waitForSelector('input[aria-label="Day"]', { timeout: 20000 });
-    await p.fill('input[aria-label="Day"]', future.startAt.slice(0, 10));
+    await p.fill('input[aria-label="Day"]', bookedDay);
     await p.waitForFunction(
       // Case-insensitive: the pill is uppercased by CSS, so innerText returns
       // FROM A BOOKING and matching the source spelling tests the stylesheet.

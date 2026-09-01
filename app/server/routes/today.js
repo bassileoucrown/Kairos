@@ -270,12 +270,43 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
   const mFrom = new Date(Date.parse(`${todayKey}T00:00:00Z`) - 36 * 3600000).toISOString();
   const mTo = new Date(Date.parse(`${todayKey}T00:00:00Z`) + 60 * 3600000).toISOString();
   const inZone = new Intl.DateTimeFormat('en-CA', { timeZone: tz });
-  const movements = (await movement.forWindow(req.principal.id, req.user.id, mFrom, mTo))
+  const inWindow = await movement.forWindow(req.principal.id, req.user.id, mFrom, mTo);
+  const movements = inWindow
     .filter((m) => inZone.format(new Date(m.departsAt)) === todayKey);
-  // Two things worth pulling out of the list rather than leaving the screen to
-  // scan for them: a journey nobody has confirmed arrived, and one that no
-  // longer gets them there in time.
-  const movementsLate = movements.filter((m) => m.lateByMinutes !== null);
+
+  // AN OPEN ALARM IS NOT A DIARY ENTRY, and filtering both by calendar day
+  // treated them as the same thing.
+  //
+  // A journey belongs to the day it departs on: that is what the list above
+  // is, and a car that ran this morning has no business on tomorrow's sheet.
+  // But a car that left at 23:00 and has NOT confirmed arrival is not an entry
+  // in a diary — it is an unanswered question about where somebody is, and it
+  // is at its most urgent at half past midnight. Scoped to the day, it
+  // vanished off the screen at the stroke of twelve, which is precisely the
+  // hour it matters most. The same goes for a duress signal: somebody pressed
+  // it, nobody has cleared it, and midnight is not an answer.
+  //
+  // So the two alarms are drawn from the window rather than from the day, and
+  // they stop when the thing that raised them is resolved rather than when the
+  // date changes. lateBy() already returns null the moment an arrival is
+  // confirmed — see lib/movement.js — so "still open" is the same question,
+  // asked without the calendar in the way.
+  const ALARM_CARRY_MS = 24 * 3600000;
+  const carriedOver = inWindow.filter((m) => {
+    const departed = Date.parse(m.departsAt);
+    return departed <= Date.now() && Date.now() - departed <= ALARM_CARRY_MS;
+  });
+  const alarming = [
+    ...movements,
+    // Deduplicated: a journey that departed today is in both lists, and the
+    // count below is what puts a number on the rail.
+    ...carriedOver.filter((m) => !movements.some((d) => d.id === m.id)),
+  ];
+
+  const movementsLate = alarming.filter((m) => m.lateByMinutes !== null);
+  // FIT STAYS ON THE DAY, deliberately. "This car no longer gets you there in
+  // time" is a thing to fix before the journey runs; once it has run, it is
+  // history and not a task.
   const movementsWrong = movements.filter((m) => m.fit && m.fit.fits === false);
   // Somebody in a car has said something is wrong. Carried separately from
   // everything else because it is the only thing in this response that means
@@ -289,7 +320,9 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     .map((d) => ({ id: d.id, name: d.name }));
 
   const movementsDuress = [];
-  for (const m of movements) {
+  // Over the same carried-over set as the late alarm, and for the same reason:
+  // somebody pressed this and nobody has cleared it. Midnight is not an answer.
+  for (const m of alarming) {
     const row = await db.prepare(
       'SELECT duress_at, duress_note FROM movements WHERE id = ?',
     ).get(m.id);
