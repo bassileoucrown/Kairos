@@ -35,7 +35,7 @@ function shift(at, minutes) { return iso(new Date(at).getTime() + minutes * MS);
  */
 async function itemsFrom(ownerId, fromIso, windowHours = 36) {
   const until = iso(new Date(fromIso).getTime() + windowHours * 3600 * 1000);
-  return db.prepare(`
+  const items = await db.prepare(`
     SELECT i.*, hm.name AS staff_name, hm.job_title AS staff_title,
            hm.member_user_id AS staff_user_id, hm.status AS staff_status,
            b.booker_name, b.booker_email
@@ -46,6 +46,49 @@ async function itemsFrom(ownerId, fromIso, windowHours = 36) {
       AND i.start_at >= ? AND i.start_at <= ?
     ORDER BY i.start_at ASC
   `).all(ownerId, fromIso, until);
+
+  // APPOINTMENTS SOMEBODY BOOKED COUNT AS PART OF THE DAY.
+  //
+  // This read itinerary_items alone, which made the delay cascade blind to
+  // exactly the commitments a principal is least able to be late for. Somebody
+  // pressed "running 30 minutes late" on the morning and was told the day
+  // absorbed it — while the 4pm with the chairman, which is a booking and not
+  // an itinerary item, sat in the gap the cascade had just decided was empty.
+  // A cascade that cannot see half the day is worse than no cascade, because
+  // it is believed.
+  //
+  // AND THEY ARE ANCHORS. A booking is somebody else's time: moving it emails
+  // them and changes a commitment they made. So the cascade reports running
+  // into one as a conflict and stops there, rather than shunting it quietly —
+  // which is also what an assistant would say out loud. Moving it stays the
+  // deliberate act it already is, on the appointment or from the day sheet.
+  const mirrored = new Set(items.map((i) => i.booking_id).filter(Boolean));
+  const bookings = await db.prepare(`
+    SELECT * FROM bookings
+     WHERE owner_id = ? AND status = 'confirmed'
+       AND start_at >= ? AND start_at <= ?
+     ORDER BY start_at ASC
+  `).all(ownerId, fromIso, until);
+
+  const asItems = bookings
+    // One that has been copied onto the itinerary is already in the list
+    // above, and counting it twice would have the day collide with itself.
+    .filter((b) => !mirrored.has(b.id))
+    .map((b) => ({
+      id: b.id,
+      source: 'booking',
+      kind: 'meeting',
+      title: `${b.booker_name}`,
+      start_at: b.start_at,
+      end_at: b.end_at,
+      is_anchor: 1,
+      travel_minutes: 0,
+      booker_name: b.booker_name,
+      booker_email: b.booker_email,
+    }));
+
+  return [...items.map((i) => ({ ...i, source: 'item' })), ...asItems]
+    .sort((a, b) => (a.start_at < b.start_at ? -1 : a.start_at > b.start_at ? 1 : 0));
 }
 
 /** End of an item, treating one with no end as instantaneous. */
@@ -64,14 +107,34 @@ function endOf(item, startOverride) {
  * assistant can act on, and "the 15:30 car would now leave at 16:15, which
  * misses the 17:40" is.
  */
-async function planDelay({ ownerId, itemId, minutes }) {
-  const target = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
-    .get(itemId, ownerId);
-  if (!target) return null;
+async function planDelay({ ownerId, itemId, bookingId, minutes }) {
+  // The thing running late is either an entry this office put on the day or an
+  // appointment somebody booked. Both are things a principal is physically at
+  // and can therefore overrun; only the second one has a person on the other
+  // end of it who has to be told.
+  let target;
+  if (bookingId) {
+    const b = await db.prepare(
+      "SELECT * FROM bookings WHERE id = ? AND owner_id = ? AND status = 'confirmed'",
+    ).get(bookingId, ownerId);
+    if (!b) return null;
+    target = {
+      id: b.id, source: 'booking', kind: 'meeting', title: b.booker_name,
+      start_at: b.start_at, end_at: b.end_at,
+      booker_name: b.booker_name, booker_email: b.booker_email,
+    };
+  } else {
+    const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+      .get(itemId, ownerId);
+    if (!row) return null;
+    target = { ...row, source: 'item' };
+  }
 
   const delay = Math.round(Number(minutes) || 0);
   const rest = (await itemsFrom(ownerId, target.start_at))
-    .filter((i) => i.id !== target.id);
+    // Matched on source as well as id, because an itinerary item and a booking
+    // could in principle share neither namespace nor uniqueness guarantee.
+    .filter((i) => !(i.id === target.id && (i.source || 'item') === target.source));
 
   const newTargetStart = shift(target.start_at, delay);
   const newTargetEnd = endOf(target, newTargetStart);
@@ -93,6 +156,7 @@ async function planDelay({ ownerId, itemId, minutes }) {
       // is worth as much as the warnings.
       effects.push({
         id: item.id, title: item.title, kind: item.kind,
+        source: item.source || 'item',
         startAt: item.start_at, newStartAt: item.start_at,
         effect: 'unchanged',
         reason: stillCascading ? 'There is enough of a gap before this.' : null,
@@ -107,15 +171,23 @@ async function planDelay({ ownerId, itemId, minutes }) {
       // either — the anchor pins the rest of the day back to its own clock.
       effects.push({
         id: item.id, title: item.title, kind: item.kind,
+        source: item.source || 'item',
         startAt: item.start_at, newStartAt: item.start_at,
         effect: 'conflict',
         lateBy: late,
-        reason: item.kind === 'flight' || item.kind === 'train'
-          ? `You would reach this ${late} min after it leaves. It will not wait.`
-          : `You would arrive ${late} min late, and this cannot be moved.`,
+        // A booking says who has to be asked. "This cannot be moved" is true
+        // of a plane and misleading of an appointment: the appointment CAN be
+        // moved, by a person, after asking — and the useful thing to hand back
+        // is the name of whoever would have to agree.
+        reason: item.source === 'booking'
+          ? `You would arrive ${late} min late. Moving this means telling ${item.booker_name}.`
+          : item.kind === 'flight' || item.kind === 'train'
+            ? `You would reach this ${late} min after it leaves. It will not wait.`
+            : `You would arrive ${late} min late, and this cannot be moved.`,
         isAnchor: true,
         staff: item.staff_user_id && item.staff_status === 'active'
           ? { name: item.staff_name, jobTitle: item.staff_title } : null,
+        attendee: item.booker_email ? { name: item.booker_name, email: item.booker_email } : null,
       });
       stillCascading = false;
       continue;
@@ -124,6 +196,9 @@ async function planDelay({ ownerId, itemId, minutes }) {
     const newStart = shift(item.start_at, late);
     effects.push({
       id: item.id, title: item.title, kind: item.kind,
+      // Always 'item' here: a booking is an anchor and never reaches this
+      // branch. Carried anyway so the apply step never has to assume.
+      source: item.source || 'item',
       startAt: item.start_at, newStartAt: newStart,
       effect: 'shifted',
       movedBy: late,
@@ -145,7 +220,14 @@ async function planDelay({ ownerId, itemId, minutes }) {
   return {
     item: {
       id: target.id, title: target.title, kind: target.kind,
+      source: target.source,
       startAt: target.start_at, newStartAt: newTargetStart,
+      newEndAt: newTargetEnd,
+      // Whoever has to be told that the thing itself moved. Only a booking has
+      // one, and it is the difference between a row changing and a person
+      // being sent a message.
+      attendee: target.booker_email
+        ? { name: target.booker_name, email: target.booker_email } : null,
     },
     minutes: delay,
     effects,

@@ -257,7 +257,10 @@ function dayKey(offset) {
     // The three the appointment's own page offers under "Change the
     // arrangement", plus the notes. Length was the one this screen did not
     // have, so an assistant had to open the appointment to lengthen a meeting.
-    for (const label of ['Move', 'Length', 'Cancel', 'Notes']) {
+    // Running late is on this list because a booked appointment is exactly the
+    // kind a principal overruns, and it was the one control the day sheet
+    // withheld from them. See lib/cascade.js and blater.js.
+    for (const label of ['Running late', 'Move', 'Length', 'Cancel', 'Notes']) {
       ok(`the booking offers ${label}`,
         (await p.locator(`.itin-tool:has-text("${label}")`).count()) >= 1);
     }

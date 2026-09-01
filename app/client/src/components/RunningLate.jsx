@@ -58,11 +58,21 @@ export default function RunningLate({ ownerId, item, onDone, onCancel }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // TWO KINDS OF THING CAN OVERRUN, and the difference matters at the end
+  // rather than at the start. An itinerary entry moving is a row changing; an
+  // appointment somebody booked moving is a message to them. The screens are
+  // identical because the question is identical — what does this do to the
+  // rest of the day — so only the address changes.
+  const isBooking = item.source === 'booking';
+  const base = isBooking
+    ? `/itinerary/${ownerId}/bookings/${String(item.id).replace(/^booking:/, '')}/delay`
+    : `/itinerary/${ownerId}/items/${item.id}/delay`;
+
   async function preview(m) {
     setMinutes(m);
     setError(''); setBusy(true);
     try {
-      const d = await api.post(`/itinerary/${ownerId}/items/${item.id}/delay/preview`, { minutes: m });
+      const d = await api.post(`${base}/preview`, { minutes: m });
       setPlan(d.plan);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -71,7 +81,7 @@ export default function RunningLate({ ownerId, item, onDone, onCancel }) {
   async function apply() {
     setError(''); setBusy(true);
     try {
-      await api.post(`/itinerary/${ownerId}/items/${item.id}/delay`, {
+      await api.post(base, {
         minutes,
         // The conflict was shown and read. Sometimes the plane really is going
         // to be missed and the day still has to be rearranged around it.
@@ -120,7 +130,17 @@ export default function RunningLate({ ownerId, item, onDone, onCancel }) {
           <ul className="late-list">
             {plan.effects.map((e) => <EffectRow key={e.id} e={e} />)}
           </ul>
-          {plan.attendeesToTell.length > 0 && (
+              {/* THE ONE THING KAIROS DOES SEND. Moving an appointment tells the
+              person who booked it, because they would otherwise arrive at the
+              old time — that is not a judgement call, it is the whole meaning
+              of moving it. Said before the button, not discovered after. */}
+          {isBooking && (
+            <p className="hint">
+              <strong>{item.title}</strong> is somebody else&rsquo;s appointment.
+              Applying this moves it and emails them the new time.
+            </p>
+          )}
+      {plan.attendeesToTell.length > 0 && (
             <p className="hint">
               Still to message: {plan.attendeesToTell.map((a) => a.name).join(', ')}. Kairos won't
               send that for you — how you word running late is a judgement call.

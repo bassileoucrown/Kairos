@@ -812,6 +812,15 @@ export default function Itinerary() {
                     booker two emails and loses the thread. */}
                 {e.source === 'booking' && e.status !== 'cancelled' && !past && moving !== e.id && (
                   <>
+                    {/* The same question as on an entry the office created —
+                        "if this overruns, what does it do to the rest of the
+                        day" — and until now it was asked only of half the
+                        day. See lib/cascade.js: the plan reads bookings as
+                        well as itinerary items, so the answer is about the
+                        whole schedule rather than the part this office typed. */}
+                    <button className="itin-tool" type="button"
+                      aria-label={`${e.title} is running late`}
+                      onClick={() => setLateItem(e)}>Running late</button>
                     <button className="itin-tool" type="button"
                       aria-label={`Move ${e.title}`}
                       onClick={() => setMoving(e.id)}>Move</button>

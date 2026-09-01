@@ -12,6 +12,7 @@ const pickupSignal = require('../lib/pickupSignal');
 const { isValidTimeZone, utcToZonedParts } = require('../lib/timezone');
 const recurrence = require('../lib/recurrence');
 const { planDelay } = require('../lib/cascade');
+const { rescheduleBooking } = require('../lib/rescheduleBooking');
 const { sendEmail } = require('../lib/email');
 const { directLineFor } = require('../lib/directLine');
 const { requirePlan } = require('../lib/plans');
@@ -793,6 +794,90 @@ router.post('/:ownerId/items/:itemId/delay/preview', requirePaAccess, async (req
 
   const plan = await planDelay({ ownerId: req.principal.id, itemId: row.id, minutes });
   res.json({ plan });
+});
+
+// ---------------------------------------------------------------------------
+// Running late, on an appointment somebody booked
+//
+// The day sheet offered this on entries the office created and not on the
+// appointments the office is least able to be late for. The reason it took a
+// separate route rather than the one above is what happens at the end of it:
+// an itinerary item moving is a row changing, and an appointment moving is a
+// message to whoever booked it. Those are different acts and they are kept in
+// different handlers so that neither can be done by accident while doing the
+// other.
+// ---------------------------------------------------------------------------
+
+router.post('/:ownerId/bookings/:bookingId/delay/preview', requirePaAccess, async (req, res) => {
+  const minutes = Math.round(Number(req.body?.minutes));
+  if (!Number.isFinite(minutes) || minutes === 0) {
+    return res.status(400).json({ error: 'By how many minutes?' });
+  }
+  const plan = await planDelay({
+    ownerId: req.principal.id, bookingId: req.params.bookingId, minutes,
+  });
+  if (!plan) return res.status(404).json({ error: 'Appointment not found.' });
+  res.json({ plan });
+});
+
+/**
+ * Do it: move the appointment, then shift what follows.
+ *
+ * THE APPOINTMENT MOVES THROUGH rescheduleBooking, which is the same function
+ * the appointment's own page and the day sheet's Move already call. That is
+ * not tidiness — it is the only way the booker is told, the event trail is
+ * written, and a clash with another live booking is refused. A second path
+ * that wrote start_at directly would move the meeting and leave the person
+ * who booked it standing outside a building at the old time.
+ */
+router.post('/:ownerId/bookings/:bookingId/delay', requirePaAccess, async (req, res) => {
+  const minutes = Math.round(Number(req.body?.minutes));
+  if (!Number.isFinite(minutes) || minutes === 0) {
+    return res.status(400).json({ error: 'By how many minutes?' });
+  }
+  const booking = await db.prepare(
+    "SELECT * FROM bookings WHERE id = ? AND owner_id = ? AND status = 'confirmed'",
+  ).get(req.params.bookingId, req.principal.id);
+  if (!booking) return res.status(404).json({ error: 'Appointment not found.' });
+
+  // Recomputed rather than trusting a plan posted back, exactly as the item
+  // route does: the day may have changed in the seconds since the preview.
+  const plan = await planDelay({
+    ownerId: req.principal.id, bookingId: booking.id, minutes,
+  });
+  if (plan.counts.conflicts > 0 && req.body?.acceptConflicts !== true) {
+    return res.status(409).json({
+      error: 'This would run into something that cannot move.',
+      plan,
+    });
+  }
+
+  const moved = await rescheduleBooking({
+    booking,
+    owner: req.principal,
+    startAt: plan.item.newStartAt,
+    movedByUserId: req.user.id,
+    note: `Running ${minutes} min late.`,
+  });
+  // A clash it will not make, refused in its own words rather than translated
+  // into ours — the booker-facing rules are that function's to state.
+  if (!moved.ok) return res.status(moved.status).json({ error: moved.error, plan });
+
+  // Then everything the office owns that has to follow it along.
+  const shifted = plan.effects.filter((e) => e.effect === 'shifted' && e.source === 'item');
+  await db.tx(async (t) => {
+    for (const e of shifted) {
+      const item = await t.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(e.id);
+      if (!item) continue;
+      await t.prepare('UPDATE itinerary_items SET start_at = ?, end_at = ? WHERE id = ?').run(
+        e.newStartAt,
+        item.end_at ? new Date(new Date(item.end_at).getTime() + e.movedBy * 60000).toISOString() : null,
+        item.id,
+      );
+    }
+  });
+
+  res.json({ plan, moved: shifted.length, told: plan.item.attendee });
 });
 
 /**
