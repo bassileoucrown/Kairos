@@ -86,4 +86,64 @@ router.get('/', async (req, res) => {
   });
 });
 
+/**
+ * Everything waiting on you, across every principal at once.
+ *
+ * WHY THIS EXISTS. The endpoint above answers for ONE principal, because the
+ * rail follows the switcher. That is right for a principal, who has only their
+ * own day, and wrong for an assistant, who has three. An assistant supporting
+ * three people had to switch three times to find out whether anything was
+ * waiting — and switching is not free: it re-scopes every screen, so the act of
+ * checking moves you away from what you were doing.
+ *
+ * This is the surface an assistant-led account lands on. It answers the only
+ * question they open the app to ask: whose day needs me first.
+ *
+ * WHAT IS COUNTED PER PRINCIPAL, and what is not. Approvals belong to a
+ * principal's queue and differ between them, so they are broken out. Notices,
+ * unread messages and tasks follow YOU between principals — counting them once
+ * per principal would report the same four unread messages three times and turn
+ * a worklist into a wrong number. They stay on the endpoint above.
+ *
+ * WHOSE QUEUES. Only principals with an ACTIVE membership, and yourself. A
+ * revoked assistant is not a former assistant with a smaller list; they are a
+ * stranger, and a stranger sees nothing. bpadesk.js breaks this deliberately to
+ * prove the assertion can fail.
+ */
+router.get('/across', async (req, res) => {
+  const userId = req.user.id;
+
+  const mine = await db.prepare(`
+    SELECT u.id, u.name, u.slug, u.timezone, m.role
+    FROM memberships m
+    JOIN users u ON u.id = m.owner_id
+    WHERE m.member_user_id = ? AND m.status = 'active'
+  `).all(userId);
+
+  const self = await db.prepare('SELECT id, name, slug, timezone FROM users WHERE id = ?').get(userId);
+  const rows = [
+    { id: self.id, name: self.name, slug: self.slug, timezone: self.timezone, role: 'owner' },
+    ...mine.map((m) => ({ id: m.id, name: m.name, slug: m.slug, timezone: m.timezone, role: m.role })),
+  ];
+
+  // One query per principal rather than one grouped query over every booking
+  // in the table. The list is small — an assistant has a handful of principals,
+  // not a page of them — and going through approvalsFor means the access rule
+  // is the same function the single-principal endpoint uses. Two queries
+  // answering one question is how the two drift apart.
+  const principals = await Promise.all(rows.map(async (p) => ({
+    ...p,
+    approvals: await approvalsFor(userId, p.id),
+  })));
+
+  res.json({
+    principals,
+    total: principals.reduce((n, p) => n + p.approvals, 0),
+    // Said plainly so a screen does not have to infer it from the length of the
+    // list: an assistant with one principal and a principal with none both have
+    // exactly one row here, and they are not the same account.
+    supporting: mine.length,
+  });
+});
+
 module.exports = router;

@@ -259,11 +259,29 @@ export default function AppShell({ children, title, actions, active }) {
     approvals: 0, notices: 0, messages: 0, tasks: 0, requests: 0,
   });
   const [waiting, setWaiting] = useState(0);
+  // What is waiting on each principal you support, so the switcher answers
+  // "whose day needs me first" without being used. An assistant with three
+  // principals had to switch three times to find out, and switching re-scopes
+  // every screen — so the act of checking moved them off whatever they were
+  // doing. Keyed by principal id; absent means nothing waiting.
+  const [across, setAcross] = useState({});
   // Which badges have gone up since this reader last looked at them. A count
   // is a fact; this is the news, and it is what stops a live rail from being
   // a rail that renumbers itself behind your back.
   const [arrived, setArrived] = useState(() => new Set());
   const [navOpen, setNavOpen] = useState(false);
+
+  // Only worth asking when there is more than one diary in play. A principal
+  // with no assistants would be asking the server to tell them what their own
+  // rail already says.
+  useEffect(() => {
+    if (principals.length <= 1) return;
+    api.get('/attention/across')
+      .then((d) => setAcross(Object.fromEntries(
+        (d.principals || []).map((p) => [p.id, p.approvals]),
+      )))
+      .catch(() => { /* a switcher must not be able to fail a page */ });
+  }, [principals.length]);
 
   useEffect(() => {
     api.get('/pa/principals').then((d) => {
@@ -396,11 +414,19 @@ export default function AppShell({ children, title, actions, active }) {
               value={activeId || ''}
               onChange={(e) => switchPrincipal(e.target.value)}
             >
-              {principals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.role === 'owner' ? `${p.name} (you)` : p.name}
-                </option>
-              ))}
+              {principals.map((p) => {
+                // An option is plain text, so the count goes in the label
+                // rather than a badge beside it. That is the whole point: it
+                // has to be readable in the closed select as well as the open
+                // list, or an assistant still has to go looking.
+                const n = across[p.id] || 0;
+                const who = p.role === 'owner' ? `${p.name} (you)` : p.name;
+                return (
+                  <option key={p.id} value={p.id}>
+                    {n ? `${who} — ${n} waiting` : who}
+                  </option>
+                );
+              })}
             </select>
           </div>
         )}
