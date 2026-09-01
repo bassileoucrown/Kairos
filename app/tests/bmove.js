@@ -354,12 +354,32 @@ function client() {
     // most urgent thing the office has, and scoping it to the calendar day
     // made it disappear at the stroke of twelve — the exact hour it matters.
     //
-    // Departing twenty-two hours ago, so it is unambiguously yesterday in any
-    // zone, however late in the day this suite runs.
+    // ANCHORED TO MIDNIGHT, NOT TO A WALL-CLOCK OFFSET. This used to depart
+    // "twenty-two hours ago", with a comment claiming that was unambiguously
+    // yesterday however late the suite ran. It is not: after 22:00 the subtraction
+    // lands back on today, the journey really is today's, and the day-scoped list
+    // is right to carry it. The board went red at 22:33 and again at 22:42 for
+    // exactly that reason — a fixture asserting something false about the clock,
+    // not a defect.
+    //
+    // Three things have to hold at once, and only one departure time does it at
+    // every hour: yesterday in the principal's zone, so it is off the day sheet;
+    // inside the twenty-four hour alarm carry, so the arrival alarm still sounds;
+    // and past its expected arrival, so it counts as unanswered. One minute
+    // before today's midnight satisfies all three, and the expected ninety
+    // minutes comes down to one so that it is overdue from the first minute of
+    // the day rather than from half past one in the morning.
+    //
+    // The zone is the principal's and not this process's — the day sheet reads
+    // it in theirs, and a suite that assumed UTC would go red for whoever runs
+    // it from Lagos.
+    const zone = (await pa('GET', `/today/${bossId}`)).d.timezone || 'UTC';
+    const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
+    const departsAt = new Date(new Date(`${todayKey}T00:00:00Z`).getTime() - 60000).toISOString();
     const overnight = (await pa('POST', `/movement/${bossId}/movements`, {
       title: 'Back from Abeokuta', departsFrom: 'Abeokuta', destination: 'Ikoyi',
-      departsAt: new Date(Date.now() - 22 * 3600000).toISOString(),
-      expectedMinutes: 90,
+      departsAt,
+      expectedMinutes: 1,
     })).d.movement.id;
 
     let sheet = (await pa('GET', `/today/${bossId}`)).d;
