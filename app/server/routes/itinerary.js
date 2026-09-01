@@ -16,6 +16,7 @@ const { rescheduleBooking } = require('../lib/rescheduleBooking');
 const { sendEmail } = require('../lib/email');
 const { directLineFor } = require('../lib/directLine');
 const { requirePlan } = require('../lib/plans');
+const plans = require('../lib/plans');
 const travelTime = require('../lib/travelTime');
 
 const router = asyncRouter();
@@ -518,7 +519,13 @@ router.delete('/:ownerId/items/:itemId/signal/found', requirePaAccess, async (re
 // trusts — and the assistant often knows something the road does not, like a
 // closed gate or a convoy. See lib/travelTime.js.
 
-router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, requirePlan('travel_time'), async (req, res) => {
+// METERED, NOT RANKED. A maps lookup is invoiced to us per call, unlike
+// everything on the plan ladder, so travel_time sits in METERED — see
+// lib/plans.js. This route carried requirePlan('travel_time') after that move,
+// which silently did nothing: allows() returns true for a feature that is not
+// on the sheet, so the check read like a gate and was a no-op. The count now
+// happens below, after an estimate that actually cost something.
+router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, async (req, res) => {
   const item = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
     .get(req.params.itemId, req.principal.id);
   if (!item) return res.status(404).json({ error: 'Not found.' });
@@ -533,6 +540,10 @@ router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, requirePlan(
     // a 400 that looks like the assistant typed something wrong.
     return res.status(result.unconfigured ? 501 : 400).json(result);
   }
+
+  // Counted here rather than at the top: an unconfigured deployment returned
+  // above without asking the road anything, and a refusal is not demand.
+  await plans.meterUse(req, 'travel_time');
 
   if (req.body?.apply) {
     await db.prepare('UPDATE itinerary_items SET travel_minutes = ? WHERE id = ?')

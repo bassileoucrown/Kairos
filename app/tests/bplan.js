@@ -202,6 +202,34 @@ function client() {
       && new Set(signals.map((s) => s.feature)).size === signals.length,
       JSON.stringify(signals));
 
+    // ---- Metering ------------------------------------------------------------------------
+    head('What costs money per use is counted, and only when it cost something:');
+    // A known plan, so the assertion below is about what was recorded rather
+    // than about the corrupted-plan fixture the previous section left behind.
+    await db.prepare("UPDATE users SET plan = 'principal' WHERE id = ?").run(freeId);
+    // THE NEGATIVE FIRST. No model key is configured here, so every ask
+    // refuses — and a refusal is not demand. Counting it would put invented
+    // numbers into the only evidence this file exists to produce.
+    await free('POST', '/assist/catch-up');
+    let metered = await db.prepare(
+      "SELECT * FROM plan_signals WHERE owner_id = ? AND feature = 'metered:ai_assist'",
+    ).get(freeId);
+    ok('an ask that refused for want of a key is not counted', !metered,
+      JSON.stringify(metered));
+
+    // AND THE POSITIVE CONTROL, which is the assertion that stops meterUse
+    // being another check that reads like a gate and does nothing — the exact
+    // bug that put travel_time on requirePlan for a feature not on the sheet.
+    // Called directly because a real ask needs a real model.
+    await plans.meterUse({ user: { id: freeId } }, 'ai_assist');
+    metered = await db.prepare(
+      "SELECT * FROM plan_signals WHERE owner_id = ? AND feature = 'metered:ai_assist'",
+    ).get(freeId);
+    ok('but a use that did cost something is', !!metered && Number(metered.times) === 1,
+      JSON.stringify(metered));
+    ok('recorded against the plan it happened on',
+      metered?.plan === 'principal', JSON.stringify(metered));
+
     // ---- What a screen is told ---------------------------------------------------------
     head('And a screen can say all of it before anybody presses:');
     await db.prepare("UPDATE users SET plan = 'principal' WHERE id = ?").run(freeId);

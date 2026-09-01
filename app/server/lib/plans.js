@@ -298,6 +298,27 @@ async function recordUse(ownerId, metered, plan) {
 }
 
 /**
+ * Count one use of something we are invoiced for, from inside a handler.
+ *
+ * NOT MIDDLEWARE, and that is the whole difference from requirePlan. A plan
+ * check has to run before the work; a meter has to run after it, because what
+ * is being counted is a call that actually happened and actually cost
+ * something. A model call that refused for want of a key, or a maps lookup on
+ * a deployment with no maps key, cost nothing and must not appear in the
+ * evidence as demand.
+ *
+ * Never throws. Nothing that has already succeeded should fail because a
+ * counter did.
+ */
+async function meterUse(req, metered) {
+  const owner = req.principal || req.user;
+  try {
+    const row = await db.prepare('SELECT plan FROM users WHERE id = ?').get(owner?.id);
+    await recordUse(owner?.id, metered, planOf(row));
+  } catch { /* a count is never worth an error */ }
+}
+
+/**
  * Express middleware for a gated capability.
  *
  * Runs after requirePaAccess, so it can read the PRINCIPAL's plan — an
@@ -375,5 +396,5 @@ async function stateFor(userId) {
 
 module.exports = {
   PLANS, FEATURES, METERED, ALIASES, NEVER_GATED, DEFAULT_PLAN, ENFORCED, UNRECOGNISED,
-  allows, allowanceFor, planOf, requirePlan, recordReach, recordUse, stateFor,
+  allows, allowanceFor, planOf, requirePlan, recordReach, recordUse, meterUse, stateFor,
 };

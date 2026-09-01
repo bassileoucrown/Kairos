@@ -51,14 +51,16 @@ const attempt = (res, fn) => fn().catch((err) => modelError(res, err));
  * it is metered rather than ranked — see METERED in lib/plans.js. Counted
  * AFTER the ask succeeds: a refusal because no key is configured cost nothing
  * and should not appear in the evidence as demand.
+ *
+ * The counting itself lives in lib/plans.js rather than here. It was written
+ * out in this file and again in routes/itinerary.js, which is two answers to
+ * one question — the drift shape this codebase keeps being bitten by.
  */
-async function meter(req) {
-  const owner = req.principal || req.user;
-  try {
-    const row = await db.prepare('SELECT plan FROM users WHERE id = ?').get(owner?.id);
-    await plans.recordUse(owner?.id, 'ai_assist', plans.planOf(row));
-  } catch { /* never blocks an answer that already worked */ }
-}
+// CALLED AFTER THE ASK, NEVER BEFORE. Written the other way round first, and
+// the effect was that an ask which refused for want of a key was counted as
+// demand — inventing the very numbers this is here to collect. lib/assist.js
+// throws on an unconfigured deployment, so anything above the await never ran.
+const meter = (req) => plans.meterUse(req, 'ai_assist');
 
 // --- 1. What happened while you were away -----------------------------------------
 //
@@ -67,8 +69,9 @@ async function meter(req) {
 // three at once, and a brief that made them pick one first would be asking
 // them to guess where the news is.
 router.post('/catch-up', async (req, res) => attempt(res, async () => {
+  const brief = await assist.catchUpBrief(req.user.id);
   await meter(req);
-  res.json(await assist.catchUpBrief(req.user.id));
+  res.json(brief);
 }));
 
 // --- 2. The brief before a meeting --------------------------------------------------
@@ -77,8 +80,9 @@ router.post('/:ownerId/meetings/:bookingId/brief', requirePaAccess,
     const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
       .get(req.params.bookingId, req.principal.id);
     if (!booking) return res.status(404).json({ error: 'Not found.' });
+    const brief = await assist.meetingBrief(booking, req.principal.id);
     await meter(req);
-    res.json(await assist.meetingBrief(booking, req.principal.id));
+    res.json(brief);
   }));
 
 // --- 3. The actions inside a minute --------------------------------------------------
@@ -95,8 +99,9 @@ router.post('/:ownerId/meetings/:bookingId/minute-tasks', requirePaAccess,
       return res.status(400).json({ error: 'There are no minutes on this meeting yet.' });
     }
     // Proposals only. Creating them is POST /tasks, which a person calls.
+    const tasks = await assist.tasksFromMinute(note.body);
     await meter(req);
-    res.json({ tasks: await assist.tasksFromMinute(note.body) });
+    res.json({ tasks });
   }));
 
 // --- 4. Triage of correspondence ------------------------------------------------------
@@ -122,8 +127,9 @@ router.post('/:ownerId/mail/:accountId/triage', requirePaAccess,
       const last = [...msgs].reverse().find((m) => !m.deleted);
       withText.push({ ...t, latest: last?.body || '' });
     }
+    const verdicts = await assist.triage(withText);
     await meter(req);
-    res.json({ verdicts: await assist.triage(withText) });
+    res.json({ verdicts });
   }));
 
 // --- 5. A reply that sounds like them ---------------------------------------------------
@@ -134,19 +140,21 @@ router.post('/:ownerId/reply', requirePaAccess,
     // Written in the PRINCIPAL's voice when drafting for them, which is the
     // whole point — an assistant drafting as themselves would just be writing.
     const asUserId = req.body?.asPrincipal === false ? req.user.id : req.principal.id;
-    await meter(req);
-    res.json(await assist.reply({
+    const drafted = await assist.reply({
       instruction,
       context: String(req.body?.context || '').slice(0, 12000),
       asUserId,
-    }));
+    });
+    await meter(req);
+    res.json(drafted);
   }));
 
 // --- 6. The week ahead, read rather than listed --------------------------------------------
 router.post('/:ownerId/week-ahead', requirePaAccess,
   async (req, res) => attempt(res, async () => {
+    const read = await assist.weekAheadRead(req.principal.id, req.user.id);
     await meter(req);
-    res.json(await assist.weekAheadRead(req.principal.id, req.user.id));
+    res.json(read);
   }));
 
 // --- 7. Something in this room looks like a decision -----------------------------------------
@@ -160,8 +168,9 @@ router.post('/threads/:threadId/records', async (req, res) => attempt(res, async
   if (!thread) return res.status(404).json({ error: 'Not found.' });
   const access = await resolveAccess(thread.space_id, req.user.id);
   if (!access) return res.status(404).json({ error: 'Not found.' });
+  const candidates = await assist.recordCandidates(req.params.threadId);
   await meter(req);
-  res.json({ candidates: await assist.recordCandidates(req.params.threadId) });
+  res.json({ candidates });
 }));
 
 module.exports = { router };
