@@ -354,6 +354,25 @@ function ready() {
       // Which plan the account is on. Existing rows land on 'founding' — see
       // lib/plans.js for why that is a fact in the row rather than a promise.
       await ensureColumn('users', 'plan', "TEXT NOT NULL DEFAULT 'founding'");
+      // THE ASSISTANT HOLDING A PRINCIPAL WHO IS NOT ON KAIROS.
+      //
+      // A great many assistants work for somebody who will never open an app,
+      // and until now that person could not exist here at all: every
+      // owner-scoped query in fifty route modules reads a users row, and
+      // memberships.owner_id references one. So a kept principal IS a users
+      // row — with no usable password — rather than a second kind of thing
+      // every one of those queries would have to learn about.
+      //
+      // One column, not two. "Is this kept?" is exactly "is kept_by set?", and
+      // a separate is_kept flag would be a second answer to one question,
+      // which is how the two drift apart.
+      //
+      // Claiming is the ordinary password reset: the address on the row is the
+      // principal's own, so setting a password clears kept_by and the account
+      // becomes theirs, with the assistant retained by the membership that was
+      // written when the record was created. Nothing is re-entered and nothing
+      // is migrated.
+      await ensureColumn('users', 'kept_by', 'TEXT');
       // "The thing you asked for has happened", which is not the same claim as
       // "I have seen this". See routes/threads.js.
       await ensureColumn('messages', 'done_at', 'TEXT');

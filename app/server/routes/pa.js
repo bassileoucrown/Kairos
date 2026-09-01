@@ -18,6 +18,11 @@ const { getOpenSlots } = require('../lib/availability');
 // The vault's own access log. Deleting a contact can destroy documents held
 // against them, and that belongs in the same trail as reading one.
 const { logAccess } = require('./essentials');
+// The same handle rule a signup uses, and the same handle history, so a kept
+// principal can never be given a name somebody once held.
+const { uniqueSlugFromName } = require('./auth');
+const { rememberHandle } = require('../lib/handles');
+const { DEFAULT_PLAN } = require('../lib/plans');
 const { parseRequest, filterSlots, draftMessage } = require('../lib/aiAssist');
 const aiModel = require('../lib/aiModel');
 const minuteHandlers = require('./minuteHandlers');
@@ -35,13 +40,97 @@ const BRIEF_SECTION_KEYS = ['who', 'why', 'background', 'talkingPoints', 'desire
 const router = asyncRouter();
 router.use(requireAuth);
 
+/**
+ * Take on a principal who is not on Kairos.
+ *
+ * An assistant does the same work whether or not their principal ever signs
+ * in: the diary, the trips, the papers, the briefs, the minutes. Until now
+ * that person could not exist here, which made the most motivated buyer in
+ * this market the one who could not buy.
+ *
+ * HELD, NOT OWNED. The claim address is required, and it may not be the
+ * assistant's own. That single rule is what makes this escrow rather than
+ * ownership: the principal can take the record whenever they choose, by the
+ * ordinary forgotten-password route, and an assistant who leaves the job
+ * cannot take somebody's passport with them. Without it the assistant would
+ * hold both the record and the only way to claim it, and "escrow" would be a
+ * word in a document rather than a property of the system.
+ *
+ * The row is a real user with a sentinel password no input can produce, and a
+ * membership is written at the same moment — so the switcher, the day sheet,
+ * the approval queue and everything else work immediately, and the assistant
+ * is retained automatically when the principal later claims it.
+ */
+router.post('/kept', requirePlan('assistants'), async (req, res) => {
+  const { name, claimEmail, timezone } = req.body || {};
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'A name is required.' });
+  }
+  const email = String(claimEmail || '').trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: 'A claim address for the principal is required.' });
+  }
+  // THE ESCROW RULE. Said as its own refusal, with its own message, because an
+  // assistant who quietly used their own address would end up holding a
+  // principal's documents with no way for that principal to ever take them
+  // back — and nothing on any screen would look wrong.
+  const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+  if (me && email === String(me.email).toLowerCase()) {
+    return res.status(400).json({
+      error: 'The claim address must be the principal\'s own, not yours — it is how they take the record back.',
+    });
+  }
+  const clash = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(email);
+  if (clash) {
+    return res.status(409).json({ error: 'Someone with that address is already on Kairos. Ask them to appoint you instead.' });
+  }
+
+  const id = crypto.randomUUID();
+  const slug = await uniqueSlugFromName(String(name).trim());
+  const now = new Date().toISOString();
+  // A sentinel, not a hash. Nothing verifyPassword is given can match it, and
+  // login refuses on kept_by before reaching it in any case.
+  await db.prepare(`
+    INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified,
+                       onboarding_step, account_category, plan, kept_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, 'done', 'principal', ?, ?, ?)
+  `).run(id, email, '!kept', String(name).trim(), slug,
+    String(timezone || 'UTC'), DEFAULT_PLAN, req.user.id, now);
+  await rememberHandle(id, slug);
+
+  // The membership is the whole reason nothing else had to change, and it is
+  // what keeps the assistant on after the principal claims the record.
+  const category = (await db.prepare('SELECT account_category FROM users WHERE id = ?').get(req.user.id))?.account_category;
+  // invite_token is NOT NULL because every other membership starts life as an
+  // invitation somebody has to accept. This one does not: the assistant is
+  // already here and the principal is not, so the row is born active. A fresh
+  // random token keeps the column unique and leaves nothing redeemable.
+  await db.prepare(`
+    INSERT INTO memberships (id, owner_id, member_user_id, invited_email, role, status,
+                             invite_token, created_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+  `).run(crypto.randomUUID(), id, req.user.id, email,
+    ['pa', 'ea', 'chief_of_staff'].includes(category) ? category : 'pa',
+    crypto.randomBytes(32).toString('hex'), now);
+
+  res.status(201).json({
+    principal: { id, name: String(name).trim(), slug, timezone: String(timezone || 'UTC'), kept: true },
+    // Said back plainly so the screen can tell the assistant what they have
+    // just agreed to, rather than leaving it in a help page.
+    claim: {
+      email,
+      how: 'They can take this record whenever they like by asking for a password at that address.',
+    },
+  });
+});
+
 router.get('/principals', async (req, res) => {
   // Timezone travels with the principal because their diary is read in it. An
   // assistant in Lagos looking at a principal in London must see the
   // principal's day, not their own clock applied to it.
   const self = await db.prepare('SELECT id, name, slug, timezone FROM users WHERE id = ?').get(req.user.id);
   const memberships = await db.prepare(`
-    SELECT u.id, u.name, u.slug, u.timezone, m.role, m.can_manage_scheduling
+    SELECT u.id, u.name, u.slug, u.timezone, u.kept_by, m.role, m.can_manage_scheduling
     FROM memberships m
     JOIN users u ON u.id = m.owner_id
     WHERE m.member_user_id = ? AND m.status = 'active'
@@ -51,11 +140,16 @@ router.get('/principals', async (req, res) => {
     principals: [
       {
         id: self.id, name: self.name, slug: self.slug, timezone: self.timezone,
-        role: 'owner', canManageScheduling: true,
+        role: 'owner', canManageScheduling: true, kept: false,
       },
       ...memberships.map((m) => ({
         id: m.id, name: m.name, slug: m.slug, timezone: m.timezone, role: m.role,
         canManageScheduling: !!m.can_manage_scheduling,
+        // Whether this principal is a record being held for somebody not on
+        // Kairos, rather than an account that appointed you. A screen that
+        // cannot tell them apart would let an assistant believe the principal
+        // is reading what they write.
+        kept: !!m.kept_by,
       })),
     ],
   });

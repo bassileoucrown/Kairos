@@ -188,7 +188,15 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).trim().toLowerCase());
-  if (!user || !verifyPassword(String(password), user.password_hash)) {
+  // A KEPT PRINCIPAL CANNOT SIGN IN, and the check is here rather than resting
+  // on the stored hash being unusable. The hash is a sentinel no password can
+  // produce, so verifyPassword already refuses — but that is one library's
+  // behaviour standing between an unclaimed record and whoever knows the
+  // address on it, and a record holding somebody's passport deserves a stated
+  // rule rather than a fortunate one. Said in the same words as a wrong
+  // password, because which addresses have unclaimed records is not something
+  // a stranger gets to enumerate.
+  if (!user || user.kept_by || !verifyPassword(String(password), user.password_hash)) {
     return res.status(401).json({ error: 'Incorrect email or password.' });
   }
 
@@ -312,7 +320,17 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 
   const passwordHash = hashPassword(String(password));
-  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, reset.user_id);
+  // AND THIS IS ALSO HOW A KEPT PRINCIPAL CLAIMS THEIR RECORD. Setting a
+  // password on an account an assistant has been holding makes it theirs:
+  // kept_by clears, the sentinel hash is replaced, and they can sign in. The
+  // assistant is not evicted — the membership written when the record was
+  // created is what keeps them, so the diary, the trips and the papers carry
+  // over with nobody re-entering anything.
+  //
+  // Deliberately the ordinary reset flow rather than a claim flow of its own.
+  // A second way to set a password is a second place to get it wrong, and the
+  // link already goes to the principal's own address and nowhere else.
+  await db.prepare('UPDATE users SET password_hash = ?, kept_by = NULL WHERE id = ?').run(passwordHash, reset.user_id);
   await db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(reset.user_id);
   // Resetting a password should end every existing session, on this device
   // and anywhere else it was signed in.
@@ -321,4 +339,7 @@ router.post('/reset-password/:token', async (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router, publicUser };
+// uniqueSlugFromName is exported so a kept principal gets its handle by the
+// same rule a signup does — including the part that skips a handle somebody
+// once held. Two ways of minting a handle would eventually hand one out twice.
+module.exports = { router, publicUser, uniqueSlugFromName };

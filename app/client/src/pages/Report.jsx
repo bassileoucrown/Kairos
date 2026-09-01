@@ -260,11 +260,24 @@ export default function Report() {
     ? `from=${encodeURIComponent(applied.from)}&to=${encodeURIComponent(applied.to)}`
     : `week=${back}`;
 
+  // ONLY THE ANSWER TO THE PERIOD STILL BEING ASKED FOR. The same shape that
+  // was showing one day's entries under another day's heading on the itinerary:
+  // change the dates twice in quick succession, or change them while the first
+  // fetch is still out, and whichever request ANSWERED last won — regardless of
+  // which was asked last. Here it would put one fortnight's figures under
+  // another fortnight's dates, and the download links beside them are built
+  // from `period`, so the file and the table would disagree with each other
+  // while both looked settled. A report somebody forwards to an accountant is
+  // the last place for that.
+  const reqRef = useRef(0);
   useEffect(() => {
     if (!ownerId) return;
+    const seq = ++reqRef.current;
     setData(null);
     setError('');
-    api.get(`/report/${ownerId}?${period}`).then(setData).catch((e) => setError(e.message));
+    api.get(`/report/${ownerId}?${period}`)
+      .then((r) => { if (seq === reqRef.current) setData(r); })
+      .catch((e) => { if (seq === reqRef.current) setError(e.message); });
   }, [ownerId, period]);
 
   if (!data) {
