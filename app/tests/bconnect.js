@@ -41,8 +41,27 @@ function client() {
       PORT: String(PORT),
       DATABASE_URL: process.env.DATABASE_URL || '',
     },
-    stdio: ['ignore', 'ignore', 'ignore'],
+    stdio: ['ignore', 'ignore', 'pipe'],
   });
+  // KEEP THE CHILD'S LAST WORDS. This suite has failed "no server" twice —
+  // 27 Aug and 1 Sep — and both times the message was the whole of the
+  // evidence, because the server's stderr was being thrown away. A suite that
+  // cannot say why its server did not start hands you a hundred and fifty
+  // seconds of silence and a guess, and the guess costs more than the bug.
+  //
+  // Two things are captured. The stderr, so a crash on boot arrives with its
+  // stack. And the exit, so a server that dies at once — a port already taken,
+  // a schema that will not apply — is reported the instant it happens instead
+  // of after the full timeout, which is also how you tell those two apart: a
+  // child that exited was broken, a child still running when the clock ran out
+  // was slow.
+  let boot = '';
+  proc.stderr.on('data', (d) => { boot = (boot + d).slice(-4000); });
+  let died = null;
+  proc.on('exit', (code, signal) => { died = signal ? `signal ${signal}` : `exit ${code}`; });
+  const why = () => `${died ? `server ${died}` : 'server still running, never answered'}` +
+    `${boot.trim() ? `\n--- server stderr ---\n${boot.trim()}` : '\n--- server printed nothing to stderr ---'}`;
+
   // Two and a half minutes. Twenty seconds was plenty on an idle machine and
   // not plenty on a loaded one; a minute went the same way, twice in one day,
   // on a box where a hundred suites run back to back and each one starts a
@@ -56,7 +75,8 @@ function client() {
   const deadline = Date.now() + 150000;
   for (;;) {
     try { const r = await (await fetch(`${BASE}/api/status`)).json(); if (r.databaseReady) break; } catch { /* not up */ }
-    if (Date.now() > deadline) throw new Error('no server');
+    if (died) throw new Error(`no server — ${why()}`);
+    if (Date.now() > deadline) throw new Error(`no server — ${why()}`);
     await new Promise((r) => setTimeout(r, 200));
   }
 
