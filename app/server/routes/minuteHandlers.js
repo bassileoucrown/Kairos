@@ -1,6 +1,7 @@
 const bookingNotes = require('../lib/bookingNotes');
 const minutes = require('../lib/minutes');
 const aiModel = require('../lib/aiModel');
+const recordingLib = require('../lib/recording');
 
 // Writing up a meeting — the handlers, once, for both doors.
 //
@@ -136,4 +137,49 @@ function recording(ctx) {
   };
 }
 
-module.exports = { own, forPrincipal, draft, dictate, file, recording };
+/**
+ * The audio itself, after the fact.
+ *
+ * SEPARATE FROM TURNING IT ON, because they are separate acts with separate
+ * failure modes — and because the state machine has to have been through `on`
+ * before this will take a byte. lib/recording.js is where that is enforced;
+ * this hands it the booking and gets back a sentence to show.
+ */
+function captureAudio(ctx) {
+  return async (req, res) => {
+    const { booking, author } = ctx(req);
+    const result = await recordingLib.capture({
+      booking,
+      base64: req.body?.audio,
+      mimeType: req.body?.mimeType,
+      durationMs: req.body?.durationMs,
+      userId: author.id,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error, code: result.code });
+    }
+    return res.status(201).json({
+      recording: { id: result.id, bytes: result.bytes, words: result.words },
+      // Said on the way back, because the words are now office material a
+      // minute can be drafted from and somebody should know that happened.
+      material: 'The transcript is filed with the notes on this meeting.',
+    });
+  };
+}
+
+/** What was captured, never the audio. */
+function recordings(ctx) {
+  return async (req, res) => {
+    const { booking } = ctx(req);
+    res.json({
+      recordings: await recordingLib.forBooking(booking.id),
+      // So a screen can say which credential is missing rather than hiding the
+      // control with no explanation.
+      readiness: recordingLib.readiness(),
+    });
+  };
+}
+
+module.exports = {
+  own, forPrincipal, draft, dictate, file, recording, captureAudio, recordings,
+};

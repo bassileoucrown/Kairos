@@ -579,6 +579,12 @@ router.post('/:ownerId/bookings/:bookingId/dictation',
   requirePaAccess, loadPrincipalBooking, minuteHandlers.dictate(forThem));
 router.post('/:ownerId/bookings/:bookingId/recording',
   requirePaAccess, loadPrincipalBooking, minuteHandlers.recording(forThem));
+// The audio, once the meeting has been put into the recording state. See
+// lib/recording.js — the consent gate lives there, not here.
+router.post('/:ownerId/bookings/:bookingId/recording/audio',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.captureAudio(forThem));
+router.get('/:ownerId/bookings/:bookingId/recordings',
+  requirePaAccess, loadPrincipalBooking, minuteHandlers.recordings(forThem));
 
 router.post('/:ownerId/bookings/:bookingId/follow-up', requirePaAccess, loadPrincipalBooking, async (req, res) => {
   const result = await bookingNotes.followUp({

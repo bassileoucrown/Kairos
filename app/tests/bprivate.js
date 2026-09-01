@@ -1,36 +1,41 @@
-// A journey that is nobody's business but the principal's.
+// Which correspondence an assistant sees, and which is the principal's alone.
 //
-// WHY THIS FILE IS ALL NEGATIVES. Every other suite here proves something
-// appears. This one mostly proves things do NOT, which is harder to trust:
-// an assertion that a private trip is absent passes just as happily when the
-// feature is broken and the trip was never created, or when the request
-// errored, or when the test looked in the wrong place. So every hiding
-// assertion is paired with a positive control — the SAME viewer seeing the
-// SAME kind of thing when it is not private — and the suite fails if the
-// control ever stops showing.
+// PRIVATE BY DEFAULT. The obvious design — a list of addresses barred from the
+// assistant — leaks three ways, and each of them is found out afterwards: a
+// person is not an address, so the same conversation arrives from a phone or a
+// new domain; the subject line is the content, so "Re: the settlement" in a
+// list tells them everything without opening it; and it fails open, so
+// anything nobody remembered to add is visible.
 //
-// THE RULE, from the principal: a personal trip is offline to the office
-// entirely. Not blurred, not "somewhere abroad" — absent. Except that the
-// principal may name who knows, and except that whoever arranged it can still
-// open the thing they built.
+// So the default is the other way round. An assistant sees correspondents the
+// principal has ADMITTED. Everything else waits where only the principal can
+// see it, and letting one through is the principal's act.
 //
-// AND ONE BIT CROSSES ANYWAY, deliberately: the day is unavailable. A trip
-// nobody can see is a trip the office books straight over, which is a worse
-// failure than the office knowing a Tuesday is spoken for.
+// PLUS A PER-THREAD OVERRIDE, for the case the rule cannot predict: a
+// correspondent the office knows perfectly well who writes about something
+// personal once.
+//
+// WHAT THIS FILE IS REALLY FOR is the list of doors. A privacy rule is only as
+// good as the narrowest route around it, so every way of reaching a thread is
+// tried from an assistant who should not have it: the list, the thread itself,
+// filing it, deleting it, and — the one most likely to be forgotten — handing
+// it to a model for triage.
 const ROOT = require('path').join(__dirname, '..', '..');
 
-const PORT = 4613, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
+const PORT = 4643, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
+const SECRET = 'inbound-secret-for-tests';
+const DOMAIN = 'in.exousia.test';
 let fails = 0;
 const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x ? ' — ' + x : '')); } else console.log('  ✓ ' + l); };
 const head = (s) => console.log(`\n${s}`);
 
 function client() {
   let cookie = '';
-  return async function call(method, path, body) {
+  return async function call(method, path, body, headers = {}) {
     const r = await fetch(`${BASE}/api${path}`, {
       method,
-      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      headers: { 'content-type': 'application/json', ...headers, ...(cookie ? { cookie } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const set = r.headers.get('set-cookie');
@@ -41,11 +46,6 @@ function client() {
     return { s: r.status, d: json };
   };
 }
-
-const dayKey = (offset) => {
-  const d = new Date(Date.now() + offset * 86400000);
-  return d.toISOString().slice(0, 10);
-};
 
 (async () => {
   const fs = require('fs');
@@ -58,7 +58,10 @@ const dayKey = (offset) => {
   }
   const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
-    env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT) },
+    env: {
+      ...process.env, NODE_ENV: 'production', PORT: String(PORT),
+      INBOUND_EMAIL_SECRET: SECRET, INBOUND_EMAIL_DOMAIN: DOMAIN,
+    },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
 
@@ -70,207 +73,145 @@ const dayKey = (offset) => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    // ---- The office ---------------------------------------------------------
     const boss = client();
-    const up = await boss('POST', '/auth/signup',
-      { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
-    const bossId = up.d.user.id;
-    await boss('PATCH', '/profile', { timezone: 'UTC' });
+    const bossId = (await boss('POST', '/auth/signup',
+      { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' })).d.user.id;
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
-    // The PA, who arranges the work travel.
     const pa = client();
-    const paUp = await pa('POST', '/auth/signup',
+    await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
-    const paId = paUp.d.user.id;
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
-    let inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
+    const inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
+    const paId = (await pa('GET', '/auth/me')).d.user.id;
 
-    // The Chief of Staff, who can otherwise see the whole office.
-    const cos = client();
-    const cosUp = await cos('POST', '/auth/signup',
-      { name: 'Tunde Bakare', email: `tunde${ID}@x.com`, password: PW, accountCategory: 'pa' });
-    const cosId = cosUp.d.user.id;
-    await cos('POST', '/profile/onboarding-step', { step: 'done' });
-    inv = await boss('POST', '/members', { email: `tunde${ID}@x.com`, role: 'chief_of_staff' });
-    await cos('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
+    // Somebody the office knows. Their correspondence is the office's business.
+    await boss('POST', `/pa/${bossId}/contacts`,
+      { name: 'Chidi Nwosu', email: `chidi${ID}@ashford.com`, relationshipTier: 'professional' });
 
-    // ---- Two journeys -------------------------------------------------------
-    head('A principal has a work trip and a private one:');
-    const work = await pa('POST', `/trips/${bossId}`, {
-      name: 'Board week, London', destination: 'London', destinationTimezone: 'Europe/London',
-      startsOn: dayKey(10), endsOn: dayKey(14), status: 'confirmed',
+    const account = (await boss('POST', `/mail/${bossId}/accounts`,
+      { kind: 'delegated', address: `office${ID}@exousia.test`, label: 'The office' })).d.account;
+    await boss('PUT', `/mail/${bossId}/accounts/${account.id}/grants/${paId}`,
+      { view: true, organise: true, draft: true, delete: true, sendMode: 'draft' });
+
+    const address = (await boss('GET', `/mail/${bossId}/accounts/${account.id}/inbound`)).d.address;
+    const post = (body) => client()('POST', '/mail-inbound', body,
+      { 'x-kairos-inbound-secret': SECRET });
+
+    await post({
+      to: address, from: `chidi${ID}@ashford.com`, fromName: 'Chidi Nwosu',
+      subject: 'The Q3 board pack', body: 'Attached, as promised.', messageId: `known-${ID}`,
     });
-    const workId = work.d.trip?.id;
-    ok('the assistant arranges the work trip', work.s === 201, `${work.s} ${JSON.stringify(work.d).slice(0, 120)}`);
-
-    const priv = await boss('POST', `/trips/${bossId}`, {
-      name: 'Sallah with the family', destination: 'Kaduna', destinationTimezone: 'Africa/Lagos',
-      startsOn: dayKey(30), endsOn: dayKey(34), status: 'confirmed', visibility: 'private',
+    const stranger = await post({
+      to: address, from: 'solicitor@private.test', fromName: 'A Solicitor',
+      subject: 'The settlement', body: 'As discussed.', messageId: `new-${ID}`,
     });
-    const privId = priv.d.trip?.id;
-    ok('the principal makes their own one private', priv.d.trip?.visibility === 'private',
-      JSON.stringify(priv.d).slice(0, 140));
+    ok('mail from somebody new is held rather than accepted',
+      stranger.d.quarantined === true, JSON.stringify(stranger.d));
 
-    // ---- What the office sees ----------------------------------------------
-    head('The office sees the work and not the rest:');
-    let r = await pa('GET', `/trips/${bossId}`);
-    const paSees = (r.d.trips || []).map((t) => t.id);
-    // POSITIVE CONTROL FIRST. If this ever stops being true the hiding
-    // assertion below means nothing, because an empty list hides everything.
-    ok('the assistant still sees the work trip', paSees.includes(workId), JSON.stringify(paSees));
-    ok('and not the private one', !paSees.includes(privId), JSON.stringify(paSees));
+    const listFor = async (who) =>
+      (await who('GET', `/mail/${bossId}/accounts/${account.id}/threads`)).d.threads || [];
+    const quarantinedFor = async (who) =>
+      (await who('GET', `/mail/${bossId}/accounts/${account.id}/threads?quarantined=1`)).d.threads || [];
 
-    r = await cos('GET', `/trips/${bossId}`);
-    const cosSees = (r.d.trips || []).map((t) => t.id);
-    ok('the Chief of Staff still sees the work trip', cosSees.includes(workId), JSON.stringify(cosSees));
-    // The one exception to "the Chief of Staff sees the whole office", and it
-    // is deliberate: seeing the office is about work.
-    ok('and the whole office does not include a family holiday',
-      !cosSees.includes(privId), JSON.stringify(cosSees));
+    // ---- The default -------------------------------------------------------------
+    head('An assistant sees the correspondents the principal has admitted:');
+    let mine = await listFor(pa);
+    ok('the known correspondent is theirs to work',
+      mine.some((t) => /Q3 board pack/.test(t.subject)), JSON.stringify(mine.map((t) => t.subject)));
+    ok('and there is exactly one thread in their list', mine.length === 1,
+      JSON.stringify(mine.map((t) => t.subject)));
 
-    // Not merely filtered from a list — unreachable by its own address, and
-    // refused the same way a trip that does not exist is refused.
-    ok('opening it directly is a plain not-found',
-      (await pa('GET', `/trips/${bossId}/${privId}`)).s === 404);
-    ok('while the work trip opens', (await pa('GET', `/trips/${bossId}/${workId}`)).s === 200);
-    ok('and the principal can open their own',
-      (await boss('GET', `/trips/${bossId}/${privId}`)).s === 200);
+    head('And nothing at all of the one nobody admitted:');
+    // THE ASSERTION THIS FILE EXISTS FOR. Not "cannot open" — cannot see that
+    // it is there. The subject line alone would have said enough.
+    ok('the held correspondence is not in their list',
+      !mine.some((t) => /settlement/i.test(t.subject)), JSON.stringify(mine.map((t) => t.subject)));
+    ok('nor in the held tray, which is no longer theirs to work',
+      (await quarantinedFor(pa)).length === 0,
+      JSON.stringify(await quarantinedFor(pa)));
 
-    // ---- The legs, which are as private as the journey ----------------------
-    head('And the legs of it are just as absent:');
-    const leg = await boss('POST', `/itinerary/${bossId}/items`, {
-      title: 'Drive up to Kaduna', kind: 'car', tripId: privId,
-      startAt: new Date(Date.parse(`${dayKey(30)}T09:00:00Z`)).toISOString(),
-      status: 'confirmed',
-    });
-    ok('a leg is added to the private trip', leg.s === 201, `${leg.s} ${JSON.stringify(leg.d).slice(0, 120)}`);
-    const openLeg = await boss('POST', `/itinerary/${bossId}/items`, {
-      title: 'Board dinner', kind: 'meal', tripId: workId,
-      startAt: new Date(Date.parse(`${dayKey(10)}T18:00:00Z`)).toISOString(),
-      status: 'confirmed',
-    });
-    ok('and one to the work trip', openLeg.s === 201);
+    // POSITIVE CONTROL: the principal sees both, so the two silences above are
+    // the rule rather than mail that failed to arrive.
+    ok('though the principal has both', (await listFor(boss)).length
+      + (await quarantinedFor(boss)).length === 2,
+      JSON.stringify([(await listFor(boss)).length, (await quarantinedFor(boss)).length]));
 
-    const paDay = await pa('GET', `/itinerary/${bossId}/day?date=${dayKey(30)}`);
-    const paWork = await pa('GET', `/itinerary/${bossId}/day?date=${dayKey(10)}`);
-    ok('the assistant sees the work leg on its day',
-      JSON.stringify(paWork.d).includes('Board dinner'), JSON.stringify(paWork.d).slice(0, 160));
-    ok('and nothing at all on the private day',
-      !JSON.stringify(paDay.d).includes('Kaduna'), JSON.stringify(paDay.d).slice(0, 200));
+    const held = (await quarantinedFor(boss))[0];
+    const known = (await listFor(boss)).find((t) => /Q3/.test(t.subject));
 
-    // ---- The clock, which is evidence --------------------------------------
-    head('Nor can the clock give it away:');
-    // A day drawn in the destination's zone says "they are abroad" without
-    // ever showing the trip. Asserted against the timezone the day comes back
-    // in rather than against any text.
-    const paToday = await pa('GET', `/today/${bossId}`);
-    ok('the assistant\'s view of the day stays in the home zone',
-      !JSON.stringify(paToday.d?.trip || null).includes('Kaduna'),
-      JSON.stringify(paToday.d?.trip || null));
+    // ---- Every other door ----------------------------------------------------------
+    head('And every other way in is shut, not just the list:');
+    const at = (id) => `/mail/${bossId}/accounts/${account.id}/threads/${id}`;
+    ok('opening it directly is not found',
+      (await pa('GET', at(held.id))).s === 404);
+    ok('filing it is not found',
+      (await pa('PATCH', at(held.id), { state: 'done' })).s === 404);
+    // The most damaging verb, and the one a gate written only for reading
+    // would leave open.
+    ok('and deleting it is not found',
+      (await pa('DELETE', at(held.id))).s === 404);
+    // POSITIVE CONTROL: the same three work on the thread they may see, so the
+    // 404s above are the gate rather than three broken routes.
+    ok('though all three reach the correspondence they do handle',
+      (await pa('GET', at(known.id))).s === 200
+      && (await pa('PATCH', at(known.id), { state: 'waiting' })).s === 200,
+      'one of GET/PATCH failed on the admitted thread');
+    // Put back, because the control above really did file it and the triage
+    // check below asks for what is still open. A positive control that leaves
+    // the fixture changed makes the next assertion measure the control.
+    await pa('PATCH', at(known.id), { state: 'open' });
 
-    // ---- The one bit that does cross ---------------------------------------
-    head('But the day is not offered as free, because it is not:');
-    // A booking to move, so the openings endpoint has something to answer about.
-    await boss('PUT', '/availability', {
-      rules: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: '00:00', endTime: '23:30' })),
-    });
-    const mt = await boss('POST', '/meeting-types',
-      { name: 'Board', durationMinutes: 30, locationType: 'video', accessTier: 1 });
-    // The handle is generated at signup, so it is asked for rather than assumed.
-    const slug = (await boss('GET', '/auth/me')).d.user.slug;
-    const slots = await (await fetch(`${BASE}/api/public/${slug}/${mt.d.meetingType.slug}/slots`)).json();
-    ok('the booking page offers times', (slots.slots || []).length > 0, JSON.stringify(slots).slice(0, 120));
-    await fetch(`${BASE}/api/public/${slug}/${mt.d.meetingType.slug}/book`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ timezone: 'UTC', startAt: slots.slots[0].startAt, name: 'Chidi Eze', email: 'chidi@x.com' }),
-    });
-    const mine = await boss('GET', '/bookings');
-    const bookingId = mine.d.bookings[0].id;
+    // ---- The door most easily forgotten ---------------------------------------------
+    head('Including the one that hands correspondence to a model:');
+    // No key is configured here, so the ask refuses — but it refuses AFTER
+    // assembling the list, which is where a private thread would have leaked.
+    // Counting what the mailbox hands the ask is therefore done directly.
+    const mailbox = require(`${ROOT}/app/server/lib/mailbox`);
+    const mailAccess = require(`${ROOT}/app/server/lib/mailAccess`);
+    const acct = await require(`${ROOT}/app/server/lib/db`)
+      .prepare('SELECT * FROM mail_accounts WHERE id = ?').get(account.id);
+    const paMay = await mailAccess.accessFor(acct, paId);
+    const forTriage = await mailbox.threads(acct.id, { state: 'open', may: paMay });
+    ok('triage is handed only what the assistant may see',
+      forTriage.length === 1 && !/settlement/i.test(forTriage[0].subject),
+      JSON.stringify(forTriage.map((t) => t.subject)));
 
-    const openOnPrivate = await pa('GET',
-      `/pa/${bossId}/bookings/${bookingId}/openings?date=${dayKey(31)}&minutes=30`);
-    const openOnFree = await pa('GET',
-      `/pa/${bossId}/bookings/${bookingId}/openings?date=${dayKey(20)}&minutes=30`);
-    // POSITIVE CONTROL. An ordinary day must still offer times, or "no times"
-    // proves nothing about privacy.
-    ok('an ordinary day still offers times',
-      (openOnFree.d.openings || []).length > 0, JSON.stringify(openOnFree.d).slice(0, 140));
-    ok('a private day offers none', (openOnPrivate.d.openings || []).length === 0,
-      JSON.stringify(openOnPrivate.d).slice(0, 140));
-    ok('and says only that it is unavailable',
-      openOnPrivate.d.unavailable === true
-      && JSON.stringify(openOnPrivate.d.busy) === JSON.stringify(
-        [{ id: null, kind: 'unavailable', label: 'Unavailable', startAt: null, endAt: null }]),
-      JSON.stringify(openOnPrivate.d.busy));
-    // THE POINT OF THE WHOLE PARAGRAPH: the word "unavailable" and nothing else.
-    ok('naming neither the trip, the place, nor that it is travel',
-      !/Kaduna|Sallah|family|car|trip/i.test(JSON.stringify(openOnPrivate.d)),
-      JSON.stringify(openOnPrivate.d).slice(0, 200));
-    // And the principal's own picker is not crippled by their own privacy.
-    ok('while the principal\'s own day is untouched',
-      ((await boss('GET', `/bookings/${bookingId}/openings?date=${dayKey(31)}&minutes=30`))
-        .d.openings || []).length > 0);
+    // ---- Admitting is the principal's ------------------------------------------------
+    head('Letting a new correspondent through belongs to the principal:');
+    ok('an assistant cannot admit one',
+      (await pa('PATCH', at(held.id), { releaseQuarantine: true })).s === 404);
+    let r = await boss('PATCH', at(held.id), { releaseQuarantine: true });
+    ok('the principal can', r.s === 200, `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
+    mine = await listFor(pa);
+    ok('after which the office can work it',
+      mine.some((t) => /settlement/i.test(t.subject)), JSON.stringify(mine.map((t) => t.subject)));
 
-    // ---- Who may decide ----------------------------------------------------
-    head('And it is the principal\'s decision, nobody else\'s:');
-    ok('an assistant cannot make a trip private',
-      (await pa('PATCH', `/trips/${bossId}/${workId}/visibility`, { visibility: 'private' })).s === 403);
-    ok('nor can a Chief of Staff',
-      (await cos('PATCH', `/trips/${bossId}/${workId}/visibility`, { visibility: 'private' })).s === 403);
-    ok('an assistant creating one cannot mark it private either',
-      (await pa('POST', `/trips/${bossId}`, {
-        name: 'Sneaky', startsOn: dayKey(50), endsOn: dayKey(51), visibility: 'private',
-      })).d.trip?.visibility === 'office');
-    ok('the principal can', (await boss('PATCH', `/trips/${bossId}/${workId}/visibility`,
-      { visibility: 'private' })).d.trip?.visibility === 'private');
-    // Put it back, so the rest of the file reasons about the trip it named.
-    await boss('PATCH', `/trips/${bossId}/${workId}/visibility`, { visibility: 'office' });
+    // ---- The per-thread override -------------------------------------------------------
+    head('And one correspondence can be taken back out of the office\'s sight:');
+    ok('an assistant cannot take one private',
+      (await pa('PATCH', at(known.id), { visibility: 'private' })).s === 403);
+    r = await boss('PATCH', at(known.id), { visibility: 'private' });
+    ok('the principal can', r.s === 200, `${r.s} ${JSON.stringify(r.d).slice(0, 120)}`);
+    mine = await listFor(pa);
+    ok('and it leaves the assistant\'s list entirely',
+      !mine.some((t) => /Q3/.test(t.subject)), JSON.stringify(mine.map((t) => t.subject)));
+    ok('while the one they were admitted to stays',
+      mine.some((t) => /settlement/i.test(t.subject)), JSON.stringify(mine.map((t) => t.subject)));
+    ok('and the principal still has it, marked',
+      (await listFor(boss)).some((t) => /Q3/.test(t.subject) && t.visibility === 'private'),
+      JSON.stringify((await listFor(boss)).map((t) => [t.subject, t.visibility])));
 
-    // ---- Whoever arranged it keeps it --------------------------------------
-    head('Whoever arranged it can still open what they built:');
-    // The principal asks the PA to arrange something personal. The PA made it,
-    // so the PA can see it — pretending otherwise means an assistant locked out
-    // of their own work.
-    const arranged = await pa('POST', `/trips/${bossId}`, {
-      name: 'Anniversary, Cape Town', destination: 'Cape Town',
-      startsOn: dayKey(60), endsOn: dayKey(64), status: 'confirmed',
-    });
-    const arrangedId = arranged.d.trip.id;
-    await boss('PATCH', `/trips/${bossId}/${arrangedId}/visibility`, { visibility: 'private' });
-    ok('the assistant who arranged it still sees it',
-      (await pa('GET', `/trips/${bossId}/${arrangedId}`)).s === 200);
-    ok('but the Chief of Staff, who did not, does not',
-      (await cos('GET', `/trips/${bossId}/${arrangedId}`)).s === 404);
+    // NOT A ONE-WAY DOOR. A principal who cannot undo this would think twice
+    // before using it, which would make the feature not exist.
+    r = await boss('PATCH', at(known.id), { visibility: 'office' });
+    ok('and it can be put back', r.s === 200, String(r.s));
+    ok('after which the office has it again',
+      (await listFor(pa)).some((t) => /Q3/.test(t.subject)));
 
-    // ---- The principal chooses who else -------------------------------------
-    head('The principal can let somebody in, and take it back:');
-    ok('somebody outside the office cannot be told',
-      (await boss('POST', `/trips/${bossId}/${privId}/shares`, { userId: 'nobody' })).s === 400);
-    ok('an assistant cannot hand it round',
-      (await pa('POST', `/trips/${bossId}/${privId}/shares`, { userId: cosId })).s === 403);
-
-    ok('the principal names somebody',
-      (await boss('POST', `/trips/${bossId}/${privId}/shares`, { userId: cosId })).s === 201);
-    ok('and now they can see it', (await cos('GET', `/trips/${bossId}/${privId}`)).s === 200);
-    ok('and it is in their list',
-      (await cos('GET', `/trips/${bossId}`)).d.trips.some((t) => t.id === privId));
-    // Being told does not put the day back on the market for them, it opens
-    // the day: they can see what is there and judge, like any other trip.
-    ok('their picker stops saying unavailable for that day',
-      (await cos('GET', `/pa/${bossId}/bookings/${bookingId}/openings?date=${dayKey(31)}&minutes=30`))
-        .d.unavailable !== true);
-    // But only for them.
-    ok('while it still says so for everybody else',
-      (await pa('GET', `/pa/${bossId}/bookings/${bookingId}/openings?date=${dayKey(31)}&minutes=30`))
-        .d.unavailable === true);
-
-    ok('and the principal can take it back',
-      (await boss('DELETE', `/trips/${bossId}/${privId}/shares/${cosId}`)).s === 204);
-    ok('after which it is gone again',
-      (await cos('GET', `/trips/${bossId}/${privId}`)).s === 404);
-    void paId;
+    ok('a visibility that is neither is refused',
+      (await boss('PATCH', at(known.id), { visibility: 'somewhat' })).s === 400);
 
   } catch (err) {
     fails++;
@@ -280,7 +221,7 @@ const dayKey = (offset) => {
   }
 
   console.log(fails === 0
-    ? '\nA personal journey is the principal\'s alone, and the day still cannot be booked over.'
+    ? '\nAn assistant sees who the principal admitted, and one letter can always be kept back.'
     : `\n${fails} FAILURES`);
   process.exit(fails === 0 ? 0 : 1);
 })().catch((e) => { console.error('\nFAILED: ' + e.message); process.exit(1); });

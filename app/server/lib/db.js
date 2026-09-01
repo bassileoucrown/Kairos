@@ -615,6 +615,20 @@ function ready() {
       // from the people doing it. See lib/tripPrivacy.js.
       await ensureColumn('trips', 'visibility', "TEXT NOT NULL DEFAULT 'office'");
       await ensureIndex('idx_trips_visibility', 'trips(owner_id, visibility)');
+
+      // Whether one correspondence is the office's business. The same word and
+      // the same default as trips above, for the same reason: every thread
+      // that already exists stays exactly as visible as it was, because a
+      // migration that hid old correspondence would take work away from the
+      // people doing it without telling anybody.
+      //
+      // This is the PER-THREAD OVERRIDE. The default rule — that an assistant
+      // sees correspondents the principal has admitted and nobody else — is
+      // computed rather than stored, and lives in lib/mailAccess.js. This
+      // column is for the case the rule cannot predict: a known correspondent
+      // who writes about something personal once.
+      await ensureColumn('mail_threads', 'visibility', "TEXT NOT NULL DEFAULT 'office'");
+      await ensureIndex('idx_mail_threads_visibility', 'mail_threads(account_id, visibility)');
       await ensureIndex('idx_itinerary_series', 'itinerary_items(series_id)');
       await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
       await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');

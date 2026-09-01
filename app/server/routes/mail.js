@@ -55,6 +55,11 @@ function serializeAccount(a, may) {
     may: {
       view: may.view, organise: may.organise, draft: may.draft,
       delete: may.delete, purge: may.purge, sendMode: may.sendMode,
+      // Two acts belong to the principal alone — admitting a new
+      // correspondent, and taking one correspondence out of the office's
+      // sight. The screen needs to know which it is talking to so it does not
+      // offer either to somebody the server would refuse.
+      isOwner: !!may.isOwner,
     },
   };
 }
@@ -181,15 +186,37 @@ router.get('/:ownerId/accounts/:accountId/threads', requirePaAccess, loadAccount
       threads: await mailbox.threads(req.account.id, {
         state: req.query.state || null,
         quarantined: req.query.quarantined === '1',
+        // The viewer, so the list is filtered by the one gate rather than by
+        // this route's own idea of who sees what. See lib/mailAccess.js.
+        may: req.may,
       }),
     });
   });
+
+/**
+ * The thread's own tier, for the gate.
+ *
+ * Looked up rather than joined into the row because this route fetches one
+ * thread by id and a second small query is cheaper to read than a join that
+ * exists for one caller.
+ */
+async function tierOf(thread) {
+  const c = await db.prepare('SELECT relationship_tier FROM contacts WHERE owner_id = ? AND email = ?')
+    .get(thread.owner_id, thread.correspondent_email);
+  return c?.relationship_tier || null;
+}
 
 router.get('/:ownerId/accounts/:accountId/threads/:threadId', requirePaAccess, loadAccount,
   async (req, res) => {
     const t = await db.prepare('SELECT * FROM mail_threads WHERE id = ? AND account_id = ?')
       .get(req.params.threadId, req.account.id);
     if (!t) return res.status(404).json({ error: 'Not found.' });
+    // NOT FOUND RATHER THAN FORBIDDEN, deliberately. "You may not read this"
+    // confirms that a correspondence with that id exists in this principal's
+    // mailbox, which is most of what somebody guessing wanted to know.
+    if (!access.maySeeThread(t, req.may, await tierOf(t))) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
     res.json({
       thread: mailbox.serializeThread(t),
       messages: await mailbox.messagesIn(t.id),
@@ -201,12 +228,34 @@ router.patch('/:ownerId/accounts/:accountId/threads/:threadId', requirePaAccess,
     if (!req.may.organise) {
       return res.status(403).json({ error: 'You may read this correspondence, not file it.' });
     }
-    const t = await db.prepare('SELECT id FROM mail_threads WHERE id = ? AND account_id = ?')
+    const t = await db.prepare('SELECT * FROM mail_threads WHERE id = ? AND account_id = ?')
       .get(req.params.threadId, req.account.id);
     if (!t) return res.status(404).json({ error: 'Not found.' });
+    if (!access.maySeeThread(t, req.may, await tierOf(t))) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
+
+    // ADMITTING A CORRESPONDENT IS THE PRINCIPAL'S, and this is the line that
+    // makes private-by-default mean anything. Quarantine is no longer a tray
+    // the office works through — it is the boundary, and an assistant who
+    // could release from it could admit anyone to everything that follows.
+    if (req.body?.releaseQuarantine && !req.may.isOwner) {
+      return res.status(403).json({
+        error: 'Only the principal can let a new correspondent through to the office.',
+        code: 'principal_only',
+      });
+    }
+    // Same for taking a thread out of the office's sight, or putting it back.
+    if (req.body?.visibility !== undefined && !req.may.isOwner) {
+      return res.status(403).json({
+        error: 'Only the principal decides which correspondence the office sees.',
+        code: 'principal_only',
+      });
+    }
+
     const result = await mailbox.organise(t.id, req.body || {});
     if (!result.ok) return res.status(result.status).json({ error: result.error });
-    res.json({ threads: await mailbox.threads(req.account.id) });
+    res.json({ threads: await mailbox.threads(req.account.id, { may: req.may }) });
   });
 
 router.delete('/:ownerId/accounts/:accountId/threads/:threadId', requirePaAccess, loadAccount,
@@ -217,6 +266,11 @@ router.delete('/:ownerId/accounts/:accountId/threads/:threadId', requirePaAccess
     const t = await db.prepare('SELECT * FROM mail_threads WHERE id = ? AND account_id = ?')
       .get(req.params.threadId, req.account.id);
     if (!t) return res.status(404).json({ error: 'Not found.' });
+    // A thread they cannot see is a thread they cannot destroy. Without this
+    // the gate would guard reading and leave the most damaging verb open.
+    if (!access.maySeeThread(t, req.may, await tierOf(t))) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
     await mailbox.remove({ thread: t, actorId: req.user.id, ownerId: req.principal.id });
     res.status(204).end();
   });

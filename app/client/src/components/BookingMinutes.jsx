@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import AssistButton from './AssistButton.jsx';
+import MeetingRecorder from './MeetingRecorder.jsx';
 import { dayLabelInZone, timeLabelInZone } from '../lib/timezones.js';
 
 /**
@@ -129,6 +130,13 @@ export default function BookingMinutes({ ownerId, bookingId, startAt, timezone, 
           <div className="minute-body">{m.body}</div>
         </div>
       ))}
+
+      {/* Recording belongs to the meeting itself rather than to the write-up,
+          so it sits above both halves. See components/MeetingRecorder.jsx —
+          nothing starts without somebody reading the notice and pressing
+          again, and the deployment says which credential it is waiting on
+          rather than hiding the control. */}
+      <MeetingRecorder ownerId={ownerId} bookingId={bookingId} onChanged={load} />
 
       {/* OUTSIDE the started/not-started split, deliberately. Everything below
           is the record AFTERWARDS and correctly waits for the meeting to

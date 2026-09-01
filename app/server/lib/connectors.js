@@ -165,7 +165,11 @@ const CONNECTORS = [
     what: 'Where a scanned passport page is kept, encrypted, when the number alone is not enough.',
     kind: 'deployment',
     plan: 'plus',
-    env: ['STORAGE_BUCKET', 'STORAGE_KEY'],
+    // Five, not two. An S3-compatible endpoint needs the bucket, where it is,
+    // which region it thinks it is in, and both halves of the credential —
+    // listing only two would have an operator set them, see "not configured",
+    // and have nothing to tell them which of the missing three it wanted.
+    env: ['STORAGE_BUCKET', 'STORAGE_ENDPOINT', 'STORAGE_KEY', 'STORAGE_SECRET'],
   },
   {
     id: 'transcription',

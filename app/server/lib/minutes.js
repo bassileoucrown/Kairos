@@ -59,8 +59,14 @@ async function material(booking) {
   if (booking.purpose) parts.push(`What it was for: ${booking.purpose}`);
 
   for (const n of notes) {
-    parts.push(`[${n.kind === 'dictation' ? 'Said afterwards' : 'Note'}`
-      + `${n.author ? ` by ${n.author}` : ''}] ${n.body}`);
+    // A TRANSCRIPT IS LABELLED AS ONE. What a machine heard and what a person
+    // wrote down are different kinds of evidence, and a draft built from both
+    // should say which sentences came from which — not least because a
+    // transcript mishears names and a note does not.
+    const label = n.kind === 'dictation' ? 'Said afterwards'
+      : n.kind === 'transcript' ? 'Transcript of the recording'
+        : 'Note';
+    parts.push(`[${label}${n.author ? ` by ${n.author}` : ''}] ${n.body}`);
   }
 
   // Truncated at a stated size rather than sent whole. A model call is
@@ -74,6 +80,7 @@ async function material(booking) {
     // somebody conclude the feature is broken.
     noteCount: notes.length,
     hasDictation: notes.some((n) => n.kind === 'dictation'),
+    hasTranscript: notes.some((n) => n.kind === 'transcript'),
   };
 }
 

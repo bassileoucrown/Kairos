@@ -264,6 +264,25 @@ function dayKey(offset) {
       ok(`the booking offers ${label}`,
         (await p.locator(`.itin-tool:has-text("${label}")`).count()) >= 1);
     }
+    // The recording control lives on the appointment itself. Unconfigured
+    // here, so what a tester must see is the control naming the credentials
+    // rather than nothing at all. The capture itself is proved in btape.js.
+    await p.goto(`${BASE}/appointments/${(await p.evaluate(async () =>
+      (await (await fetch('/api/auth/me', { credentials: 'include' })).json()).user.id))}/${booked.booking.id}`);
+    await p.waitForSelector('.booking-minutes', { timeout: 20000 });
+    await p.waitForSelector('.minute-record', { timeout: 20000 });
+    const rec = await p.locator('.minute-record').innerText();
+    ok('the appointment says recording is not available here',
+      /not available on this deployment/i.test(rec), rec.slice(0, 200));
+    ok('and names a credential rather than saying "not configured"',
+      /TRANSCRIPTION_ENDPOINT|STORAGE_BUCKET|ENCRYPTION_KEY/.test(rec), rec.slice(0, 300));
+
+    await p.goto(`${BASE}/itinerary`);
+    await p.waitForSelector('input[aria-label="Day"]', { timeout: 20000 });
+    await p.fill('input[aria-label="Day"]', bookedDay);
+    await p.waitForFunction(
+      () => /from a booking/i.test(document.body.innerText), null, { timeout: 20000 },
+    );
     await p.click('.itin-tool:has-text("Length")');
     await p.waitForSelector('input[type="number"]', { timeout: 20000 });
     ok('and Length opens on the length it currently runs',

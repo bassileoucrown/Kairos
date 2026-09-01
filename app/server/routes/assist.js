@@ -90,7 +90,12 @@ router.post('/:ownerId/mail/:accountId/triage', requirePaAccess,
     const may = await mailAccess.accessFor(account, req.user.id);
     if (!may) return res.status(404).json({ error: 'Not found.' });
 
-    const threads = await mailbox.threads(account.id, { state: 'open' });
+    // THROUGH THE SAME GATE AS THE SCREEN. Without `may` this listed every
+    // open thread in the mailbox and handed it to a model — including the
+    // correspondence the principal has kept out of the office's sight, which
+    // is the one place it must never go. An ask is a new door onto old data,
+    // and this is exactly the door a new privacy rule gets forgotten behind.
+    const threads = await mailbox.threads(account.id, { state: 'open', may });
     const withText = [];
     for (const t of threads.slice(0, 25)) {
       const msgs = await mailbox.messagesIn(t.id);

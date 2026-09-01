@@ -190,16 +190,24 @@ export default function Correspondence() {
         )}
       </div>
 
-      {/* Held, not dropped and not accepted. Dropping loses a first approach
-          from somebody who matters; accepting lets anybody who learns the
-          address put things in front of a principal. */}
+      {/* WAITING TO BE ADMITTED, and only the principal sees this or acts on
+          it. Held rather than dropped, because dropping loses a first approach
+          from somebody who matters; held rather than accepted, because
+          accepting lets anybody who learns the address put things in front of
+          a principal — and, now, in front of their staff.
+          Letting one through is the act that makes private-by-default mean
+          something, so it is the principal's alone. See lib/mailAccess.js. */}
       {quarantined.length > 0 && (
         <div className="alert alert-warning">
           <strong>{quarantined.length} from senders the office does not know.</strong>
+          <p className="hint" style={{ margin: '4px 0 8px' }}>
+            Nobody but you can see these. Letting one through puts that
+            correspondence in front of whoever handles this mailbox.
+          </p>
           {quarantined.map((t) => (
             <div className="movement-line" key={t.id}>
               <span>{t.correspondentEmail} — {t.subject}</span>
-              {account?.may?.organise && (
+              {account?.may?.isOwner && (
                 <button
                   className="btn btn-sm" type="button"
                   onClick={() => act(() => api.patch(
@@ -226,8 +234,16 @@ export default function Correspondence() {
                 <strong>{t.subject}</strong>
                 <div className="meta">{t.correspondentName} · {when(t.lastAt)}</div>
               </div>
-              <span className={`pill${t.state === 'waiting' ? ' is-warn' : ''}`}>
-                {(STATES.find(([s]) => s === t.state) || [, t.state])[1]}
+              <span className="mail-state">
+                {/* Shown to the principal only, because it is the only person
+                    who ever receives a private thread. Saying it on the row
+                    saves opening each one to find out which are hidden. */}
+                {t.visibility === 'private' && (
+                  <span className="pill is-warn">Only me</span>
+                )}
+                <span className={`pill${t.state === 'waiting' ? ' is-warn' : ''}`}>
+                  {(STATES.find(([s]) => s === t.state) || [, t.state])[1]}
+                </span>
               </span>
             </button>
 
@@ -267,6 +283,24 @@ export default function Correspondence() {
                       {label}
                     </button>
                   ))}
+                  {/* THE PER-THREAD OVERRIDE, for the case the rule cannot
+                      predict: a correspondent the office knows perfectly well
+                      who writes about something personal once. The principal's
+                      alone — an assistant who could put a thread back would be
+                      able to undo their own exclusion from it. */}
+                  {account?.may?.isOwner && (
+                    <button
+                      className="btn btn-sm" type="button"
+                      onClick={() => act(() => api.patch(
+                        `/mail/${ownerId}/accounts/${accountId}/threads/${t.id}`,
+                        { visibility: t.visibility === 'private' ? 'office' : 'private' },
+                      ))}
+                    >
+                      {t.visibility === 'private'
+                        ? 'Let the office see this'
+                        : 'Keep this to myself'}
+                    </button>
+                  )}
                   {account?.may?.delete && (
                     <button
                       className="btn btn-sm" type="button"

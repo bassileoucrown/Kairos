@@ -128,6 +128,27 @@ function build() {
     state: 'soon',
   });
 
+  // ---- A meeting -----------------------------------------------------
+  //
+  // The capture is built — see lib/recording.js — and needs three things this
+  // deployment may not have. Listed as one capability rather than three
+  // because an office does not want "recording, transcription and storage";
+  // it wants a minute written from what was said, and either that works or it
+  // does not.
+  const rec = require('./recording').readiness();
+  add({
+    id: 'meeting_recording',
+    control: 'Record this meeting',
+    screen: 'appointment',
+    label: 'Record a meeting and transcribe it',
+    what: 'With everyone told, the room is recorded and the words are filed with the notes, '
+      + 'so the minute is written from what was actually said. The audio is encrypted before it '
+      + 'leaves the server and deleted on a clock; the transcript is what lasts.',
+    available: rec.available,
+    needs: rec.missing,
+    state: 'needs_key',
+  });
+
   // ---- The desk ------------------------------------------------------
   add({
     id: 'concierge_desk',

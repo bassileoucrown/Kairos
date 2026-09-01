@@ -184,6 +184,8 @@ router.post('/:id/minutes', loadOwn, minuteHandlers.file(minuteHandlers.own));
 router.post('/:id/minutes/draft', loadOwn, minuteHandlers.draft(minuteHandlers.own));
 router.post('/:id/dictation', loadOwn, minuteHandlers.dictate(minuteHandlers.own));
 router.post('/:id/recording', loadOwn, minuteHandlers.recording(minuteHandlers.own));
+router.post('/:id/recording/audio', loadOwn, minuteHandlers.captureAudio(minuteHandlers.own));
+router.get('/:id/recordings', loadOwn, minuteHandlers.recordings(minuteHandlers.own));
 
 router.post('/:id/follow-up', loadOwn, async (req, res) => {
   const result = await notes.followUp({

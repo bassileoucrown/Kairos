@@ -1726,3 +1726,34 @@ CREATE TABLE IF NOT EXISTS usage_events (
 );
 CREATE INDEX IF NOT EXISTS idx_usage_at ON usage_events(at);
 CREATE INDEX IF NOT EXISTS idx_usage_event ON usage_events(event);
+
+-- ============================================================
+-- Meeting recordings
+-- ============================================================
+
+-- What was captured in the room, and what it turned into.
+--
+-- THE ROW OUTLIVES THE AUDIO, deliberately. object_key is cleared when the
+-- recording expires and the row stays, so "was this meeting recorded, and by
+-- whom" still has an answer months later. The fact of a recording is part of
+-- the record — arguably the most important part of it — and deleting the row
+-- with the file would erase the evidence that anyone was ever taped.
+--
+-- The transcript is the durable artifact: it is what a minute gets written
+-- from, and it is a thousandth of the size of the thing it came from.
+CREATE TABLE IF NOT EXISTS booking_recordings (
+  id           TEXT PRIMARY KEY,
+  booking_id   TEXT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Null once the audio has been swept. Never null while it exists.
+  object_key   TEXT,
+  mime_type    TEXT NOT NULL DEFAULT '',
+  bytes        INTEGER NOT NULL DEFAULT 0,
+  duration_ms  INTEGER NOT NULL DEFAULT 0,
+  transcript   TEXT NOT NULL DEFAULT '',
+  captured_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL,
+  expires_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_booking_recordings ON booking_recordings(booking_id);
+CREATE INDEX IF NOT EXISTS idx_booking_recordings_expiry ON booking_recordings(expires_at);

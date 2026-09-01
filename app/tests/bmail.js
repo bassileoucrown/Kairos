@@ -216,8 +216,19 @@ function client() {
     ok('the known correspondence is in the working inbox', threads.length === 1,
       JSON.stringify(threads.map((t) => t.subject)));
     ok('and the stranger is not', !threads.some((t) => /Investment/.test(t.subject)));
-    ok('but is waiting in quarantine',
+    // PRIVATE BY DEFAULT MOVED THIS LINE. Quarantine used to be a tray the
+    // office worked through, and this asserted the PA could see what was in
+    // it. It is now the boundary itself: a correspondent nobody has admitted
+    // is the principal's alone, and admitting them is the principal's act.
+    // See lib/mailAccess.js — maySeeThread — and bprivate.js, which is where
+    // the whole rule and every door round it are tested.
+    ok('and the office cannot see it waiting either',
       ((await pa('GET', `/mail/${bossId}/accounts/${accountId}/threads?quarantined=1`))
+        .d.threads || []).length === 0);
+    // POSITIVE CONTROL: it really did arrive and really is being held, so the
+    // silence above is the rule rather than mail that never landed.
+    ok('though the principal sees it waiting',
+      ((await boss('GET', `/mail/${bossId}/accounts/${accountId}/threads?quarantined=1`))
         .d.threads || []).length === 1);
 
     const threadId = threads[0].id;

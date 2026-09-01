@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('./db');
+const mailAccess = require('./mailAccess');
 
 // The correspondence itself: what arrives, how it is worked, and what a delete
 // leaves behind.
@@ -121,6 +122,10 @@ function serializeThread(t, extra = {}) {
     snoozedUntil: t.snoozed_until || null,
     lastAt: t.last_at,
     quarantined: !!t.quarantined,
+    // So the principal's screen can mark which threads their office cannot
+    // see, and offer to change it. An assistant never receives a thread this
+    // is 'private' on, so the field is only ever informative to the owner.
+    visibility: t.visibility || 'office',
     deletedAt: t.deleted_at || null,
     ...extra,
   };
@@ -148,16 +153,39 @@ function serializeMessage(m) {
   };
 }
 
-async function threads(accountId, { state = null, includeDeleted = false, quarantined = false } = {}) {
+/**
+ * The threads in a mailbox, as one viewer may see them.
+ *
+ * `may` IS NOT OPTIONAL IN PRACTICE and is only defaulted so an internal
+ * caller counting rows does not have to invent one. Every route passes it, and
+ * what comes back is filtered through mailAccess.maySeeThread — the one
+ * function that answers "may this person see this correspondence".
+ *
+ * THE FILTER IS IN JAVASCRIPT RATHER THAN IN THE SQL, deliberately, and it is
+ * the same two-gate shape used for movements: the query narrows, the gate
+ * decides. Writing the rule twice — once as a WHERE clause and once as a
+ * function — is how the two come to disagree, and the half that would be wrong
+ * is the SQL, because that is the half nobody re-reads when the rule changes.
+ * The LIMIT is generous enough that filtering afterwards does not empty a page.
+ */
+async function threads(accountId, {
+  state = null, includeDeleted = false, quarantined = false,
+  may = mailAccess.FULL, ownerId = null,
+} = {}) {
   const rows = await db.prepare(`
-    SELECT * FROM mail_threads
-     WHERE account_id = ?
-       AND quarantined = ?
-       ${state ? 'AND state = ?' : ''}
-       ${includeDeleted ? '' : 'AND deleted_at IS NULL'}
-     ORDER BY last_at DESC LIMIT 200
+    SELECT t.*, c.relationship_tier AS contact_tier
+      FROM mail_threads t
+      LEFT JOIN contacts c
+        ON c.owner_id = t.owner_id AND c.email = t.correspondent_email
+     WHERE t.account_id = ?
+       AND t.quarantined = ?
+       ${state ? 'AND t.state = ?' : ''}
+       ${includeDeleted ? '' : 'AND t.deleted_at IS NULL'}
+     ORDER BY t.last_at DESC LIMIT 200
   `).all(...[accountId, quarantined ? 1 : 0, ...(state ? [state] : [])]);
-  return rows.map((t) => serializeThread(t));
+  return rows
+    .filter((t) => mailAccess.maySeeThread(t, may, t.contact_tier))
+    .map((t) => serializeThread(t));
 }
 
 async function messagesIn(threadId) {
@@ -167,7 +195,11 @@ async function messagesIn(threadId) {
   return rows.map(serializeMessage);
 }
 
-async function organise(threadId, { state, assignedTo, snoozedUntil, releaseQuarantine }) {
+const VISIBILITIES = new Set(['office', 'private']);
+
+async function organise(threadId, {
+  state, assignedTo, snoozedUntil, releaseQuarantine, visibility,
+}) {
   const sets = [];
   const args = [];
   if (state !== undefined) {
@@ -177,6 +209,15 @@ async function organise(threadId, { state, assignedTo, snoozedUntil, releaseQuar
   if (assignedTo !== undefined) { sets.push('assigned_to = ?'); args.push(assignedTo || null); }
   if (snoozedUntil !== undefined) { sets.push('snoozed_until = ?'); args.push(snoozedUntil || null); }
   if (releaseQuarantine) { sets.push('quarantined = 0'); }
+  // The per-thread override. Both directions: a principal who has taken a
+  // correspondence out of the office's sight can put it back, because a
+  // one-way door would make somebody think twice before using it at all.
+  if (visibility !== undefined) {
+    if (!VISIBILITIES.has(visibility)) {
+      return { ok: false, status: 400, error: 'A correspondence is either the office\'s or private.' };
+    }
+    sets.push('visibility = ?'); args.push(visibility);
+  }
   if (!sets.length) return { ok: false, status: 400, error: 'Nothing to change.' };
   args.push(threadId);
   await db.prepare(`UPDATE mail_threads SET ${sets.join(', ')} WHERE id = ?`).run(...args);

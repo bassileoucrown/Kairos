@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { asyncRouter } = require('../lib/asyncRouter');
 const { runReminderSweep } = require('../lib/reminders');
+const recording = require('../lib/recording');
 const db = require('../lib/db');
 
 const router = asyncRouter();
@@ -119,8 +120,14 @@ async function sweep(req, res) {
   // deployment and a continuously running one cannot drift apart in what a
   // sweep actually means.
   const result = await runReminderSweep();
+  // Audio that has served its purpose. The transcript stays and the row stays;
+  // only the recording itself goes, on the clock set when it was captured.
+  // Never allowed to fail the sweep — a store that is briefly unreachable is
+  // not a reason to stop sending the day's reminders. See lib/recording.js.
+  let audioRemoved = 0;
+  try { audioRemoved = await recording.sweepExpired(); } catch { /* next sweep */ }
   await noteRun(result).catch(() => {});
-  res.json({ ok: true, ...result });
+  res.json({ ok: true, ...result, audioRemoved });
 }
 
 // Both verbs, one handler. POST is the honest one; GET is there because
