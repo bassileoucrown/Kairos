@@ -469,20 +469,42 @@ export default function Itinerary() {
   const [buildingTrip, setBuildingTrip] = useState(false);
   const [lateItem, setLateItem] = useState(null);
 
+  // ONLY THE ANSWER TO THE QUESTION STILL BEING ASKED.
+  //
+  // Two fetches of this screen could be in flight at once — the one the mount
+  // fires for today, and the one changing the day fires for the day you asked
+  // for — and whichever ANSWERED last won, because the response was piped
+  // straight into setData. The heading reads the `date` state and the entries
+  // read the response, so when the older answer landed second the screen showed
+  // one day's name over another day's schedule, and said nothing was loading.
+  //
+  // For a diary that is not cosmetic. Somebody checks whether Wednesday is
+  // free, sees Tuesday's entries under Wednesday's heading, and books over a
+  // meeting that is already there. It reproduced about a third of the time on a
+  // loaded machine and never on an idle one, which is exactly how a race hides.
+  //
+  // Every request takes a ticket; only the newest one may write.
+  const reqRef = useRef(0);
   function load(d = date, owner = ownerId) {
     if (!owner) return Promise.resolve();
+    const seq = ++reqRef.current;
     return api.get(`/itinerary/${owner}/day?date=${d}`)
-      .then(setData).catch((err) => setError(err.message));
+      .then((r) => { if (seq === reqRef.current) setData(r); })
+      .catch((err) => { if (seq === reqRef.current) setError(err.message); });
   }
 
   // Resolve who this day belongs to before fetching it — an assistant's
   // default is the principal they support, not themselves.
+  //
+  // Setting the owner is enough to fetch: the effect below already runs when
+  // ownerId goes from null to an id. Fetching here as well sent a second
+  // identical request carrying the date captured when this effect was created,
+  // which is the stale racer described above.
   useEffect(() => {
     let cancelled = false;
     resolveActivePrincipal(user).then((id) => {
       if (cancelled || !id) return;
       setOwnerId(id);
-      load(date, id);
     });
     return () => { cancelled = true; };
   }, [user?.id]);

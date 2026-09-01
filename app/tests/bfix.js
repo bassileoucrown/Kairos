@@ -35,6 +35,44 @@ function dayKey(offset) {
   return d.toISOString().slice(0, 10);
 }
 
+// Asking the day sheet for a different day is a network round trip and a
+// re-render, not a repaint. Twenty seconds was enough every time this suite was
+// run on its own and not enough once on a board of a hundred and twelve, where
+// the identical wait twenty-five lines earlier had already passed in the very
+// same run — same code, same data, same page, one timed out and one did not,
+// which is timing and nothing else. The box has form: bconnect records twenty
+// seconds and then sixty both proving too short for a server to start here.
+//
+// Note it cannot be done by URL instead. Itinerary.jsx line 465 seeds its date
+// from new Date() and never reads ?date=, so the input is the only way in and
+// this wait is unavoidable.
+const DAY_LOAD = 60000;
+
+/**
+ * Wait for a day's content, and say what was on screen if it never came.
+ * A bare "Timeout 20000ms exceeded" cost a diagnosis; the day the app really
+ * does stop honouring the date picker, this should be the line that says so
+ * rather than the line that looks like the board being slow again.
+ */
+async function waitForDay(p, re, asked) {
+  try {
+    await p.waitForFunction(
+      (src) => new RegExp(src, 'i').test(document.body.innerText),
+      re.source, { timeout: DAY_LOAD },
+    );
+  } catch (e) {
+    const shown = await p.locator('input[aria-label="Day"]').inputValue().catch(() => '??');
+    const head = await p.locator('.day-heading').innerText().catch(() => '??');
+    const busy = await p.evaluate(() => /loading|…/i.test(document.body.innerText)).catch(() => false);
+    throw new Error(
+      `never saw /${re.source}/i after asking for ${asked} — `
+      + `the picker reads ${shown}, the heading reads ${head}, `
+      + `${busy ? 'and the page was still loading' : 'and the page was not loading'}. `
+      + `${shown === asked ? 'The app took the date and did not finish.' : 'The app never took the date.'}`,
+    );
+  }
+}
+
 (async () => {
   const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
@@ -249,11 +287,9 @@ function dayKey(offset) {
     await p.goto(`${BASE}/itinerary`);
     await p.waitForSelector('input[aria-label="Day"]', { timeout: 20000 });
     await p.fill('input[aria-label="Day"]', bookedDay);
-    await p.waitForFunction(
-      // Case-insensitive: the pill is uppercased by CSS, so innerText returns
-      // FROM A BOOKING and matching the source spelling tests the stylesheet.
-      () => /from a booking/i.test(document.body.innerText), null, { timeout: 20000 },
-    );
+    // Case-insensitive: the pill is uppercased by CSS, so innerText returns
+    // FROM A BOOKING and matching the source spelling tests the stylesheet.
+    await waitForDay(p, /from a booking/, bookedDay);
     // The three the appointment's own page offers under "Change the
     // arrangement", plus the notes. Length was the one this screen did not
     // have, so an assistant had to open the appointment to lengthen a meeting.
@@ -280,9 +316,7 @@ function dayKey(offset) {
     await p.goto(`${BASE}/itinerary`);
     await p.waitForSelector('input[aria-label="Day"]', { timeout: 20000 });
     await p.fill('input[aria-label="Day"]', bookedDay);
-    await p.waitForFunction(
-      () => /from a booking/i.test(document.body.innerText), null, { timeout: 20000 },
-    );
+    await waitForDay(p, /from a booking/, bookedDay);
     await p.click('.itin-tool:has-text("Length")');
     await p.waitForSelector('input[type="number"]', { timeout: 20000 });
     ok('and Length opens on the length it currently runs',
