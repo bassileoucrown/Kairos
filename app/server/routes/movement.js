@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
@@ -65,7 +66,7 @@ router.get('/:ownerId/vehicles', requirePaAccess, async (req, res) => {
   });
 });
 
-router.post('/:ownerId/vehicles', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/vehicles', requirePaAccess, requirePlan('movement_fleet'), async (req, res) => {
   const { label, plate, makeModel, colour, notes } = req.body || {};
   if (!String(label || '').trim()) return res.status(400).json({ error: 'Give the car a name.' });
   const row = {
@@ -141,6 +142,11 @@ router.get('/:ownerId/movements', requirePaAccess, async (req, res) => {
   res.json({ movements: movements.filter(Boolean) });
 });
 
+// DELIBERATELY NOT GATED, and it must stay that way. A journey is what the
+// arrival alarm and the duress signal hang off — gate creating one and a plan
+// can silence a panic button, which is rule 3 in lib/plans.js broken by the
+// back door while appearing to be respected. The fleet above is what is
+// charged for; recording where somebody went is not.
 router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
   const { title, departsFrom, destination, departsAt, bufferMinutes, notes, tripId,
           expectedMinutes, bookingId } = req.body || {};
@@ -408,7 +414,7 @@ router.get('/:ownerId/drivers', requirePaAccess, async (req, res) => {
   res.json({ drivers: await drivers.list(req.principal.id, { archived: req.query.archived === '1' }) });
 });
 
-router.post('/:ownerId/drivers', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/drivers', requirePaAccess, requirePlan('movement_fleet'), async (req, res) => {
   const result = await drivers.create(req.principal.id, req.body || {});
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.status(201).json({ driver: result.driver });
@@ -439,7 +445,7 @@ router.post('/:ownerId/drivers/:driverId/archive', requirePaAccess, async (req, 
  * so the access rule needs no special case: a repeating school run is visible
  * to exactly the two people any single journey is.
  */
-router.post('/:ownerId/series', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/series', requirePaAccess, requirePlan('movement_fleet'), async (req, res) => {
   const { title, departsFrom, destination, timeOfDay, days, expectedMinutes, notes } = req.body || {};
   if (!String(title || '').trim()) return res.status(400).json({ error: 'Give it a name.' });
   const onDays = series.validDays(days);

@@ -82,7 +82,13 @@ export default function Coming() {
                   : (where?.label || c.screen)}
                 {c.control && <> as <strong>{c.control}</strong></>}
                 {!soon && c.needs?.length > 0 && (
-                  <> · waiting on {c.needs.map((n) => <code key={n}>{n}</code>)}</>
+                  // Separated and allowed to wrap. Rendered adjacent with no
+                  // separator, seven long variable names became one
+                  // unbreakable run that pushed the page 413px sideways on a
+                  // phone — and they also read as one impossible word.
+                  <> · waiting on {c.needs.map((n, i) => (
+                    <span key={n}>{i > 0 ? ', ' : ''}<code>{n}</code></span>
+                  ))}</>
                 )}
               </div>
             </div>

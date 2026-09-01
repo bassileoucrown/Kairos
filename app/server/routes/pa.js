@@ -1,4 +1,5 @@
 const express = require('express');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
@@ -313,7 +314,7 @@ const MONTH_DAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 // also needs to add people the principal knows who haven't booked yet —
 // board members, family, an assistant reaching out cold on the principal's
 // behalf — so this is a manual, PA-initiated entry point.
-router.post('/:ownerId/contacts', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/contacts', requirePaAccess, requirePlan('contacts'), async (req, res) => {
   const { email, name, notes, relationshipTier, birthday, anniversary } = req.body || {};
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });
@@ -572,7 +573,7 @@ router.post('/:ownerId/bookings/:bookingId/notes', requirePaAccess, loadPrincipa
 // Shared with the principal's own door — see routes/minuteHandlers.js.
 const forThem = minuteHandlers.forPrincipal;
 router.post('/:ownerId/bookings/:bookingId/minutes',
-  requirePaAccess, loadPrincipalBooking, minuteHandlers.file(forThem));
+  requirePaAccess, requirePlan('minutes'), loadPrincipalBooking, minuteHandlers.file(forThem));
 router.post('/:ownerId/bookings/:bookingId/minutes/draft',
   requirePaAccess, loadPrincipalBooking, minuteHandlers.draft(forThem));
 router.post('/:ownerId/bookings/:bookingId/dictation',
@@ -654,7 +655,7 @@ router.get('/:ownerId/briefs/:bookingId', requirePaAccess, async (req, res) => {
 // filling seven blank textareas per meeting. Doesn't touch sections the PA
 // has already written (only fills ones that are still empty), and never
 // saves on its own — the PA still hits "Save brief" explicitly.
-router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/briefs/:bookingId/draft', requirePaAccess, requirePlan('briefs'), async (req, res) => {
   const booking = await db.prepare(`
     SELECT b.*, mt.name as meeting_type_name FROM bookings b
     JOIN meeting_types mt ON mt.id = b.meeting_type_id

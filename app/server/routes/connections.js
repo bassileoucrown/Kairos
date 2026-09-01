@@ -1,4 +1,5 @@
 const { asyncRouter } = require('../lib/asyncRouter');
+const { requirePlan } = require('../lib/plans');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { BRAND_FULL } = require('../lib/brand');
@@ -99,7 +100,7 @@ router.get('/lookup', lookupLimiter, async (req, res) => {
   });
 });
 
-router.post('/', requestLimiter, async (req, res) => {
+router.post('/', requestLimiter, requirePlan('peer_connections'), async (req, res) => {
   const handle = normalizeHandle(req.body?.handle);
   const note = String(req.body?.note || '').trim().slice(0, 280);
 

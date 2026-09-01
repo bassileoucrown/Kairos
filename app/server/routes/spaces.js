@@ -1,4 +1,5 @@
 const express = require('express');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
@@ -58,7 +59,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePlan('spaces'), async (req, res) => {
   const { name, context } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'Give the space a name.' });

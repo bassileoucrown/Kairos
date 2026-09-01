@@ -1,4 +1,5 @@
 const { asyncRouter } = require('../lib/asyncRouter');
+const { requirePlan } = require('../lib/plans');
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { BRAND_FULL } = require('../lib/brand');
@@ -187,7 +188,7 @@ router.get('/:ownerId', requireHouseholdInstruct, async (req, res) => {
   });
 });
 
-router.post('/:ownerId/staff', requireHouseholdOwner, async (req, res) => {
+router.post('/:ownerId/staff', requireHouseholdOwner, requirePlan('household'), async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const name = String(req.body?.name || '').trim().slice(0, 120);
   const jobTitle = String(req.body?.jobTitle || '').trim().slice(0, 60);

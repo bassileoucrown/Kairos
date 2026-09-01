@@ -3528,3 +3528,11 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .report-period input { width: auto; }
 .report-trail { margin: 18px 0; }
+
+/* A credential name is one long token with no natural break in it, and a
+   feature waiting on seven of them is a paragraph of them. Allowed to break
+   mid-token as a last resort: a name split across two lines is readable, and
+   a page 400px wider than the phone is not. */
+.coming-row code,
+.soon-why code,
+.minute-record code { overflow-wrap: anywhere; }

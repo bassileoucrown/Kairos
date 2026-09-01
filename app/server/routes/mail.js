@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
@@ -85,7 +86,7 @@ router.get('/:ownerId/accounts', requirePaAccess, async (req, res) => {
   });
 });
 
-router.post('/:ownerId/accounts', requirePaAccess, async (req, res) => onlyPrincipal(req, res, async () => {
+router.post('/:ownerId/accounts', requirePaAccess, requirePlan('mail'), async (req, res) => onlyPrincipal(req, res, async () => {
   const { kind, address, label } = req.body || {};
   const kinds = new Set(['delegated', 'forwarded', 'gmail', 'graph']);
   if (!kinds.has(kind)) return res.status(400).json({ error: 'Not a kind of mailbox.' });

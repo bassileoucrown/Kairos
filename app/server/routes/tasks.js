@@ -1,4 +1,5 @@
 const express = require('express');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
@@ -229,7 +230,16 @@ router.get('/', async (req, res) => {
   res.json({ tasks: await withSteps(rows, req.user.id) });
 });
 
-router.post('/', async (req, res) => {
+// The plan checked is the SPACE OWNER'S, not the signed-in user's. An
+// assistant putting a task in their principal's space is working inside the
+// principal's entitlements; recording the reach against the assistant's own
+// free account would poison the only number this whole file exists to collect.
+router.post('/', requirePlan('tasks', async (req) => {
+  const id = req.body?.spaceId;
+  if (!id) return req.user?.id;
+  const row = await db.prepare('SELECT owner_id FROM spaces WHERE id = ?').get(id);
+  return row?.owner_id || req.user?.id;
+}), async (req, res) => {
   const {
     spaceId, projectId, stageId, sourceMessageId, parentTaskId,
     title, assigneeId, dueAt, priority,

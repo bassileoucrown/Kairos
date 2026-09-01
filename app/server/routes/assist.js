@@ -7,6 +7,7 @@ const aiModel = require('../lib/aiModel');
 const mailAccess = require('../lib/mailAccess');
 const mailbox = require('../lib/mailbox');
 const { resolveAccess } = require('../lib/spaceAccess');
+const plans = require('../lib/plans');
 
 // The seven asks, as routes.
 //
@@ -43,6 +44,22 @@ function modelError(res, err) {
 
 const attempt = (res, fn) => fn().catch((err) => modelError(res, err));
 
+/**
+ * One ask, counted against what it costs us.
+ *
+ * A model call is invoiced per use, unlike everything on the plan ladder, so
+ * it is metered rather than ranked — see METERED in lib/plans.js. Counted
+ * AFTER the ask succeeds: a refusal because no key is configured cost nothing
+ * and should not appear in the evidence as demand.
+ */
+async function meter(req) {
+  const owner = req.principal || req.user;
+  try {
+    const row = await db.prepare('SELECT plan FROM users WHERE id = ?').get(owner?.id);
+    await plans.recordUse(owner?.id, 'ai_assist', plans.planOf(row));
+  } catch { /* never blocks an answer that already worked */ }
+}
+
 // --- 1. What happened while you were away -----------------------------------------
 //
 // NOT principal-scoped, deliberately, and for the same reason the catch-up
@@ -50,6 +67,7 @@ const attempt = (res, fn) => fn().catch((err) => modelError(res, err));
 // three at once, and a brief that made them pick one first would be asking
 // them to guess where the news is.
 router.post('/catch-up', async (req, res) => attempt(res, async () => {
+  await meter(req);
   res.json(await assist.catchUpBrief(req.user.id));
 }));
 
@@ -59,6 +77,7 @@ router.post('/:ownerId/meetings/:bookingId/brief', requirePaAccess,
     const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
       .get(req.params.bookingId, req.principal.id);
     if (!booking) return res.status(404).json({ error: 'Not found.' });
+    await meter(req);
     res.json(await assist.meetingBrief(booking, req.principal.id));
   }));
 
@@ -76,6 +95,7 @@ router.post('/:ownerId/meetings/:bookingId/minute-tasks', requirePaAccess,
       return res.status(400).json({ error: 'There are no minutes on this meeting yet.' });
     }
     // Proposals only. Creating them is POST /tasks, which a person calls.
+    await meter(req);
     res.json({ tasks: await assist.tasksFromMinute(note.body) });
   }));
 
@@ -102,6 +122,7 @@ router.post('/:ownerId/mail/:accountId/triage', requirePaAccess,
       const last = [...msgs].reverse().find((m) => !m.deleted);
       withText.push({ ...t, latest: last?.body || '' });
     }
+    await meter(req);
     res.json({ verdicts: await assist.triage(withText) });
   }));
 
@@ -113,6 +134,7 @@ router.post('/:ownerId/reply', requirePaAccess,
     // Written in the PRINCIPAL's voice when drafting for them, which is the
     // whole point — an assistant drafting as themselves would just be writing.
     const asUserId = req.body?.asPrincipal === false ? req.user.id : req.principal.id;
+    await meter(req);
     res.json(await assist.reply({
       instruction,
       context: String(req.body?.context || '').slice(0, 12000),
@@ -123,6 +145,7 @@ router.post('/:ownerId/reply', requirePaAccess,
 // --- 6. The week ahead, read rather than listed --------------------------------------------
 router.post('/:ownerId/week-ahead', requirePaAccess,
   async (req, res) => attempt(res, async () => {
+    await meter(req);
     res.json(await assist.weekAheadRead(req.principal.id, req.user.id));
   }));
 
@@ -137,6 +160,7 @@ router.post('/threads/:threadId/records', async (req, res) => attempt(res, async
   if (!thread) return res.status(404).json({ error: 'Not found.' });
   const access = await resolveAccess(thread.space_id, req.user.id);
   if (!access) return res.status(404).json({ error: 'Not found.' });
+  await meter(req);
   res.json({ candidates: await assist.recordCandidates(req.params.threadId) });
 }));
 

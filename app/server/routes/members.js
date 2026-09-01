@@ -1,4 +1,5 @@
 const express = require('express');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
@@ -213,7 +214,7 @@ router.post('/:id/approve', loadRequest, async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePlan('assistants'), async (req, res) => {
   const { email, role } = req.body || {};
   if (!email || !EMAIL_RE.test(String(email).trim())) {
     return res.status(400).json({ error: 'Please provide a valid email address.' });

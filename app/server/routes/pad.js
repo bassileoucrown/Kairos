@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePlan('pad'), async (req, res) => {
   const result = await pad.add({
     authorUserId: req.user.id,
     ownerId: req.body?.ownerId,
