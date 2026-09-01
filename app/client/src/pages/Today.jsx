@@ -57,17 +57,26 @@ export function span(mins) {
  * read; unproportioned it is the list this replaces. Between the two it is a
  * shape you take in before you read a word of it.
  *
- * Pass now = null for a day that is not today — a Tuesday next month has no
- * "now" in it, and calling one of its entries running, finished or next would
- * be a lie the screen then acts on.
+ * Pass now = null for a day with no clock in it at all.
+ *
+ * TWO DIFFERENT QUESTIONS, and they were one for too long. "Where is the now
+ * line" belongs only to today — a Tuesday next month has no now in it. "Is
+ * this finished" belongs to every day, because a meeting last Thursday is
+ * finished no matter which screen you are standing on. Collapsing them into
+ * one null meant the itinerary showed a day in March and a day last week
+ * identically: nothing marked done, nothing greyed, no way to tell at a
+ * glance what had already happened. So the clock is always real and
+ * `markNow` decides only whether the line is drawn.
  */
-export function shapeOf(schedule, now) {
+export function shapeOf(schedule, now, { markNow = true } = {}) {
   const rows = [];
   const dated = now !== null;
-  // With no clock to place, there is no now line to draw and nothing to call
-  // live, so both are settled before the loop starts.
-  let nowPlaced = !dated;
-  let liveClaimed = !dated;
+  // The line is settled before the loop when there is no clock, and also when
+  // there is one that does not belong on this day. `live` follows the line
+  // rather than the clock: "running late" is a thing you are on the day
+  // itself, and offering it on next month's first entry is nonsense.
+  let nowPlaced = !dated || !markNow;
+  let liveClaimed = !dated || !markNow;
 
   for (let i = 0; i < schedule.length; i++) {
     const e = schedule[i];
@@ -98,7 +107,12 @@ export function shapeOf(schedule, now) {
       // it falls rather than shoved to the top of the next thing. Claiming it
       // here is also what stops it being drawn twice: the check at the top of
       // the next iteration would otherwise place a second one above `next`.
-      const holdsNow = now >= end && now < new Date(next.startAt).getTime();
+      // Guarded by the same flag as the line above it. Without this a day in
+      // the past drew a "now" marker in whichever gap the current clock
+      // happened to land in, which is a marker for a moment that is not on
+      // this day at all.
+      const holdsNow = dated && markNow
+        && now >= end && now < new Date(next.startAt).getTime();
       if (holdsNow) nowPlaced = true;
       rows.push({
         type: 'gap',

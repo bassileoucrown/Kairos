@@ -59,22 +59,51 @@ function scopeFor(req) {
   const asked = String(req.query.person || '').trim();
   const onlyUserId = seesEveryone ? (asked || null) : req.user.id;
 
+  // A named stretch of days instead of a week counter. Passed through as the
+  // caller typed it and validated where the timezone is known — this function
+  // has no business knowing what a valid date is in Lagos.
+  const from = String(req.query.from || '').trim() || null;
+  const to = String(req.query.to || '').trim() || null;
+
   return {
     back,
+    from,
+    to,
     onlyUserId,
     seesEveryone,
     isOwner: req.paRole === 'owner',
+    // WHO SEES THE CUSTODY TRAIL, which is a narrower question than who sees
+    // the office. The counts already tell a Chief of Staff that three
+    // documents were looked at; the trail says WHICH — that the passport was
+    // revealed on Tuesday — and that is the principal's own record of their
+    // own essentials. The principal set an access code so that "even if
+    // someone accesses my account, my essentials are still protected"; a
+    // report that hands the reveal history to everyone senior would undo
+    // exactly that. So: the account holder, and nobody else.
+    seesAccessTrail: req.paRole === 'owner',
     // 'self' whenever the document covers one line, however that came about —
     // by rule or by asking — because that is what the footer has to say.
     scope: seesEveryone && !asked ? 'office' : 'self',
   };
 }
 
+/** The one refusal both routes give, so they cannot word it differently. */
+function badWindow(res) {
+  return res.status(400).json({
+    error: 'Those dates do not make a period. Give a start on or before the end, '
+      + 'within a year of each other.',
+    code: 'bad_window',
+  });
+}
+
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
-  const { back, onlyUserId, seesEveryone, isOwner, scope } = scopeFor(req);
+  const { back, from, to, onlyUserId, seesEveryone, isOwner, scope, seesAccessTrail } = scopeFor(req);
 
   const report = await buildReport(req.principal.id, {
     back,
+    from,
+    to,
+    withAccessTrail: seesAccessTrail,
     onlyUserId,
     // WHO IS READING, which is not the same as whose week this is. The open
     // records are links now, and a link to a room this reader cannot open
@@ -82,6 +111,7 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     viewerId: req.user.id,
   });
   if (!report) return res.status(404).json({ error: 'Not found.' });
+  if (report.badWindow) return badWindow(res);
 
   res.json({
     ...report,
@@ -110,13 +140,18 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
  * mattering is not theoretical: a file gets forwarded.
  */
 router.get('/:ownerId/export', requirePaAccess, async (req, res) => {
-  const { back, onlyUserId, scope } = scopeFor(req);
+  const { back, from, to, onlyUserId, scope, seesAccessTrail } = scopeFor(req);
   const format = req.query.format === 'csv' ? 'csv' : 'html';
 
   const report = await buildReport(req.principal.id, {
-    back, onlyUserId, viewerId: req.user.id,
+    back, from, to, onlyUserId, viewerId: req.user.id,
+    // Through the same gate as the screen, which is the whole reason that
+    // decision lives in scopeFor. A file gets forwarded, so the export is the
+    // route where a copied access rule would do the most damage.
+    withAccessTrail: seesAccessTrail,
   });
   if (!report) return res.status(404).json({ error: 'Not found.' });
+  if (report.badWindow) return badWindow(res);
 
   // The document carries the week ahead too. A file is read away from the app,
   // often by somebody who cannot click through to anything, so leaving out the

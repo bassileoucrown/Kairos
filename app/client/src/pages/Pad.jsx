@@ -339,7 +339,7 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
       )}
 
       {open && (
-        <PadActions item={item} ownerId={ownerId} onChange={onChange}
+        <PadActions item={item} ownerId={ownerId} mine={mine} onChange={onChange}
           onRemove={onRemove} onDone={onDone} />
       )}
     </div>
@@ -353,7 +353,13 @@ function PadLine({ item, ownerId, me, open, onOpen, onChange, onRemove, onDone }
  * never promoted, and a pad where every entry carries four controls is a pad
  * that is harder to read than the envelope it replaced.
  */
-function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
+function PadActions({ item, ownerId, mine, onChange, onRemove, onDone }) {
+  // What the line says, being corrected. The server has always allowed this —
+  // PATCH /pad/:id takes a body, gated to whoever wrote it — and the screen
+  // never offered it, so the only way to fix a typo or finish a half-written
+  // thought was to bin the line and type it again, losing the replies hanging
+  // off it and whatever it had already been handed to somebody as.
+  const [draft, setDraft] = useState(null);
   const [spaces, setSpaces] = useState(null);
   const [people, setPeople] = useState(null);
   const [pending, setPending] = useState([]);
@@ -420,6 +426,55 @@ function PadActions({ item, ownerId, onChange, onRemove, onDone }) {
         <button className="itin-tool is-danger" type="button"
           onClick={() => onRemove(item.id)}>Bin it</button>
       </div>
+
+      {/* Only the person who wrote it, which is the server's rule too. A
+          shared line that anybody could rewrite is a line nobody can rely on
+          having read. */}
+      {mine && (
+        <div className="pad-action-row">
+          <span className="pad-action-label">Change it</span>
+          <button className="itin-tool" type="button"
+            onClick={() => setDraft(draft === null ? item.body : null)}>
+            {draft === null ? 'Edit the wording' : 'Never mind'}
+          </button>
+          {/* The same PATCH and the same author-only gate, so it belongs
+              beside the wording rather than in a menu of its own. */}
+          <button className="itin-tool" type="button"
+            onClick={() => onChange(item.id, {
+              visibility: item.visibility === 'office' ? 'private' : 'office',
+            })}>
+            {item.visibility === 'office' ? 'Make it only mine' : 'Put it on the office pad'}
+          </button>
+        </div>
+      )}
+
+      {draft !== null && (
+        <div className="pad-action-form">
+          <textarea
+            aria-label="What the line should say"
+            rows={3}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          {/* Its own request rather than the parent's onChange, deliberately:
+              that one swallows its failure and closes this panel, which would
+              throw away what somebody had just typed and tell them nothing.
+              A refused save has to leave the words on the screen. */}
+          <button className="btn btn-primary btn-sm" type="button"
+            disabled={busy || !draft.trim() || draft.trim() === item.body}
+            onClick={async () => {
+              setBusy(true);
+              setError('');
+              try {
+                await api.patch(`/pad/${item.id}`, { body: draft.trim() });
+                setDraft(null);
+                onDone();
+              } catch (err) { setError(err.message); } finally { setBusy(false); }
+            }}>
+            {busy ? 'Saving…' : 'Save the wording'}
+          </button>
+        </div>
+      )}
 
       {mode === 'task' && (
         <div className="pad-action-form">

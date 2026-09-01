@@ -60,9 +60,27 @@ const COLUMNS = [
   ['keptToArchive', 'Kept to the archive'],
 ];
 
+/**
+ * What to call the stretch of days this covers.
+ *
+ * A report somebody asked for by date is not "the week of", and putting that
+ * heading on a document covering the 3rd to the 19th is the kind of small lie
+ * that makes a reader distrust the numbers under it.
+ */
+function periodTitle(window) {
+  return window.custom ? 'The period' : 'The week of';
+}
+
+/** The custody trail as flat rows, in the order it happened. */
+const TRAIL_HEADER = ['When', 'Who', 'Did what', 'To what'];
+function trailRow(e) {
+  return [String(e.at).slice(0, 16).replace('T', ' '), e.actorName, e.action, e.subject || e.field];
+}
+
 function toCsv(report) {
   const rows = [
-    ['Kairos — the week of', report.window.startDate, 'to', report.window.endDate].map(cell).join(','),
+    ['Kairos —', periodTitle(report.window), report.window.startDate, 'to', report.window.endDate]
+      .map(cell).join(','),
     [`Office of ${report.principal.name}`].map(cell).join(','),
     '',
     ['Person', 'Role', ...COLUMNS.map(([, label]) => label)].map(cell).join(','),
@@ -77,6 +95,22 @@ function toCsv(report) {
   rows.push(['Approvals waiting', report.stillOpen.approvalsWaiting].map(cell).join(','));
   rows.push(['Tasks overdue', report.stillOpen.tasksOverdue].map(cell).join(','));
   rows.push(['Records nobody has answered', report.stillOpen.recordsOpen].map(cell).join(','));
+
+  // WHO LOOKED AT WHAT. Only present when the reader is entitled to it —
+  // routes/report.js decides, and this file never second-guesses that by
+  // reconstructing the rule. Absent means absent, not empty.
+  if (report.accessTrail) {
+    rows.push('', ['Who looked at what'].map(cell).join(','));
+    if (report.accessTrail.entries.length === 0) {
+      rows.push(['Nobody opened anything held for you in this period'].map(cell).join(','));
+    } else {
+      rows.push(TRAIL_HEADER.map(cell).join(','));
+      for (const e of report.accessTrail.entries) rows.push(trailRow(e).map(cell).join(','));
+      if (report.accessTrail.more) {
+        rows.push(['…and more. Ask for a shorter period to see the rest.'].map(cell).join(','));
+      }
+    }
+  }
 
   if (report.ahead) {
     rows.push('', [`The week ahead — ${report.ahead.window.startDate} to ${report.ahead.window.endDate}`]
@@ -111,7 +145,7 @@ function toHtml(report) {
   const a = report.ahead;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Kairos — week of ${esc(report.window.startDate)}</title>
+<title>Kairos — ${esc(report.window.custom ? 'report' : 'week')} of ${esc(report.window.startDate)}</title>
 <style>
   :root { color-scheme: light; }
   body { font: 14px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -143,7 +177,7 @@ function toHtml(report) {
   }
 </style></head>
 <body><div class="wrap">
-  <h1>The week of ${esc(report.window.startDate)} to ${esc(report.window.endDate)}</h1>
+  <h1>${esc(periodTitle(report.window))} ${esc(report.window.startDate)} to ${esc(report.window.endDate)}</h1>
   <p class="sub">Office of ${esc(report.principal.name)} · times in ${esc(report.window.timeZone)}</p>
 
   <h2>What the office did</h2>
@@ -158,6 +192,19 @@ function toHtml(report) {
   ${report.stillOpen.records.length ? `<ul>${report.stillOpen.records.map((r) => `
     <li><strong>${esc(r.threadName)}</strong> — ${esc(r.body)}
       <span class="why">· ${esc(r.authorName)}, ${esc(String(r.at).slice(0, 10))}</span></li>`).join('')}</ul>` : ''}
+
+  ${report.accessTrail ? `
+  <h2>Who looked at what</h2>
+  ${report.accessTrail.entries.length ? `
+  <table>
+    <thead><tr>${TRAIL_HEADER.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${report.accessTrail.entries.map((e) => `<tr>${trailRow(e)
+      .map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>
+  ${report.accessTrail.more
+    ? '<p class="sub">More than is shown here. Ask for a shorter period to see the rest.</p>' : ''}`
+    : '<p class="sub">Nobody opened anything held for you in this period.</p>'}
+  ` : ''}
 
   ${a ? `
   <h2>The week ahead — ${esc(a.window.startDate)} to ${esc(a.window.endDate)}</h2>
@@ -182,6 +229,8 @@ function toHtml(report) {
     ${report.scope === 'self'
       ? 'This copy covers your own line only.'
       : 'This copy covers the whole office.'}
+    ${report.accessTrail
+      ? 'It carries the record of who opened what is held for you — keep it accordingly.' : ''}
     Counted from what the app already records; nothing is logged specially to produce it.
   </p>
 </div></body></html>`;

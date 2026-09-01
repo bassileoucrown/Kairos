@@ -82,7 +82,9 @@ const NAV = [
   // week rather than the office's — see mayRead's cousin in routes/report.js.
   // Hiding it from them would mean the people the report is about are the only
   // people who cannot see what it says.
-  { group: 'desk', to: '/report', label: 'Weekly report', icon: '▦', principalScoped: true },
+  // "Weekly" until the week stopped being the only period it could cover. It
+  // still opens on last week, which is what most people want from it.
+  { group: 'desk', to: '/report', label: 'Report', icon: '▦', principalScoped: true },
   // Principal-scoped, and shown to everybody — the screen itself says "no
   // mailbox yet" to somebody nobody has put in one. Hiding the entry until a
   // grant exists would mean the principal who has to CREATE the mailbox cannot

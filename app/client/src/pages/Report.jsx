@@ -175,10 +175,75 @@ function WeekAhead({ ahead, ownerId }) {
   );
 }
 
+// What the trail's four verbs mean in a sentence. The stored word is the
+// smallest thing that identifies the act; this is what a principal reads.
+const TRAIL_VERB = {
+  reveal: 'opened',
+  create: 'added',
+  update: 'changed',
+  delete: 'removed',
+  mail_grant: 'granted mail access —',
+  mail_revoke: 'took back mail access —',
+  mail_delete: 'deleted the correspondence —',
+  mail_purge: 'destroyed the correspondence —',
+  grant: 'granted a one-time pass —',
+  duress_cleared: 'cleared a duress signal —',
+};
+
+/**
+ * Who opened what is held for you.
+ *
+ * ONLY ON THE PRINCIPAL'S OWN COPY. The counts above say a document was looked
+ * at three times; this says which document, and the server sends it to nobody
+ * else — see routes/report.js. So the absence of this section is the rule
+ * working, not a section that failed to load, and the screen never renders an
+ * empty shell where it would be.
+ */
+function AccessTrail({ trail }) {
+  return (
+    <div className="report-trail">
+      <h3>Who looked at what</h3>
+      {trail.entries.length === 0 ? (
+        // The good outcome, said out loud. An empty box under this heading
+        // reads as a log that broke rather than a quiet fortnight.
+        <p className="hint">Nobody opened anything held for you in this period.</p>
+      ) : (
+        <>
+          <ul className="report-open-list">
+            {trail.entries.map((e) => (
+              <li key={e.id}>
+                <strong>{e.actorName}</strong>{' '}
+                {TRAIL_VERB[e.action] || e.action}{' '}
+                {e.subject || e.field || 'something since removed'}
+                <span className="hint">
+                  {' — '}{new Date(e.at).toLocaleString(undefined, {
+                    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {trail.more && (
+            <p className="hint">
+              More than is shown here. Ask for a shorter period to see the rest.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Report() {
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [back, setBack] = useState(1);
+  // A period somebody asked for, which wins over the week stepper while it is
+  // set. Held as the two dates rather than as a mode flag, so "is this a
+  // custom period" has one answer and not two that can disagree.
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [applied, setApplied] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   // Whose copy to download. Only offered to somebody who may see everyone —
@@ -187,23 +252,48 @@ export default function Report() {
 
   useEffect(() => { resolveActivePrincipal(user).then(setOwnerId); }, [user]);
 
+  // ONE PLACE THAT SAYS WHICH PERIOD, and every fetch and both download links
+  // are built from it. Written twice, the screen would eventually show one
+  // fortnight and hand somebody a file covering another — which is worse than
+  // either being wrong, because nothing on the page would say so.
+  const period = applied
+    ? `from=${encodeURIComponent(applied.from)}&to=${encodeURIComponent(applied.to)}`
+    : `week=${back}`;
+
   useEffect(() => {
     if (!ownerId) return;
     setData(null);
-    api.get(`/report/${ownerId}?week=${back}`).then(setData).catch((e) => setError(e.message));
-  }, [ownerId, back]);
+    setError('');
+    api.get(`/report/${ownerId}?${period}`).then(setData).catch((e) => setError(e.message));
+  }, [ownerId, period]);
 
   if (!data) {
-    return <AppShell title="Weekly report"><p className="hint">{error || 'Loading…'}</p></AppShell>;
+    return (
+      <AppShell title="Report">
+        <p className="hint">{error || 'Loading…'}</p>
+        {/* Reachable from the failure, not only from the success. A refused
+            period used to leave the screen on "Loading…" for ever with the
+            picker gone, and the only way back was the browser's own back
+            button. */}
+        {error && applied && (
+          <button className="btn btn-sm" type="button"
+            onClick={() => { setApplied(null); setError(''); }}>
+            Back to whole weeks
+          </button>
+        )}
+      </AppShell>
+    );
   }
 
   const open = data.stillOpen || {};
   const anythingOpen = open.approvalsWaiting || open.tasksOverdue || open.recordsOpen;
   // Built once so the two links cannot drift into asking for different weeks.
-  const query = `?week=${back}${who ? `&person=${encodeURIComponent(who)}` : ''}`;
+  const query = `?${period}${who ? `&person=${encodeURIComponent(who)}` : ''}`;
+
+  const custom = !!data.window.custom;
 
   return (
-    <AppShell title="Weekly report">
+    <AppShell title="Report">
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="report-head">
@@ -212,20 +302,60 @@ export default function Report() {
             {data.window.startDate} to {data.window.endDate}
           </h3>
           <p className="hint" style={{ margin: '2px 0 0' }}>
-            {back === 0 ? 'The week so far' : back === 1 ? 'Last week' : `${back} weeks ago`}
-            {' · '}weeks run Monday to Sunday in {data.window.timeZone}
+            {custom
+              ? 'The period you asked for'
+              : back === 0 ? 'The week so far' : back === 1 ? 'Last week' : `${back} weeks ago`}
+            {' · '}
+            {custom
+              ? `dates read in ${data.window.timeZone}`
+              : `weeks run Monday to Sunday in ${data.window.timeZone}`}
           </p>
         </div>
-        <div className="report-nav">
-          <button className="btn btn-sm" type="button" onClick={() => setBack((b) => Math.min(b + 1, 52))}>
-            ← Earlier
-          </button>
-          <button className="btn btn-sm" type="button" disabled={back === 0}
-            onClick={() => setBack((b) => Math.max(b - 1, 0))}>
-            Later →
-          </button>
-        </div>
+        {/* The stepper is for the question "how was last week", which is most
+            of them. It steps out of the way rather than disappearing once
+            somebody asks for dates, so getting back is one click. */}
+        {!custom && (
+          <div className="report-nav">
+            <button className="btn btn-sm" type="button" onClick={() => setBack((b) => Math.min(b + 1, 52))}>
+              ← Earlier
+            </button>
+            <button className="btn btn-sm" type="button" disabled={back === 0}
+              onClick={() => setBack((b) => Math.max(b - 1, 0))}>
+              Later →
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* ANY STRETCH OF DAYS, ON DEMAND. A Monday-to-Sunday week is the right
+          default and the wrong only option: "how did the quarter go", "what
+          happened while I was in Geneva" and "give me March" are none of them
+          a whole number of weeks back from today. */}
+      <form
+        className="report-period"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (from && to) setApplied({ from, to });
+        }}
+      >
+        <span className="hint">Or any dates:</span>
+        <label className="sr-only" htmlFor="rp-from">From</label>
+        <input id="rp-from" type="date" value={from} max={to || undefined}
+          onChange={(e) => setFrom(e.target.value)} />
+        <span className="hint">to</span>
+        <label className="sr-only" htmlFor="rp-to">To</label>
+        <input id="rp-to" type="date" value={to} min={from || undefined}
+          onChange={(e) => setTo(e.target.value)} />
+        <button className="btn btn-sm" type="submit" disabled={!from || !to}>
+          Run it
+        </button>
+        {custom && (
+          <button className="btn btn-sm" type="button"
+            onClick={() => { setApplied(null); setFrom(''); setTo(''); }}>
+            Back to weeks
+          </button>
+        )}
+      </form>
 
       {/* PLAIN LINKS, not fetch-and-blob. The session is a cookie and the
           server sends Content-Disposition, so the browser saves the file
@@ -299,6 +429,11 @@ export default function Report() {
           Nothing outstanding — no requests waiting, no work past its date.
         </div>
       )}
+
+      {/* Sent only to the account holder. Rendered only when it arrives, so
+          somebody who is not entitled to it sees no empty section hinting
+          that one exists. */}
+      {data.accessTrail && <AccessTrail trail={data.accessTrail} />}
 
       {data.ahead && <WeekAhead ahead={data.ahead} ownerId={ownerId} />}
 

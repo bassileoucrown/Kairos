@@ -30,7 +30,7 @@ const WHERE = {
   ai_assist: { label: 'AI Assist', to: '/pa?tab=ai_assist' },
   catch_up: { label: 'While you were away', to: '/catch-up' },
   mail: { label: 'Correspondence', to: '/mail' },
-  report: { label: 'the weekly report', to: '/report' },
+  report: { label: 'the report', to: '/report' },
   appointment: { label: 'any appointment' },
   thread: { label: 'any room' },
 };

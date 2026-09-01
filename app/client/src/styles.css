@@ -3509,3 +3509,22 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .mail-message:last-of-type { border-bottom: 0; }
 .mail-message p { margin: 4px 0 0; white-space: pre-wrap; }
 .mail-reply { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+
+/* Finished, said rather than only implied. The dimming alone reads as "did
+   not load" as readily as "already happened", and a past day is scanned for
+   exactly this. */
+.pill.is-done-pill {
+  background: var(--border);
+  color: var(--text-muted);
+  border-color: transparent;
+}
+.itin-edit { margin: 8px 0; }
+
+/* A period somebody asked for, beside the week stepper rather than instead of
+   it: most reports are "how was last week", and the dates are for the rest. */
+.report-period {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.report-period input { width: auto; }
+.report-trail { margin: 18px 0; }

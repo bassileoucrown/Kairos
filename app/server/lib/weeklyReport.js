@@ -87,6 +87,107 @@ function tally(rows) {
   return new Map(rows.map((r) => [r.who, Number(r.n || 0)]));
 }
 
+/** A calendar date, or null. Deliberately strict: a half-parsed date is worse
+ *  than a refused one, because it silently reports the wrong fortnight. */
+function parseDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+  if (!m) return null;
+  const [, y, mo, d] = m.map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return { year: y, month: mo, day: d };
+}
+
+// A year and a day. Long enough for "the whole of last year" and short enough
+// that a typed date in the wrong century does not ask the database for four
+// thousand weeks of booking events.
+const MAX_SPAN_DAYS = 366;
+
+/**
+ * Any stretch of days somebody actually asks for.
+ *
+ * WHY THIS EXISTS BESIDE weekWindow. Monday-to-Sunday is the right default and
+ * the wrong only option: the questions people have are "how did the quarter
+ * go", "what happened while I was in Geneva", "give me March" — and none of
+ * them is a whole number of weeks back from today. The window is the only
+ * thing that differs, so it is the only thing that varies; everything
+ * downstream counts against whatever window it is handed.
+ *
+ * INCLUSIVE OF BOTH ENDS, because that is what a person means by "the 1st to
+ * the 15th". The stored bound is midnight at the START of the day after `to`,
+ * in the principal's zone, which is the same arithmetic weekWindow already
+ * does for its Sunday.
+ */
+function customWindow(timeZone, from, to) {
+  const zone = timeZone || 'UTC';
+  const a = parseDate(from);
+  const b = parseDate(to);
+  if (!a || !b) return null;
+
+  const startAt = zonedTimeToUtc(a.year, a.month, a.day, 0, 0, zone);
+  const dayAfter = addCalendarDays(b, 1);
+  const endAt = zonedTimeToUtc(dayAfter.year, dayAfter.month, dayAfter.day, 0, 0, zone);
+  if (endAt <= startAt) return null;
+  if ((endAt - startAt) / 86400000 > MAX_SPAN_DAYS) return null;
+
+  return {
+    startAt: startAt.toISOString(),
+    endAt: endAt.toISOString(),
+    startDate: `${a.year}-${String(a.month).padStart(2, '0')}-${String(a.day).padStart(2, '0')}`,
+    endDate: `${b.year}-${String(b.month).padStart(2, '0')}-${String(b.day).padStart(2, '0')}`,
+    timeZone: zone,
+    // So the screen and the file can say "1 March to 15 March" rather than
+    // "last week", which would be a lie on a document somebody forwards.
+    custom: true,
+  };
+}
+
+/**
+ * Who looked at what, and when.
+ *
+ * WHY THE ENTRIES AND NOT ONLY THE COUNT. The report already carries
+ * "documents looked at: 3" per person, which answers how much and not what.
+ * For a product that holds passports, what is the question — three reveals of
+ * a driver's licence while arranging a hire car is the job; three reveals of
+ * the principal's passport in a week nobody travelled is the thing a custody
+ * business exists to surface. A number cannot tell those apart.
+ *
+ * NOT A COUNT OF PEOPLE, AND NOT A SCORE. Ordered by time, because the
+ * question is "what happened", and the answer reads as a trail.
+ */
+async function accessTrail(ownerId, window, limit = 200) {
+  const rows = await db.prepare(`
+    SELECT a.id, a.action, a.field, a.created_at, a.actor_id,
+           u.name AS actor_name, e.label AS essential_label
+    FROM access_log a
+    LEFT JOIN users u ON u.id = a.actor_id
+    LEFT JOIN essentials e ON e.id = a.essential_id
+    WHERE a.subject_owner_id = ? AND a.created_at >= ? AND a.created_at < ?
+    ORDER BY a.created_at DESC
+    LIMIT ?
+  `).all(ownerId, window.startAt, window.endAt, limit + 1);
+
+  return {
+    entries: rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      at: r.created_at,
+      action: r.action,
+      field: r.field || '',
+      actorId: r.actor_id,
+      // The principal's own name included rather than blanked: "you looked at
+      // it yourself" is an answer, and a gap where a name should be reads as
+      // the log having lost one.
+      actorName: r.actor_name || 'Someone since removed',
+      // The label the document had. A deleted essential leaves its log line
+      // behind on purpose — see the schema — so this is often the only thing
+      // left saying what was looked at.
+      subject: r.essential_label || '',
+    })),
+    // Said rather than silently truncated. A trail that stops at two hundred
+    // without saying so is a trail somebody will read as complete.
+    more: rows.length > limit,
+  };
+}
+
 /**
  * The diary half: what each assistant did to the principal's appointments.
  *
@@ -109,10 +210,19 @@ async function diaryWork(ownerId, window) {
   `).all(ownerId, window.startAt, window.endAt);
 }
 
-async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = null, viewerId = null } = {}) {
+async function buildReport(ownerId, {
+  back = 1, now = new Date(), onlyUserId = null, viewerId = null,
+  from = null, to = null, withAccessTrail = false,
+} = {}) {
   const owner = await db.prepare('SELECT id, name, timezone FROM users WHERE id = ?').get(ownerId);
   if (!owner) return null;
-  const window = weekWindow(owner.timezone, back, now);
+  // A named stretch of days wins over the week counter when one is asked for.
+  // Falling back to last week on a malformed date would answer a question
+  // nobody asked and label it with the dates they typed.
+  const window = (from || to)
+    ? customWindow(owner.timezone, from, to)
+    : weekWindow(owner.timezone, back, now);
+  if (!window) return { badWindow: true };
   const { startAt, endAt } = window;
 
   let office = await officeOf(ownerId);
@@ -125,7 +235,17 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
   const ids = office.map((m) => m.id);
 
   if (!ids.length) {
-    return { window, principal: { id: owner.id, name: owner.name }, people: [], stillOpen: await stillOpen(ownerId, viewerId || ownerId) };
+    return {
+      window,
+      principal: { id: owner.id, name: owner.name },
+      people: [],
+      stillOpen: await stillOpen(ownerId, viewerId || ownerId),
+      // An office of nobody still has a trail — the principal's own reveals,
+      // and anything done before the last assistant left. Leaving it out of
+      // this branch would make the log vanish exactly when it is most likely
+      // to be being read.
+      accessTrail: withAccessTrail ? await accessTrail(ownerId, window) : null,
+    };
   }
   const marks = ids.map(() => '?').join(',');
 
@@ -257,6 +377,11 @@ async function buildReport(ownerId, { back = 1, now = new Date(), onlyUserId = n
     principal: { id: owner.id, name: owner.name },
     people,
     stillOpen: await stillOpen(ownerId, viewerId || ownerId),
+    // Only when the caller has established that this reader is entitled to
+    // it. The counts above say how many times a document was looked at; this
+    // says which document, and that is the principal's own business — see
+    // routes/report.js for who is told.
+    accessTrail: withAccessTrail ? await accessTrail(ownerId, window) : null,
   };
 }
 
@@ -337,4 +462,6 @@ async function stillOpen(ownerId, viewerId = null) {
   };
 }
 
-module.exports = { buildReport, weekWindow, officeOf };
+module.exports = {
+  buildReport, weekWindow, customWindow, accessTrail, officeOf, MAX_SPAN_DAYS,
+};

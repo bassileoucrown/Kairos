@@ -48,7 +48,7 @@ const SCREENS = {
   catch_up: 'While you were away',
   appointment: 'An appointment',
   mail: 'Correspondence',
-  report: 'Weekly report',
+  report: 'Report',
   thread: 'A room',
 };
 

@@ -6,7 +6,7 @@ import BuildTrip from '../components/BuildTrip.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { ScheduleEntry, KIND_ICON, shapeOf, span } from './Today.jsx';
 import TimezonePicker from '../components/TimezonePicker.jsx';
-import { zonedToUtc } from '../lib/timezones.js';
+import { zonedToUtc, dateKeyInZone } from '../lib/timezones.js';
 import { useAsk } from '../components/Ask.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
 import MoveAppointment from '../components/MoveAppointment.jsx';
@@ -257,6 +257,193 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
   );
 }
 
+/** HH:MM in the principal's zone, for prefilling a time input. */
+function timeInZone(iso, timeZone) {
+  if (!iso) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return `${map.hour}:${map.minute}`;
+}
+
+/**
+ * Correcting an entry that is already on the day.
+ *
+ * WHY THIS IS NOT "REMOVE AND ADD AGAIN". That is what the screen made
+ * somebody do, and it is not the same act: a repeating entry loses its series,
+ * an appointment mirrored from a booking loses the link, and the notes hanging
+ * off it go with the row. A wrong time on the right entry is the commonest
+ * thing that happens to a diary, and it should cost one field.
+ *
+ * ONE OCCURRENCE, NOT THE SERIES. A standing Tuesday that moved this week has
+ * not moved every week, and guessing otherwise rewrites a year of somebody's
+ * diary from a single edit. Said on the form rather than inferred.
+ */
+function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
+  const dayKey = dateKeyInZone(item.startAt, timezone);
+  const [kind, setKind] = useState(item.kind || 'meeting');
+  const [title, setTitle] = useState(item.title || '');
+  const [startTime, setStartTime] = useState(timeInZone(item.startAt, timezone));
+  const [endTime, setEndTime] = useState(item.endAt ? timeInZone(item.endAt, timezone) : '');
+  const [location, setLocation] = useState(item.location || '');
+  const [destination, setDestination] = useState(item.destination || '');
+  const [reference, setReference] = useState(item.reference || '');
+  const [notes, setNotes] = useState(item.notes || '');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const isTravel = TRAVEL_KINDS.has(kind);
+
+  async function submit(ev) {
+    ev.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      await api.patch(`/itinerary/${ownerId}/items/${item.id}`, {
+        kind,
+        title,
+        // The principal's zone, exactly as the add form does it — an assistant
+        // in London correcting a Lagos departure must not store London time.
+        startAt: zonedToUtc(dayKey, startTime, timezone),
+        // Cleared to empty rather than omitted, so removing an end time is a
+        // thing somebody can actually do. The server maps '' to NULL.
+        endAt: endTime ? zonedToUtc(endDateFor(dayKey, startTime, endTime), endTime, timezone) : '',
+        location, destination: isTravel ? destination : '', reference, notes,
+      });
+      onSaved();
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
+  }
+
+  return (
+    <form className="card itin-form itin-edit" onSubmit={submit}>
+      {error && <div className="alert alert-error">{error}</div>}
+      {item.seriesId && (
+        <p className="hint">
+          This one only. The rest of the repeat stays where it is.
+        </p>
+      )}
+
+      <div className="kind-picker">
+        {KINDS.map((k) => (
+          <button
+            key={k.value} type="button"
+            className={'kind-chip' + (kind === k.value ? ' is-on' : '')}
+            onClick={() => setKind(k.value)}
+          >
+            <span aria-hidden="true">{KIND_ICON[k.value] || '•'}</span> {k.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="field">
+        <label htmlFor={`ed-title-${item.id}`}>What it is</label>
+        <input id={`ed-title-${item.id}`} type="text" required value={title}
+          onChange={(e) => setTitle(e.target.value)} />
+      </div>
+
+      <div className="itin-times">
+        <div className="field">
+          <label htmlFor={`ed-start-${item.id}`}>Starts</label>
+          <input id={`ed-start-${item.id}`} type="time" required value={startTime}
+            onChange={(e) => setStartTime(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor={`ed-end-${item.id}`}>Ends</label>
+          <input id={`ed-end-${item.id}`} type="time" value={endTime}
+            onChange={(e) => setEndTime(e.target.value)} />
+          {endsNextDay(startTime, endTime) && (
+            <p className="hint">Overnight — ends the next morning.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor={`ed-loc-${item.id}`}>{isTravel ? 'From' : 'Where'}</label>
+        <input id={`ed-loc-${item.id}`} type="text" value={location}
+          onChange={(e) => setLocation(e.target.value)} />
+      </div>
+      {isTravel && (
+        <div className="field">
+          <label htmlFor={`ed-dest-${item.id}`}>To</label>
+          <input id={`ed-dest-${item.id}`} type="text" value={destination}
+            onChange={(e) => setDestination(e.target.value)} />
+        </div>
+      )}
+      <div className="field">
+        <label htmlFor={`ed-ref-${item.id}`}>Reference</label>
+        <input id={`ed-ref-${item.id}`} type="text" value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          placeholder="Flight number, booking reference, room" />
+      </div>
+      <div className="field">
+        <label htmlFor={`ed-notes-${item.id}`}>Notes</label>
+        <textarea id={`ed-notes-${item.id}`} rows={2} value={notes}
+          onChange={(e) => setNotes(e.target.value)} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>
+          {saving ? 'Saving…' : 'Save the change'}
+        </button>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={onCancel}>
+          Never mind
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Running twenty minutes over, on an appointment somebody booked.
+ *
+ * The third of the three controls the appointment's own page offers, and it
+ * was the one this screen did not have — so an assistant lengthening a meeting
+ * from the day sheet had to open the appointment to do it. It starts at the
+ * same time; only the end moves.
+ */
+function ChangeLength({ ownerId, bookingId, minutes, onSaved, onCancel }) {
+  const [mins, setMins] = useState(String(minutes));
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setError(''); setBusy(true);
+    try {
+      await api.post(`/pa/${ownerId}/bookings/${bookingId}/duration`,
+        { minutes: Number(mins), note });
+      onSaved();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card itin-form">
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="field" style={{ maxWidth: 220 }}>
+        <label htmlFor={`len-${bookingId}`}>Minutes</label>
+        <input id={`len-${bookingId}`} type="number" min="5" max="480" step="5" value={mins}
+          onChange={(e) => setMins(e.target.value)} />
+        <p className="hint">It starts at the same time. Currently {minutes} min.</p>
+      </div>
+      <div className="field">
+        <label htmlFor={`len-why-${bookingId}`}>Why (optional)</label>
+        <input id={`len-why-${bookingId}`} type="text" maxLength={280} value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="They are bringing two colleagues" />
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-primary btn-sm" type="button"
+          disabled={busy || !mins || Number(mins) === minutes} onClick={save}>
+          {busy ? 'Saving…' : 'Change the length'}
+        </button>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={onCancel}>
+          Never mind
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Itinerary() {
   // Replaces window.prompt; see components/Ask.jsx.
   const [ask, askDialog] = useAsk();
@@ -269,6 +456,10 @@ export default function Itinerary() {
   // Which appointment has its notes open. One at a time: the panel is a
   // conversation, not a field, and two of them side by side is noise.
   const [noting, setNoting] = useState(null);
+  // Which entry is being corrected, and which appointment is having its
+  // length changed. One at a time each, for the same reason as the notes.
+  const [editing, setEditing] = useState(null);
+  const [lengthening, setLengthening] = useState(null);
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -339,10 +530,17 @@ export default function Itinerary() {
 
   // Planning happens on days that are not today, and most of what this screen
   // shows is some other Tuesday. A day that is not today has no "now" in it,
-  // so it gets no now line and nothing on it is running, finished, or next.
+  // so it gets no now line and nothing on it is running or next.
+  //
+  // BUT IT STILL HAS A PAST. The clock is passed on every day, not only
+  // today's, because "this already happened" is true of last Thursday's
+  // eleven o'clock from wherever you are reading it. Withholding the clock
+  // meant a week gone by looked exactly like a week to come — every entry
+  // live, nothing settled, and no way to see at a glance what had been got
+  // through. `markNow` keeps the line itself on today alone.
   const todayKey = new Date().toISOString().slice(0, 10);
   const isToday = date === todayKey;
-  const rows = shapeOf(entries, isToday ? Date.now() : null);
+  const rows = shapeOf(entries, Date.now(), { markNow: isToday });
 
   // The same sentence Today opens with, so the two screens describe one day
   // the same way rather than each in its own dialect.
@@ -469,6 +667,15 @@ export default function Itinerary() {
           }
           const { e } = row;
           const mine = e.source === 'itinerary';
+          // ALREADY HAPPENED. The appointment's own page has always said this
+          // — "it can no longer be moved, lengthened or called off" — while
+          // the day sheet went on offering all three on a meeting from last
+          // Tuesday. Pressing one got a refusal from the server, which is the
+          // app teaching somebody that its buttons are a guess.
+          //
+          // What survives is everything that is ABOUT the past rather than a
+          // change to it: notes, minutes, the way through to the appointment.
+          const past = !!row.done;
           return (
             <li
               className={'day-item itin-entry'
@@ -487,7 +694,32 @@ export default function Itinerary() {
                 <BookingNotes ownerId={ownerId} bookingId={bookingIdOf(e)} onChanged={load} />
               )}
 
+              {mine && editing === e.id && (
+                <EditItem
+                  ownerId={ownerId}
+                  item={e}
+                  timezone={data?.timezone || 'UTC'}
+                  onSaved={() => { setEditing(null); load(); }}
+                  onCancel={() => setEditing(null)}
+                />
+              )}
+              {e.source === 'booking' && lengthening === e.id && (
+                <ChangeLength
+                  ownerId={ownerId}
+                  bookingId={bookingIdOf(e)}
+                  minutes={Math.round((Date.parse(e.endAt) - Date.parse(e.startAt)) / 60000) || 30}
+                  onSaved={() => { setLengthening(null); load(); }}
+                  onCancel={() => setLengthening(null)}
+                />
+              )}
+
               <div className="itin-actions no-print">
+                {/* Said out loud rather than left to a dimmed row. The greying
+                    alone reads as "not loaded" as easily as "finished", and
+                    what somebody is scanning a past day for is precisely which
+                    things got done. */}
+                {past && <span className="pill is-done-pill">Done</span>}
+
                 {mine && !viewerIsPrincipal && e.status === 'draft' && (
                   <>
                     <button className="btn btn-primary btn-sm" type="button"
@@ -531,10 +763,19 @@ export default function Itinerary() {
                     planned this is the question "if this slips an hour, does
                     the flight still work?", which is exactly when it is worth
                     asking. So it stays on every day, quietly. */}
-                {mine && e.status !== 'draft' && (
+                {mine && e.status !== 'draft' && !past && (
                   <button className="itin-tool" type="button"
                     aria-label={`${e.title} is running late`}
                     onClick={() => setLateItem(e)}>Running late</button>
+                )}
+                {/* Editing it, rather than removing it and typing it again —
+                    which is what this screen made somebody do for a wrong
+                    time, a changed room, or a misspelt name, and which loses
+                    the notes and the series along with the mistake. */}
+                {mine && editing !== e.id && (
+                  <button className="itin-tool" type="button"
+                    aria-label={`Edit ${e.title}`}
+                    onClick={() => { setEditing(e.id); setRemoving(null); }}>Edit</button>
                 )}
                 {/* Offered, never applied on its own: a schedule that reshuffles
                     itself because traffic moved is one nobody trusts. */}
@@ -569,11 +810,20 @@ export default function Itinerary() {
                     an assistant who needed to move a confirmed meeting had to
                     cancel it and ask the booker to book again, which costs the
                     booker two emails and loses the thread. */}
-                {e.source === 'booking' && e.status !== 'cancelled' && moving !== e.id && (
+                {e.source === 'booking' && e.status !== 'cancelled' && !past && moving !== e.id && (
                   <>
                     <button className="itin-tool" type="button"
                       aria-label={`Move ${e.title}`}
                       onClick={() => setMoving(e.id)}>Move</button>
+                    {/* The third of the three the appointment's own page
+                        offers, and the one that was missing here. Running
+                        twenty minutes over is not the same decision as moving
+                        to Thursday, so it is not a field inside the move. */}
+                    {lengthening !== e.id && (
+                      <button className="itin-tool" type="button"
+                        aria-label={`Change the length of ${e.title}`}
+                        onClick={() => setLengthening(e.id)}>Length</button>
+                    )}
                     <button className="itin-tool is-danger" type="button"
                       aria-label={`Cancel ${e.title}`}
                       onClick={() => cancelBooking(e)}>Cancel</button>
