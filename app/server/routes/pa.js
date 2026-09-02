@@ -62,44 +62,34 @@ router.use(requireAuth);
  * is retained automatically when the principal later claims it.
  */
 router.post('/kept', requirePlan('kept_principals'), async (req, res) => {
-  const { name, claimEmail, timezone } = req.body || {};
+  const { name, timezone } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'A name is required.' });
-  }
-  const email = String(claimEmail || '').trim().toLowerCase();
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return res.status(400).json({ error: 'A claim address for the principal is required.' });
-  }
-  // THE ESCROW RULE. Said as its own refusal, with its own message, because an
-  // assistant who quietly used their own address would end up holding a
-  // principal's documents with no way for that principal to ever take them
-  // back — and nothing on any screen would look wrong.
-  const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
-  if (me && email === String(me.email).toLowerCase()) {
-    return res.status(400).json({
-      error: 'The claim address must be the principal\'s own, not yours — it is how they take the record back.',
-    });
-  }
-  const clash = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(email);
-  if (clash) {
-    return res.status(409).json({ error: 'Someone with that address is already on Kairos. Ask them to appoint you instead.' });
   }
 
   const id = crypto.randomUUID();
   const slug = await uniqueSlugFromName(String(name).trim());
   const now = new Date().toISOString();
-  // A sentinel, not a hash. Nothing verifyPassword is given can match it, and
-  // login refuses on kept_by before reaching it in any case.
+  // NO ADDRESS IS ASKED FOR, and that is the point rather than an omission.
+  //
+  // An earlier version required the principal's email as the route back to
+  // them. It made the escrow real, and it was wrong anyway: an assistant
+  // typing their employer's address into a company that person has never
+  // agreed to deal with is disclosing somebody else's contact details at the
+  // very first step, which is not a thing to ask of a product that holds
+  // passports.
+  //
+  // So the row carries a non-routable address purely because users.email is
+  // NOT NULL and UNIQUE. Nothing is ever sent to it, and login refuses on
+  // kept_by long before the column matters.
   await db.prepare(`
     INSERT INTO users (id, email, password_hash, name, slug, timezone, email_verified,
                        onboarding_step, account_category, plan, kept_by, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, 'done', 'principal', ?, ?, ?)
-  `).run(id, email, '!kept', String(name).trim(), slug,
+  `).run(id, `kept-${id}@kept.invalid`, '!kept', String(name).trim(), slug,
     String(timezone || 'UTC'), DEFAULT_PLAN, req.user.id, now);
   await rememberHandle(id, slug);
 
-  // The membership is the whole reason nothing else had to change, and it is
-  // what keeps the assistant on after the principal claims the record.
   const category = (await db.prepare('SELECT account_category FROM users WHERE id = ?').get(req.user.id))?.account_category;
   // invite_token is NOT NULL because every other membership starts life as an
   // invitation somebody has to accept. This one does not: the assistant is
@@ -109,19 +99,61 @@ router.post('/kept', requirePlan('kept_principals'), async (req, res) => {
     INSERT INTO memberships (id, owner_id, member_user_id, invited_email, role, status,
                              invite_token, created_at)
     VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
-  `).run(crypto.randomUUID(), id, req.user.id, email,
+  `).run(crypto.randomUUID(), id, req.user.id, `kept-${id}@kept.invalid`,
     ['pa', 'ea', 'chief_of_staff'].includes(category) ? category : 'pa',
     crypto.randomBytes(32).toString('hex'), now);
 
   res.status(201).json({
     principal: { id, name: String(name).trim(), slug, timezone: String(timezone || 'UTC'), kept: true },
-    // Said back plainly so the screen can tell the assistant what they have
-    // just agreed to, rather than leaving it in a help page.
-    claim: {
-      email,
-      how: 'They can take this record whenever they like by asking for a password at that address.',
+    // What this record is and is not, said at the moment it is made rather
+    // than left to a help page. The vault is the part people assume.
+    holding: {
+      whenTheyJoin: 'When they join Kairos, connect to their handle and move across whatever should follow them.',
+      vault: 'Essentials are shut on a held record. There is no second factor of theirs to protect them with yet.',
     },
   });
+});
+
+/**
+ * Move one thing from a held record to the principal it belongs to.
+ *
+ * WHAT LINKING IS HERE. Not a merge. When the principal finally joins, they
+ * are connected the ordinary way — by handle, with them approving — and from
+ * that point the work happens in their own account. What came before does not
+ * silently follow them: an assistant's held record is a working record, and
+ * tipping a month of it onto somebody's first screen would be both a shock and
+ * a disclosure. Things cross one at a time, because the assistant chose them.
+ *
+ * BOTH ENDS ARE CHECKED. The assistant must actively support the destination
+ * and hold the source. Without that this would be a way to write into any
+ * account whose id could be guessed.
+ */
+router.post('/kept/:keptId/hand-over/:itemId', async (req, res) => {
+  const held = await db.prepare('SELECT id, kept_by, name FROM users WHERE id = ?').get(req.params.keptId);
+  if (!held || held.kept_by !== req.user.id) {
+    return res.status(404).json({ error: 'No such held record.' });
+  }
+  const toId = String(req.body?.toPrincipalId || '');
+  const may = await db.prepare(
+    "SELECT 1 FROM memberships WHERE owner_id = ? AND member_user_id = ? AND status = 'active'",
+  ).get(toId, req.user.id);
+  if (!may) {
+    return res.status(403).json({ error: 'You do not work for that principal.' });
+  }
+  const target = await db.prepare('SELECT id, kept_by FROM users WHERE id = ?').get(toId);
+  if (!target || target.kept_by) {
+    return res.status(400).json({ error: 'Things move to an account somebody holds themselves, not to another held record.' });
+  }
+
+  const item = await db.prepare('SELECT id FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, held.id);
+  if (!item) return res.status(404).json({ error: 'That is not on the held record.' });
+
+  await db.prepare('UPDATE itinerary_items SET owner_id = ? WHERE id = ?').run(toId, item.id);
+  // Remembered on the held record so the screen can say where its things have
+  // been going, and so a second hand-over does not have to ask again.
+  await db.prepare('UPDATE users SET linked_to = ? WHERE id = ?').run(toId, held.id);
+  res.json({ movedTo: toId });
 });
 
 router.get('/principals', async (req, res) => {

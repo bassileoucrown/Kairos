@@ -8,10 +8,17 @@
 // switcher, the day sheet and the approval queue need no special case.
 //
 // THE ASSERTIONS THAT MATTER are not that the record can be made. They are
-// that it cannot be signed into, that the assistant cannot make themselves the
-// only way back into it, and that claiming it does not evict them. Held is not
-// owned, and the difference has to be a property of the system rather than a
-// sentence in a document. Each of those is sabotaged below.
+// that it cannot be signed into, that the vault stays shut on it, and that
+// nothing crosses to a real account except when the assistant moves it and
+// only to a principal they actually work for.
+//
+// NO ADDRESS IS COLLECTED. An earlier version took the principal's email as
+// the route back to them, which made the escrow real and was wrong anyway: an
+// assistant typing their employer's address into a company that person has
+// never agreed to deal with is disclosing somebody else's contact details at
+// the first step. What replaces it is that the held record holds nothing worth
+// stealing — the vault does not open — and that the principal, when they join,
+// does so on their own terms and takes across only what is handed to them.
 const ROOT = require('path').join(__dirname, '..', '..');
 const { spawn } = require('child_process');
 
@@ -75,17 +82,19 @@ async function waitReady() {
     await pa('POST', '/auth/signup', { name: 'Kit Staff', email: paEmail, password: PW, timezone: 'UTC', accountCategory: 'chief_of_staff' });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
 
-    const bossEmail = `adaeze${ID}@x.com`;
-
     head('An assistant can take on somebody who is not on Kairos:');
-    let r = await pa('POST', '/pa/kept', { name: 'Adaeze Okonkwo', claimEmail: bossEmail, timezone: 'Africa/Lagos' });
+    let r = await pa('POST', '/pa/kept', { name: 'Adaeze Okonkwo', timezone: 'Africa/Lagos' });
     ok('the record is made', r.s === 201, JSON.stringify(r.d));
     const kept = r.d?.principal;
     ok('it has a handle of its own', !!kept?.slug, kept?.slug);
     ok('and the principal\'s timezone, not the assistant\'s',
       kept?.timezone === 'Africa/Lagos', kept?.timezone);
-    ok('and it says how the principal takes it back',
-      /password/i.test(r.d?.claim?.how || ''), r.d?.claim?.how);
+    ok('and it says what happens when they join, rather than promising a claim',
+      /connect to their handle/i.test(r.d?.holding?.whenTheyJoin || ''), r.d?.holding?.whenTheyJoin);
+    ok('and says the vault is shut, which is the part people assume',
+      /shut/i.test(r.d?.holding?.vault || ''), r.d?.holding?.vault);
+    ok('no address of theirs was asked for or stored',
+      !JSON.stringify(r.d).includes('@x.com'), JSON.stringify(r.d).slice(0, 160));
 
     head('It behaves like any other principal, with no special case:');
     r = await pa('GET', '/pa/principals');
@@ -121,9 +130,10 @@ async function waitReady() {
       (await pa('GET', '/attention/across')).d.principals.some((p) => p.id === kept.id));
 
     head('But it is a record, not an account anybody can get into:');
-    r = await pa('POST', '/auth/login', { email: bossEmail, password: PW });
-    ok('the claim address plus a guessed password is refused', r.s === 401, String(r.s));
-    r = await pa('POST', '/auth/login', { email: bossEmail, password: '!kept' });
+    const heldAddress = `kept-${kept.id}@kept.invalid`;
+    r = await pa('POST', '/auth/login', { email: heldAddress, password: PW });
+    ok('its own address plus a guessed password is refused', r.s === 401, String(r.s));
+    r = await pa('POST', '/auth/login', { email: heldAddress, password: '!kept' });
     ok('and so is the sentinel that is actually in the column', r.s === 401, String(r.s));
     ok('the refusal does not admit the record exists',
       /incorrect email or password/i.test(r.d?.error || ''), r.d?.error);
@@ -140,65 +150,62 @@ async function waitReady() {
       const { hashPassword } = require(`${ROOT}/app/server/lib/auth`);
       await store.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
         .run(hashPassword('averyrealpassword'), kept.id);
-      const tryIt = await pa('POST', '/auth/login', { email: bossEmail, password: 'averyrealpassword' });
+      const tryIt = await pa('POST', '/auth/login', { email: `kept-${kept.id}@kept.invalid`, password: 'averyrealpassword' });
       ok('a held record refuses a password that genuinely matches its hash',
         tryIt.s === 401, String(tryIt.s));
       // Put the sentinel back so the claim below is tested from the real state.
       await store.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run('!kept', kept.id);
     }
 
-    head('Held is not owned — the assistant cannot be the way back in:');
-    r = await pa('POST', '/pa/kept', { name: 'Second Boss', claimEmail: paEmail });
-    ok('their own address is refused as a claim address', r.s === 400, String(r.s));
-    ok('and the refusal says why, because it is the whole point',
-      /their own|take the record back/i.test(r.d?.error || ''), r.d?.error);
-    r = await pa('POST', '/pa/kept', { name: 'Third Boss', claimEmail: bossEmail });
-    ok('a claim address already in use is refused', r.s === 409, String(r.s));
-    r = await pa('POST', '/pa/kept', { name: 'No Address' });
-    ok('and a record with no claim address cannot be made at all', r.s === 400, String(r.s));
+    head('The vault is shut while nobody has claimed the record:');
+    const vault = await pa('GET', `/essentials/${kept.id}`);
+    ok('essentials refuse to open', vault.s === 409, String(vault.s));
+    ok('and say why rather than looking empty',
+      /second factor of theirs/i.test(vault.d?.error || ''), vault.d?.error);
+    // POSITIVE CONTROL: the same call on an ordinary principal works, so the
+    // refusal above is about being held and not about the route being broken.
+    const real = sess();
+    await real('POST', '/auth/signup', { name: 'Real Boss', email: `real${ID}@x.com`, password: PW, timezone: 'UTC', accountCategory: 'principal' });
+    await real('POST', '/profile/onboarding-step', { step: 'done' });
+    const realId = (await real('GET', '/auth/me')).d.user.id;
+    ok('though an ordinary principal opens theirs perfectly well',
+      (await real('GET', `/essentials/${realId}`)).s === 200);
 
-    head('The principal takes their record whenever they choose:');
-    r = await pa('POST', '/auth/forgot-password', { email: bossEmail });
-    ok('asking for a password at the claim address is accepted', r.s === 200 || r.s === 202, String(r.s));
-    // THE ASSISTANT CANNOT READ THE CLAIM LINK. Their outbox is their own, and
-    // the claim goes to the principal — which is the escrow rule holding at the
-    // one moment it would actually be tested. If this ever starts returning the
-    // link, an assistant could claim the record they are holding and the whole
-    // arrangement inverts.
-    const box = (await pa('GET', '/emails')).d;
-    const theirs = JSON.stringify(box || '');
-    ok('the assistant cannot read the claim link out of their own outbox',
-      !/reset-password/.test(theirs), theirs.slice(0, 200));
+    head('When the principal joins, things cross because somebody moved them:');
+    // They join on their own terms, with their own address, and appoint the
+    // assistant the ordinary way. Nothing about the held record is assumed.
+    const inv = await real('POST', '/members', { email: paEmail });
+    await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
 
-    // So take the token the way the principal does: out of the record, not out
-    // of the assistant's screen. This stands in for them opening their email.
-    const store = require(`${ROOT}/app/server/lib/db`);
-    await store.ready();
-    const row = await store.prepare(
-      'SELECT pr.id FROM password_resets pr JOIN users u ON u.id = pr.user_id WHERE u.email = ?',
-    ).get(bossEmail);
-    const match = row?.id ? [null, row.id] : null;
-    ok('a claim token was raised against the principal\'s own record', !!match, JSON.stringify(row));
+    const before = await real('GET', `/itinerary/${realId}/day?date=${entryDay}`);
+    ok('their own day starts without the assistant\'s working entry',
+      !(before.d.entries || []).some((e) => e.title === 'Board pre-read'),
+      JSON.stringify((before.d.entries || []).map((e) => e.title)));
 
-    if (match) {
-      const boss = sess();
-      r = await boss('POST', `/auth/reset-password/${match[1]}`, { password: 'brandnewpass1' });
-      ok('setting a password claims the record', r.s === 200, JSON.stringify(r.d));
-      r = await boss('POST', '/auth/login', { email: bossEmail, password: 'brandnewpass1' });
-      ok('and now they can sign in', r.s === 200, JSON.stringify(r.d).slice(0, 120));
+    r = await pa('POST', `/pa/kept/${kept.id}/hand-over/${made.d.item.id}`, { toPrincipalId: realId });
+    ok('the assistant can move one thing across', r.s === 200, JSON.stringify(r.d));
+    const after = await real('GET', `/itinerary/${realId}/day?date=${entryDay}`);
+    ok('and it is on the principal\'s own day now',
+      (after.d.entries || []).some((e) => e.title === 'Board pre-read'),
+      JSON.stringify((after.d.entries || []).map((e) => e.title)));
+    ok('and no longer on the held record',
+      !((await pa('GET', `/itinerary/${kept.id}/day?date=${entryDay}`)).d.entries || [])
+        .some((e) => e.title === 'Board pre-read'));
 
-      head('And claiming it does not evict the assistant:');
-      r = await pa('GET', '/pa/principals');
-      const after = (r.d.principals || []).find((p) => p.id === kept.id);
-      ok('the assistant still has them', !!after, JSON.stringify((r.d.principals || []).map((p) => p.name)));
-      ok('but they are no longer marked held', after?.kept === false, JSON.stringify(after));
-      ok('the work done while it was held is still there',
-        ((await pa('GET', `/itinerary/${kept.id}/day?date=${entryDay}`)).d.entries || [])
-          .some((e) => e.title === 'Board pre-read'));
-      ok('and the principal sees it as their own',
-        ((await boss('GET', `/itinerary/${kept.id}/day?date=${entryDay}`)).d.entries || [])
-          .some((e) => e.title === 'Board pre-read'));
-    }
+    head('And it is not a way into anybody else\'s account:');
+    const outsider = sess();
+    await outsider('POST', '/auth/signup', { name: 'Someone Else', email: `else${ID}@x.com`, password: PW, timezone: 'UTC', accountCategory: 'principal' });
+    await outsider('POST', '/profile/onboarding-step', { step: 'done' });
+    const outsiderId = (await outsider('GET', '/auth/me')).d.user.id;
+    const second = await pa('POST', `/itinerary/${kept.id}/items`, {
+      kind: 'meeting', title: 'Second thing', startAt: entryAt,
+    });
+    r = await pa('POST', `/pa/kept/${kept.id}/hand-over/${second.d.item.id}`, { toPrincipalId: outsiderId });
+    ok('moving something to a principal you do not work for is refused',
+      r.s === 403, String(r.s));
+    ok('and the outsider\'s day is untouched',
+      !((await outsider('GET', `/itinerary/${outsiderId}/day?date=${entryDay}`)).d.entries || [])
+        .some((e) => e.title === 'Second thing'));
 
     // --- AND A PA CAN ACTUALLY DO IT, from a screen -----------------------
     // Everything above proves the server can hold a principal. This proves an
@@ -233,15 +240,16 @@ async function waitReady() {
       await page.click('button:has-text("They are not on Kairos")');
       await page.waitForSelector('#kept-name', { timeout: 60000 });
       await page.fill('#kept-name', 'Emeka Obi');
-      await page.fill('#kept-email', `emeka${N}@x.com`);
       await page.click('button:has-text("Set them up")');
       // Wait for the confirmation itself, not for the button to stop spinning.
       await page.waitForFunction(
-        () => /take this record|password/i.test(document.body.innerText),
+        () => /connect to their handle/i.test(document.body.innerText),
         null, { timeout: 60000 },
       );
-      ok('setting them up says so, in the server\'s own words about the claim',
-        /password/i.test(await page.locator('body').innerText()));
+      ok('setting them up says what happens when the principal joins',
+        /connect to their handle/i.test(await page.locator('body').innerText()));
+      ok('and the screen never asked for the principal\'s email',
+        (await page.locator('#kept-email').count()) === 0);
 
       await page.click('button:has-text("Start working")');
       await page.waitForSelector('#principal-select', { timeout: 60000 });
@@ -279,6 +287,6 @@ async function waitReady() {
   }
 
   server.kill();
-  console.log(fails ? `\n${fails} FAILURES` : '\nA principal can be held for somebody not on Kairos, and taken back by them.');
+  console.log(fails ? `\n${fails} FAILURES` : '\nA principal can be held for somebody not on Kairos, and joins on their own terms.');
   process.exit(fails ? 1 : 0);
 })();

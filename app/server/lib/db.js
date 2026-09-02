@@ -373,6 +373,11 @@ function ready() {
       // written when the record was created. Nothing is re-entered and nothing
       // is migrated.
       await ensureColumn('users', 'kept_by', 'TEXT');
+      // Where a held record's things have been going, once its principal has
+      // joined and been connected. Not a merge and not ownership — the held
+      // record stays exactly where it is, and this only records that somebody
+      // has started moving work across so the screen can say so.
+      await ensureColumn('users', 'linked_to', 'TEXT');
       // "The thing you asked for has happened", which is not the same claim as
       // "I have seen this". See routes/threads.js.
       await ensureColumn('messages', 'done_at', 'TEXT');

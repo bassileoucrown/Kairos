@@ -23,6 +23,32 @@ const { verifyStepUp, factorFor } = require('../lib/stepUp');
 const router = asyncRouter();
 router.use(requireAuth);
 
+/**
+ * The vault is shut on a record nobody has claimed yet.
+ *
+ * Everywhere else in Kairos, essentials are protected by the principal's own
+ * second factor — that is the whole promise, and the reason a stolen password
+ * reaches a calendar and no further. A held record has no principal on the app,
+ * so there is no second factor of theirs to stand behind the documents; they
+ * would rest on the assistant's instead. That is a materially weaker thing, and
+ * selling it as the same thing is how a custody product loses the only argument
+ * it has.
+ *
+ * So there is nothing to weaken: the vault does not open on a held record at
+ * all, and says why rather than appearing empty. When the principal joins and
+ * sets their own second factor, they keep their papers in their own account.
+ */
+async function notWhileHeld(req, res, next) {
+  if (req.principal?.kept_by) {
+    return res.status(409).json({
+      error: 'Essentials are shut while this record is held. There is no second factor of '
+        + 'theirs to protect documents with until they join and set one.',
+      held: true,
+    });
+  }
+  return next();
+}
+
 const revealLimiter = limit({
   limit: 30,
   windowMs: 60 * 60 * 1000,
@@ -84,7 +110,7 @@ router.get('/catalogue', async (req, res) => {
   res.json({ categories: CATEGORIES, encryptionConfigured: isConfigured() });
 });
 
-router.get('/:ownerId', requirePaAccess, async (req, res) => {
+router.get('/:ownerId', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const rows = await db.prepare(
     `${SELECT} WHERE e.owner_id = ? AND e.archived_at IS NULL ORDER BY e.category, e.label`,
@@ -128,7 +154,7 @@ async function countArchived(ownerId, ctx) {
  * logged: /reveal does not ask whether a row is archived, which is exactly
  * the property that makes this safe to add.
  */
-router.get('/:ownerId/archived', requirePaAccess, async (req, res) => {
+router.get('/:ownerId/archived', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const rows = await db.prepare(
     `${SELECT} WHERE e.owner_id = ? AND e.archived_at IS NOT NULL ORDER BY e.archived_at DESC`,
@@ -161,7 +187,7 @@ router.get('/:ownerId/archived', requirePaAccess, async (req, res) => {
  * office that learns to ignore expiry mail is an office that misses the one
  * that mattered.
  */
-router.post('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
+router.post('/:ownerId/:id/archive', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
     .get(req.params.id, req.principal.id);
@@ -176,7 +202,7 @@ router.post('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
   res.json({ archivedAt: at });
 });
 
-router.delete('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
+router.delete('/:ownerId/:id/archive', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
     .get(req.params.id, req.principal.id);
@@ -193,7 +219,7 @@ router.delete('/:ownerId/:id/archive', requirePaAccess, async (req, res) => {
 // Adding is gated; reading is not. A principal who drops a plan keeps every
 // document they put in and simply cannot add more — losing sight of your own
 // passport number because a card expired is not a product behaviour.
-router.post('/:ownerId', requirePaAccess, requirePlan('vault'), async (req, res) => {
+router.post('/:ownerId', requirePaAccess, notWhileHeld, requirePlan('vault'), async (req, res) => {
   const ctx = viewerContext(req);
   const { category, field, label, value, expiresOn, notes, subjectContactId } = req.body || {};
 
@@ -251,7 +277,7 @@ router.post('/:ownerId', requirePaAccess, requirePlan('vault'), async (req, res)
   res.status(201).json({ essential: serialize(row) });
 });
 
-router.patch('/:ownerId/:id', requirePaAccess, async (req, res) => {
+router.patch('/:ownerId/:id', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
     .get(req.params.id, req.principal.id);
@@ -303,7 +329,7 @@ router.patch('/:ownerId/:id', requirePaAccess, async (req, res) => {
 //
 // The second factor, rather than the password, because the attacker this vault
 // has to survive is the one who already knows the password. See lib/stepUp.js.
-router.post('/:ownerId/:id/reveal', requirePaAccess, revealLimiter, async (req, res) => {
+router.post('/:ownerId/:id/reveal', requirePaAccess, notWhileHeld, revealLimiter, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
     .get(req.params.id, req.principal.id);
@@ -342,7 +368,7 @@ router.post('/:ownerId/:id/reveal', requirePaAccess, revealLimiter, async (req, 
 // This is where the feature earns its keep: the value is seconds at a booking
 // desk, not tidiness. Sensitive values are included in full — assembling this
 // IS a reveal, so it costs a password and is logged the same way.
-router.post('/:ownerId/travel-block', requirePaAccess, revealLimiter, async (req, res) => {
+router.post('/:ownerId/travel-block', requirePaAccess, notWhileHeld, revealLimiter, async (req, res) => {
   const ctx = viewerContext(req);
   // Assembling this hands over everything an airline asks for in one paste, so
   // it is a reveal in every sense and is gated identically.
@@ -384,7 +410,7 @@ router.post('/:ownerId/travel-block', requirePaAccess, revealLimiter, async (req
 // The check a PA does in their head and occasionally forgets: a passport must
 // usually be valid six months beyond arrival, and "not expired" is nowhere
 // near good enough. Answered without revealing a single number.
-router.get('/:ownerId/trip-ready', requirePaAccess, async (req, res) => {
+router.get('/:ownerId/trip-ready', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const on = String(req.query.date || '').trim();
   const at = /^\d{4}-\d{2}-\d{2}$/.test(on) ? Date.parse(`${on}T00:00:00Z`) : Date.now();
@@ -438,7 +464,7 @@ router.get('/:ownerId/trip-ready', requirePaAccess, async (req, res) => {
   res.json({ date: on || null, overall: worst, checks });
 });
 
-router.delete('/:ownerId/:id', requirePaAccess, async (req, res) => {
+router.delete('/:ownerId/:id', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
     .get(req.params.id, req.principal.id);

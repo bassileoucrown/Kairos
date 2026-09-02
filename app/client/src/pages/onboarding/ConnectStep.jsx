@@ -34,7 +34,6 @@ export default function ConnectStep() {
   // to want this product, told to come back when their boss arrives.
   const [keeping, setKeeping] = useState(false);
   const [keptName, setKeptName] = useState('');
-  const [keptEmail, setKeptEmail] = useState('');
 
   const iAmAssistant = ASSISTANT_CATEGORIES.has(user?.accountCategory);
 
@@ -59,12 +58,10 @@ export default function ConnectStep() {
       // field they can correct rather than a decision they must make now.
       const d = await api.post('/pa/kept', {
         name: keptName,
-        claimEmail: keptEmail,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       });
-      setNotice(`${d.principal.name} is set up. ${d.claim.how}`);
+      setNotice(`${d.principal.name} is set up. ${d.holding.whenTheyJoin}`);
       setKeptName('');
-      setKeptEmail('');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -101,9 +98,10 @@ export default function ConnectStep() {
       <OnboardingLayout step="connect">
         <h1>Set them up yourself</h1>
         <p className="subtitle">
-          You can run their diary, their trips and their papers from today. It is held for
-          them, not yours: give the address they actually read, and they can take the
-          record whenever they choose — you stay on as their assistant.
+          You can run their diary, their trips and their movements from today. When they
+          eventually join Kairos, connect to their handle and move across whatever should
+          follow them — nothing crosses on its own. Their essentials stay shut until then,
+          because there is no second factor of theirs to protect documents with yet.
         </p>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -117,17 +115,11 @@ export default function ConnectStep() {
               onChange={(e) => setKeptName(e.target.value)} required
             />
           </div>
-          <div className="field">
-            <label htmlFor="kept-email">Their email</label>
-            <input
-              id="kept-email" type="email" value={keptEmail} placeholder="adaeze@example.com"
-              onChange={(e) => setKeptEmail(e.target.value)} required
-            />
-            <p className="hint">
-              Not yours. It is how they take the record back, so it has to be theirs — and
-              nothing is sent to it until they ask for it.
-            </p>
-          </div>
+          <p className="hint">
+            Their name is all we need. We do not ask for their email: their contact details
+            are theirs to give, not yours to hand over. Nothing is sent to them and they are
+            not told this exists.
+          </p>
 
           <div className="onboarding-actions">
             <button className="btn btn-secondary" type="button" onClick={() => setKeeping(false)}>
