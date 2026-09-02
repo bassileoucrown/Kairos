@@ -4,6 +4,7 @@ import { dayLabelInZone, timeLabelInZone } from '../../lib/timezones.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import Dictate from '../../components/Dictate.jsx';
 import SoonButton from '../../components/SoonButton.jsx';
+import AssistCatalogue from '../../components/AssistCatalogue.jsx';
 
 const EXAMPLES = [
   'Book a call with Jane next Tuesday afternoon',
@@ -322,6 +323,12 @@ function ScheduleTab({
           </div>
         </div>
       )}
+
+      {/* The contents page for the rest of it. Last, because somebody who came
+          here to find a time should find that first — but present, because
+          the seven other asks were invisible from the one screen named after
+          them. */}
+      <AssistCatalogue />
     </div>
   );
 }

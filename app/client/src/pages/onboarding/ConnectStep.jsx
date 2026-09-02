@@ -28,6 +28,13 @@ export default function ConnectStep() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // The other half of the question. An assistant whose principal will never
+  // open an app was previously offered only "Skip for now", which left them
+  // with an empty account and nothing to do in it — the one person most likely
+  // to want this product, told to come back when their boss arrives.
+  const [keeping, setKeeping] = useState(false);
+  const [keptName, setKeptName] = useState('');
+  const [keptEmail, setKeptEmail] = useState('');
 
   const iAmAssistant = ASSISTANT_CATEGORIES.has(user?.accountCategory);
 
@@ -39,6 +46,30 @@ export default function ConnectStep() {
     const { user: stepped } = await api.post('/profile/onboarding-step', { step: next });
     updateUser({ onboardingStep: stepped.onboardingStep });
     navigate(iAmAssistant ? '/pa' : '/onboarding/meeting-type');
+  }
+
+  async function takeOn(e) {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    setSubmitting(true);
+    try {
+      // Their zone, guessed from this browser, because an assistant usually
+      // sits in the same country as the person they work for — and it is a
+      // field they can correct rather than a decision they must make now.
+      const d = await api.post('/pa/kept', {
+        name: keptName,
+        claimEmail: keptEmail,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      });
+      setNotice(`${d.principal.name} is set up. ${d.claim.how}`);
+      setKeptName('');
+      setKeptEmail('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -58,6 +89,65 @@ export default function ConnectStep() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // The whole point of the branch: an assistant sets their principal up and
+  // starts working the same minute, rather than waiting for somebody else to
+  // join. What they build is held for that person, not owned — see the claim
+  // line under the form, which is the server's own words rather than a promise
+  // this screen invents.
+  if (iAmAssistant && keeping) {
+    return (
+      <OnboardingLayout step="connect">
+        <h1>Set them up yourself</h1>
+        <p className="subtitle">
+          You can run their diary, their trips and their papers from today. It is held for
+          them, not yours: give the address they actually read, and they can take the
+          record whenever they choose — you stay on as their assistant.
+        </p>
+
+        {error && <div className="alert alert-error">{error}</div>}
+        {notice && <div className="alert alert-success">{notice}</div>}
+
+        <form onSubmit={takeOn}>
+          <div className="field">
+            <label htmlFor="kept-name">Their name</label>
+            <input
+              id="kept-name" type="text" value={keptName} placeholder="Adaeze Okonkwo"
+              onChange={(e) => setKeptName(e.target.value)} required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="kept-email">Their email</label>
+            <input
+              id="kept-email" type="email" value={keptEmail} placeholder="adaeze@example.com"
+              onChange={(e) => setKeptEmail(e.target.value)} required
+            />
+            <p className="hint">
+              Not yours. It is how they take the record back, so it has to be theirs — and
+              nothing is sent to it until they ask for it.
+            </p>
+          </div>
+
+          <div className="onboarding-actions">
+            <button className="btn btn-secondary" type="button" onClick={() => setKeeping(false)}>
+              They are on Kairos
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={submitting}>
+              {submitting ? 'Setting up…' : 'Set them up'}
+            </button>
+          </div>
+        </form>
+
+        {notice && (
+          <div className="onboarding-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn btn-primary" type="button" onClick={advance}>
+              Start working
+            </button>
+          </div>
+        )}
+      </OnboardingLayout>
+    );
   }
 
   return (
@@ -102,6 +192,17 @@ export default function ConnectStep() {
               <option value="delegate">Delegate — scheduling only</option>
             </select>
           </div>
+        )}
+
+        {iAmAssistant && (
+          <p className="hint" style={{ marginTop: '.75rem' }}>
+            <button
+              className="link-button" type="button" onClick={() => { setKeeping(true); setError(''); setNotice(''); }}
+            >
+              They are not on Kairos
+            </button>
+            {' — set them up yourself and start today.'}
+          </p>
         )}
 
         <div className="onboarding-actions">

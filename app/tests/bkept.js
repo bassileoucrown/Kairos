@@ -200,6 +200,73 @@ async function waitReady() {
           .some((e) => e.title === 'Board pre-read'));
     }
 
+    // --- AND A PA CAN ACTUALLY DO IT, from a screen -----------------------
+    // Everything above proves the server can hold a principal. This proves an
+    // assistant can reach it: registering, saying their principal is not on
+    // Kairos, and starting work. Without this the whole thing is an endpoint
+    // nobody can call, which is not shipped.
+    head('An assistant registering can say their principal is not on Kairos:'); {
+      const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
+      const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+      const page = await browser.newPage();
+      const SITE = `http://127.0.0.1:${PORT}`;
+      const N = `${ID}b`;
+      await page.goto(`${SITE}/signup`);
+      await page.fill('#name', 'Ngozi Bello');
+      await page.fill('#email', `ngozi${N}@x.com`);
+      await page.fill('#password', PW);
+      // The role picker is buttons, not a select — and it must NOT be wrapped
+      // in a catch. Swallowing this is how the first run of this test signed up
+      // a principal, met the principal's wording, and reported the branch
+      // missing when it was simply never asked for.
+      await page.click('.role-option:has-text("Personal Assistant")');
+      await page.click('button:has-text("Create account")');
+      await page.waitForURL('**/onboarding/profile', { timeout: 60000 });
+      await page.fill('#slug', `ngozi${N}`);
+      await page.click('button:has-text("Continue")');
+      await page.waitForURL('**/onboarding/connect', { timeout: 60000 });
+
+      ok('the step offers a way out for a principal who is not on Kairos',
+        (await page.locator('button:has-text("They are not on Kairos")').count()) === 1,
+        (await page.locator('body').innerText()).slice(0, 200));
+
+      await page.click('button:has-text("They are not on Kairos")');
+      await page.waitForSelector('#kept-name', { timeout: 60000 });
+      await page.fill('#kept-name', 'Emeka Obi');
+      await page.fill('#kept-email', `emeka${N}@x.com`);
+      await page.click('button:has-text("Set them up")');
+      // Wait for the confirmation itself, not for the button to stop spinning.
+      await page.waitForFunction(
+        () => /take this record|password/i.test(document.body.innerText),
+        null, { timeout: 60000 },
+      );
+      ok('setting them up says so, in the server\'s own words about the claim',
+        /password/i.test(await page.locator('body').innerText()));
+
+      await page.click('button:has-text("Start working")');
+      await page.waitForSelector('#principal-select', { timeout: 60000 });
+      const opts = await page.locator('#principal-select option').allInnerTexts();
+      ok('and the principal they just set up is theirs to work on',
+        opts.some((t) => /Emeka Obi/.test(t)), JSON.stringify(opts));
+
+      // --- The other thing that was built but could not be found ----------
+      head('AI Assist names everything it does, not only finding a time:');
+      await page.goto(`${SITE}/pa?tab=ai_assist`);
+      await page.waitForFunction(
+        () => /What else AI Assist does/i.test(document.body.innerText),
+        null, { timeout: 60000 },
+      );
+      const shown = await page.locator('.assist-catalogue').innerText();
+      for (const named of ['briefing note', 'Triage', 'reply', 'next week']) {
+        ok(`it names ${named}`, new RegExp(named, 'i').test(shown), shown.slice(0, 200));
+      }
+      ok('and says where each one lives rather than putting it here',
+        /While you were away|Correspondence|An appointment|A room/.test(shown), shown.slice(0, 200));
+      ok('and marks the ones still waiting on a key',
+        /ANTHROPIC_API_KEY/.test(shown) || !/Soon/.test(shown), shown.slice(0, 240));
+      await browser.close();
+    }
+
     head('A stranger cannot take on a principal on somebody else\'s behalf:');
     const nobody = await fetch(`${BASE}/pa/kept`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
