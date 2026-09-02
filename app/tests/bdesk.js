@@ -238,8 +238,17 @@ function client() {
       () => /[?&]tab=contacts/.test(window.location.search), null, { timeout: 20000 },
     );
     ok('a card opens its section', true);
-    ok('and the strip appears for moving between them',
-      (await page.locator('.tabs-shell').count()) === 1);
+    // APPEARS is a change over time, and the URL is not the thing that changes.
+    // The wait above is satisfied the moment the query string updates, which
+    // happens before the component has re-rendered the strip — so counting it
+    // on the next line read a screen that was still the card grid. Bounded, so
+    // a strip that genuinely never appears still reddens this.
+    const strip = await page.waitForFunction(
+      () => document.querySelectorAll('.tabs-shell').length === 1,
+      null, { timeout: 20000 },
+    ).then(() => true).catch(() => false);
+    ok('and the strip appears for moving between them', strip,
+      strip ? '' : `saw ${await page.locator('.tabs-shell').count()} strips`);
     // A screen you can enter and not leave is worse than one you never entered.
     ok('with a way back to the whole desk',
       (await page.locator('button:has-text("The whole desk")').count()) === 1);
