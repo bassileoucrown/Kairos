@@ -331,10 +331,21 @@ async function waitForDay(p, re, asked) {
     await p.fill('#rp-from', dayKey(-9));
     await p.fill('#rp-to', dayKey(-3));
     await p.click('.report-period button:has-text("Run it")');
+    // WAIT FOR THE THING BEING ASSERTED, not for a date both answers contain.
+    // This waited for dayKey(-9) to appear, which the screen already showed
+    // before the custom period was ever fetched: the picker opens on LAST WEEK,
+    // and in a week where last week happens to run Monday the 24th to Sunday
+    // the 30th — exactly the nine-to-three-days-ago span asked for here — the
+    // two are the same string. The wait passed on the week's own render, the
+    // assertion below then read the week's heading, and the failure looked like
+    // the period feature being broken in a week where it is merely
+    // indistinguishable. The heading is what separates them.
     await p.waitForFunction(
-      (d) => document.body.innerText.includes(d), dayKey(-9), { timeout: 20000 },
+      () => /period you asked for/i.test(document.body.innerText), null, { timeout: 20000 },
     );
-    ok('and running it reports those days', true);
+    ok('and running it reports those days',
+      (await p.locator('.report-head').innerText()).includes(dayKey(-9)),
+      await p.locator('.report-head').innerText());
     ok('saying it is a period rather than a week',
       /period you asked for/i.test(await p.locator('.report-head').innerText()),
       await p.locator('.report-head').innerText());
