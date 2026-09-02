@@ -315,10 +315,20 @@ const iso = (ms) => new Date(ms).toISOString();
     // page that had not drawn them yet. The assertion above survived only
     // because "Appointment" is in the header of the empty state too, which is
     // the tell: a check that passes on a loading screen is checking nothing.
+    // AND NOT FOR THE ABSENCE OF "LOADING…" EITHER. That was the previous fix
+    // and it is still the wrong shape: the page fetches twice — once on mount
+    // and again when the principal resolves — so "Loading…" GOES AWAY AND COMES
+    // BACK. The wait passed in the gap between the two, the read happened after
+    // the second one started, and the verbs were reported missing from a page
+    // that was loading again. A probe caught it: the body held both
+    // "Appointment" and "Loading…" at once, with no cards on it.
+    //
+    // Waiting for a thing to be absent can only ever be satisfied by a moment.
+    // Waiting for the thing being asserted is satisfied by the state the
+    // assertion is about, which is the only wait that cannot be early.
     await page.waitForFunction(
-      () => !/Loading…/.test(document.body.innerText), null, { timeout: 20000 },
+      () => /Call it off/.test(document.body.innerText), null, { timeout: 20000 },
     );
-    await page.waitForSelector('.card', { timeout: 20000 });
     const detail = await page.locator('body').innerText();
     ok('and it lands on the appointment', /Appointment/i.test(detail), detail.slice(0, 120));
     ok('with the three verbs on it, exactly like one booked through a link',

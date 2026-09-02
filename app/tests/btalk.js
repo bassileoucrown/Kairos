@@ -273,8 +273,18 @@ function client() {
     await p.waitForSelector('.msg-quote', { timeout: 15000 });
     ok('the answer posts with its quotation attached',
       (await p.locator('.msg-quote').count()) >= 1);
-    ok('and the composer stops claiming to be a reply',
-      (await p.locator('.msg-replying').count()) === 0);
+    // STOPS is a change over time, so it needs a wait rather than a snapshot.
+    // This read the count the instant the quotation appeared, which is a
+    // different state update from the composer clearing its pin — on a slower
+    // backend the pin was simply still there for another beat. Waiting with a
+    // bound keeps the assertion real: if it never clears, the wait runs out and
+    // this goes red, which is exactly what a broken composer should do.
+    const cleared = await p.waitForFunction(
+      () => document.querySelectorAll('.msg-replying').length === 0,
+      null, { timeout: 15000 },
+    ).then(() => true).catch(() => false);
+    ok('and the composer stops claiming to be a reply', cleared,
+      cleared ? '' : `still pinned after 15s: ${await p.locator('.msg-replying').innerText().catch(() => '?')}`);
 
     head('A record on the screen — the frozen one:');
     const recordEl = p.locator(`#m-${rec.d.id}`);
