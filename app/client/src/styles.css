@@ -3284,12 +3284,13 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   background: var(--surface); margin-bottom: 16px;
 }
 .what-this-does.is-open { border-left: 3px solid var(--accent); }
-.what-this-head {
-  display: flex; align-items: baseline; gap: 8px; width: 100%;
-  padding: 9px 12px; background: none; border: 0; font: inherit; color: inherit;
+.what-this-head { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; min-width: 0; }
+.what-this-toggle {
+  display: flex; align-items: baseline; gap: 8px; flex: 0 0 auto;
+  padding: 0; background: none; border: 0; font: inherit; color: inherit;
   text-align: left; cursor: pointer;
 }
-.what-this-head:hover .what-this-title { color: var(--accent); }
+.what-this-toggle:hover .what-this-title { color: var(--accent); }
 .what-this-mark { opacity: 0.55; font-size: 0.95rem; line-height: 1; width: 0.8em; }
 .what-this-title { font-weight: 600; font-size: 0.88rem; white-space: nowrap; }
 /* Folded, the one-liner is the whole value of the strip; it truncates rather
@@ -3298,7 +3299,11 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   color: var(--text-muted); font-size: 0.85rem; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.what-this-body { padding: 0 12px 11px; }
+/* Capped for reading, not for the container. On a laptop the panel is as wide
+   as the page, and a step set across 1400px is a line the eye cannot track
+   back to the start of — the frame suite measures exactly this and put the
+   number at 141 characters. */
+.what-this-body { padding: 0 12px 11px; max-width: 580px; }
 .what-this-does-line { margin: 0 0 8px; font-size: 0.9rem; }
 .what-this-steps { margin: 0; padding-left: 20px; }
 .what-this-steps li { margin-bottom: 5px; font-size: 0.88rem; }

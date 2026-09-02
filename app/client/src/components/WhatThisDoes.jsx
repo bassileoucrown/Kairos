@@ -61,16 +61,26 @@ export default function WhatThisDoes({ id }) {
 
   return (
     <section className={'what-this-does' + (open ? ' is-open' : '')}>
-      <button
-        className="what-this-head"
-        type="button"
-        aria-expanded={open}
-        onClick={() => { setOpen((v) => !v); markSeen(id); }}
-      >
-        <span className="what-this-mark" aria-hidden="true">{open ? '−' : '+'}</span>
-        <span className="what-this-title">What {f.title} does</span>
+      {/* THE ONE-LINER SITS BESIDE THE BUTTON, NEVER INSIDE IT. It was inside,
+          and that put a whole sentence of this feature's prose into a control:
+          on the staff screen the folded line read "…one tap to say you have
+          got it", so the first button on the page answering to "Got it" was
+          this panel's toggle rather than the driver's own confirm. A tester
+          would have pressed the guidance and wondered why nothing confirmed.
+          The button now holds four fixed words and a mark; everything that
+          varies is text next to it. */}
+      <div className="what-this-head">
+        <button
+          className="what-this-toggle"
+          type="button"
+          aria-expanded={open}
+          onClick={() => { setOpen((v) => !v); markSeen(id); }}
+        >
+          <span className="what-this-mark" aria-hidden="true">{open ? '−' : '+'}</span>
+          <span className="what-this-title">What {f.title} does</span>
+        </button>
         {!open && <span className="what-this-peek">{f.does}</span>}
-      </button>
+      </div>
 
       {open && (
         <div className="what-this-body">

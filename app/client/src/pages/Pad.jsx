@@ -5,6 +5,7 @@ import AppShell, { resolveActivePrincipal } from '../components/AppShell.jsx';
 import { MentionText, MentionPicker } from '../components/Mention.jsx';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { dayLabelInZone } from '../lib/timezones.js';
+import WhatThisDoes from '../components/WhatThisDoes.jsx';
 
 /**
  * The pad.
@@ -130,7 +131,6 @@ export default function Pad() {
     <AppShell
       title="The pad"
       active="pad"
-      guide="pad"
       actions={<span className="pill">{list.length} {showDone ? 'done' : 'open'}</span>}
     >
       {error && <div className="alert alert-error">{error}</div>}
@@ -203,6 +203,15 @@ export default function Pad() {
           open={openMenu === i.id} onOpen={setOpenMenu}
           onChange={change} onRemove={remove} onDone={() => load()} />
       ))}
+
+      {/* At the foot rather than through the shell, and this is the one screen
+          where that is worth the exception. Everything above is downstream of
+          one idea — nothing between a thought and the field that catches it —
+          and a panel above the composer is exactly the thing in the way. It
+          measured, too: on a phone it pushed the verbs of an open line off the
+          bottom of the screen. Here it is still on the feature, and the field
+          is still the first thing. */}
+      <WhatThisDoes id="pad" />
     </AppShell>
   );
 }

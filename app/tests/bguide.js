@@ -261,11 +261,19 @@ function idsAskedForByTheClient() {
     ok('the old one-note-for-everything is gone',
       await p.locator('.start-here').count() === 0);
 
-    await p.click('.what-this-head');
+    await p.click('.what-this-toggle');
     await p.waitForSelector('.what-this-does:not(.is-open)', { timeout: 5000 });
     ok('it folds when asked', await p.locator('.what-this-steps').count() === 0);
     ok('and folded, the heading is still there to open again',
       await p.locator('.what-this-title').count() === 1);
+    // The folded one-liner is this feature's own prose, and prose inside a
+    // control is a control that answers to words nobody chose. It read "…one
+    // tap to say you have got it" on the staff screen, which made this panel
+    // the first button on the page matching "Got it" — ahead of the driver's
+    // own confirm. Whatever the sentence says, it must not be in the button.
+    ok('and the folded line is beside the control, never inside it',
+      await p.locator('.what-this-toggle .what-this-peek').count() === 0
+      && await p.locator('.what-this-peek').count() === 1);
 
     await p.reload();
     await p.waitForSelector('.what-this-does', { timeout: 15000 });
