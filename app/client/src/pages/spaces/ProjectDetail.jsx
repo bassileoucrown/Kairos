@@ -161,6 +161,7 @@ export default function ProjectDetail() {
     <AppShell
       title={project.name}
       active="spaces"
+      guide="project"
       actions={(
         <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="pill">{doneCount} of {stages.length} stages done</span>

@@ -128,7 +128,7 @@ export default function MyInstructions() {
   const done = data.instructions.filter((i) => i.status === 'done');
 
   return (
-    <AppShell title="What you've been asked" active="instructions">
+    <AppShell title="What you've been asked" active="instructions" guide="my_instructions">
       {posts && <p className="today-date">{posts}</p>}
 
       {open.length === 0 && (

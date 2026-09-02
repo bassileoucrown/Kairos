@@ -14,6 +14,7 @@ import SecurityTab from './dashboard/SecurityTab.jsx';
 import OutboxTab from './dashboard/OutboxTab.jsx';
 import SettingsTab from './dashboard/SettingsTab.jsx';
 import Tabs from '../components/Tabs.jsx';
+import WhatThisDoes from '../components/WhatThisDoes.jsx';
 
 const TABS = [
   { id: 'calendar', label: 'Calendar' },
@@ -132,6 +133,12 @@ export default function Dashboard() {
       </div>
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} label="Account sections" />
+
+      {/* Per tab rather than per page, because on this screen a tab IS the
+          feature: Essentials and Security and the Outbox have nothing in
+          common beyond living behind the same heading, and one panel above
+          them all could only describe the heading. */}
+      <WhatThisDoes id={tab} />
 
       {tab === 'calendar' && <CalendarTab />}
       {tab === 'bookings' && <BookingsTab />}

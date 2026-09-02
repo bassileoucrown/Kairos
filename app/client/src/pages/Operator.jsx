@@ -153,7 +153,7 @@ const TABS = [
 export default function Operator() {
   const [tab, setTab] = useState('feedback');
   return (
-    <AppShell title="The pilot">
+    <AppShell title="The pilot" guide="operator">
       <Tabs tabs={TABS} active={tab} onChange={setTab} label="Pilot sections" />
       {tab === 'feedback' && <Feedback />}
       {tab === 'faults' && <Faults />}

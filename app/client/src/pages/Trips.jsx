@@ -671,6 +671,7 @@ export default function Trips() {
     <AppShell
       title="Trips"
       active="trips"
+      guide="trips"
       actions={!openId && !creating
         ? <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating(true)}>Plan a trip</button>
         : null}

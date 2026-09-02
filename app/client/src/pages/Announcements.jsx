@@ -118,6 +118,7 @@ export default function Announcements() {
     <AppShell
       title="Notices"
       active="notices"
+      guide="notices"
       actions={data.canPublish && !composing && !editing
         ? <button className="btn btn-primary btn-sm" type="button" onClick={() => setComposing(true)}>Write one</button>
         : null}

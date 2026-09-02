@@ -198,6 +198,7 @@ export default function SpaceDetail() {
     <AppShell
       title={space.name}
       active="spaces"
+      guide="space"
       actions={(
         <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`ctx-chip ctx-${space.context}`}>{CONTEXT_LABELS[space.context]}</span>

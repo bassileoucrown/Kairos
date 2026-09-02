@@ -6,6 +6,7 @@ import { BRAND_FULL } from '../lib/brand.js';
 import TimeUp from './TimeUp.jsx';
 import PadDock from './PadDock.jsx';
 import TellUs from './TellUs.jsx';
+import WhatThisDoes from './WhatThisDoes.jsx';
 import { track, startUsage } from '../lib/usage.js';
 import { useVisiblePoll } from '../lib/useVisiblePoll.js';
 
@@ -247,7 +248,7 @@ function AccountMenu({ user, onSignOut }) {
   );
 }
 
-export default function AppShell({ children, title, actions, active }) {
+export default function AppShell({ children, title, actions, active, guide }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -525,7 +526,16 @@ export default function AppShell({ children, title, actions, active }) {
             <AccountMenu user={user} onSignOut={handleLogout} />
           </div>
         </header>
-        <div className="app-body">{children}</div>
+        <div className="app-body">
+          {/* What this screen does and how to use it, above the screen itself.
+              Rendered here rather than pasted into each page so it always sits
+              in the same place and a page cannot forget where to put it — but
+              only when a page names its own feature, so a loading or error
+              state never carries one. A page with tabs passes nothing here and
+              renders its own per tab, because a tab IS the feature. */}
+          {guide && <WhatThisDoes id={guide} />}
+          {children}
+        </div>
       </main>
 
       {/* On every screen inside the app, and — because it lives here rather

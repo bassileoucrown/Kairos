@@ -306,7 +306,7 @@ export default function Report() {
   const custom = !!data.window.custom;
 
   return (
-    <AppShell title="Report">
+    <AppShell title="Report" guide="report">
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="report-head">

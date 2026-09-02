@@ -928,6 +928,7 @@ export default function Movements() {
     <AppShell
       title="Movements"
       active="movements"
+      guide="movements"
       actions={tab === 'journeys' && !openId && !creating && !repeating
         ? (
           <>

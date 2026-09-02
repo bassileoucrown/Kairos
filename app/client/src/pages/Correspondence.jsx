@@ -149,7 +149,7 @@ export default function Correspondence() {
 
   if (!accounts.length) {
     return (
-      <AppShell title="Correspondence" active="correspondence">
+      <AppShell title="Correspondence" active="correspondence" guide="correspondence">
         <div className="empty-state">
           No mailbox yet. A principal adds one in Settings, then decides who handles it —
           nobody is in a principal&rsquo;s correspondence just for being their assistant.
@@ -166,7 +166,7 @@ export default function Correspondence() {
   const verdictFor = (id) => (verdicts || []).find((v) => v.id === id);
 
   return (
-    <AppShell title="Correspondence" active="correspondence">
+    <AppShell title="Correspondence" active="correspondence" guide="correspondence">
       {error && <div className="alert alert-error">{error}</div>}
 
       {accounts.length > 1 && (

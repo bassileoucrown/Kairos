@@ -847,6 +847,7 @@ export default function ThreadView() {
     <AppShell
       title={data.thread.name}
       active="spaces"
+      guide="thread"
       actions={
         <div className="register-toggle" role="group" aria-label="Which messages to show">
           <button type="button" className={view === 'all' ? 'is-on' : ''} onClick={() => setView('all')}>

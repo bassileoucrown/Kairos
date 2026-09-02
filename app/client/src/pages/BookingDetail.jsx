@@ -108,7 +108,7 @@ export default function BookingDetail() {
     && !booking?.over;
 
   return (
-    <AppShell title="Appointment" active="today">
+    <AppShell title="Appointment" active="today" guide="appointment">
       {error && <div className="alert alert-error">{error}</div>}
       {data === null && !error && <p className="hint">Loading…</p>}
 

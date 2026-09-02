@@ -54,7 +54,7 @@ export default function Concierge() {
   const wanted = new Set(data.interest.map((i) => i.service));
 
   return (
-    <AppShell title="Concierge" active="concierge">
+    <AppShell title="Concierge" active="concierge" guide="concierge">
       {error && <div className="alert alert-error">{error}</div>}
 
       {!data.available && (

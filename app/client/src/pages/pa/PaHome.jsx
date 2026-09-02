@@ -16,6 +16,7 @@ import BookingsTab from '../dashboard/BookingsTab.jsx';
 import CalendarTab from '../dashboard/CalendarTab.jsx';
 import Tabs from '../../components/Tabs.jsx';
 import DeskOverview from './DeskOverview.jsx';
+import WhatThisDoes from '../../components/WhatThisDoes.jsx';
 
 // Scheduling tabs only appear when the principal has delegated them, so an
 // assistant is never shown a door that will 403.
@@ -161,6 +162,12 @@ export default function PaHome() {
             </div>
           )}
           {tab && <Tabs tabs={visibleTabs} active={tab} onChange={setTab} label="Desk sections" />}
+
+          {/* Per section, not per page. Nine sections behind one heading do
+              nine different jobs, and a single panel above them could only
+              describe the heading. On arrival — no tab — it describes the desk
+              itself, which is genuinely what somebody is looking at. */}
+          <WhatThisDoes id={tab || 'desk'} />
 
           {!tab && (
             <DeskOverview

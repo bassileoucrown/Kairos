@@ -80,7 +80,7 @@ export default function Connections() {
   }
 
   return (
-    <AppShell title="Connections" active="connections">
+    <AppShell title="Connections" active="connections" guide="connections">
       {error && <div className="alert alert-error">{error}</div>}
       {notice && <div className="alert alert-success">{notice}</div>}
 

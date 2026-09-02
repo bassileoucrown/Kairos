@@ -82,7 +82,7 @@ export default function Household() {
   const active = data.members.filter((m) => m.status === 'active');
 
   return (
-    <AppShell title="Household" active="household">
+    <AppShell title="Household" active="household" guide="household">
       {error && <div className="alert alert-error">{error}</div>}
       {inviteLink && (
         <div className="alert alert-success">

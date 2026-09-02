@@ -576,6 +576,7 @@ export default function Itinerary() {
     <AppShell
       title="Itinerary"
       active="itinerary"
+      guide="itinerary"
       actions={
         <>
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => window.print()}>

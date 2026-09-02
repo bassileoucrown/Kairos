@@ -59,7 +59,7 @@ export default function CatchUp() {
   // was never away has not "missed nothing", they simply were not gone.
   if (!data.away && data.empty) {
     return (
-      <AppShell title="While you were away">
+      <AppShell title="While you were away" guide="catch_up">
         <div className="empty-state">
           You have not been away. This fills up when you have been gone
           long enough to have missed something — it counts from when you
@@ -70,7 +70,7 @@ export default function CatchUp() {
   }
 
   return (
-    <AppShell title="While you were away">
+    <AppShell title="While you were away" guide="catch_up">
       {error && <div className="alert alert-error">{error}</div>}
 
       {/* The list below is correct and exhausting. This is the same thing with

@@ -243,7 +243,7 @@ export default function Archive() {
   const documents = docs || [];
 
   return (
-    <AppShell title="Archive">
+    <AppShell title="Archive" guide="archive">
       {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
 

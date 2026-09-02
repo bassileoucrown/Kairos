@@ -50,7 +50,7 @@ export default function Coming() {
   const working = caps.filter((c) => c.available);
 
   return (
-    <AppShell title="Coming" active="coming">
+    <AppShell title="Coming" active="coming" guide="coming">
       <p className="tz-note" style={{ marginBottom: 18 }}>
         Everything here is designed and placed in the app, and none of it works yet. Each one
         appears on its own screen as a named control that says so when pressed — nothing is

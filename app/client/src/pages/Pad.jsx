@@ -130,6 +130,7 @@ export default function Pad() {
     <AppShell
       title="The pad"
       active="pad"
+      guide="pad"
       actions={<span className="pill">{list.length} {showDone ? 'done' : 'open'}</span>}
     >
       {error && <div className="alert alert-error">{error}</div>}

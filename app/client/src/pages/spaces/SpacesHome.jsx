@@ -47,6 +47,7 @@ export default function SpacesHome() {
     <AppShell
       title="Spaces"
       active="spaces"
+      guide="spaces"
       actions={
         <button className="btn btn-primary btn-sm" type="button" onClick={() => setCreating((c) => !c)}>
           {creating ? 'Cancel' : 'New space'}

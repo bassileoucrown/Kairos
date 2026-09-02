@@ -34,6 +34,7 @@ export default function MyTasks() {
     <AppShell
       title="My tasks"
       active="tasks"
+      guide="tasks"
       actions={<span className="pill">{live.length} open</span>}
     >
 

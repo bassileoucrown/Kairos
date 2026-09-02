@@ -88,7 +88,7 @@ export default function Workspace() {
   }
 
   return (
-    <AppShell title="Workspace">
+    <AppShell title="Workspace" guide="workspace">
       {askDialog}
       {error && <div className="alert alert-error">{error}</div>}
       {!data && <p className="hint">Loading…</p>}
