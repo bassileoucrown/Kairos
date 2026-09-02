@@ -111,7 +111,43 @@ router.post('/signup', async (req, res) => {
 
   const normalizedEmail = String(email).trim().toLowerCase();
 
-  const existing = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(normalizedEmail);
+  const existing = await db.prepare('SELECT id, name, email, kept_by FROM users WHERE email = ?')
+    .get(normalizedEmail);
+  // A PRINCIPAL WHOSE RECORD IS ALREADY BEING HELD FOR THEM.
+  //
+  // The likeliest way a principal "joins Kairos" is to go to the signup page
+  // and type their own address — and until now that met "an account with that
+  // email already exists", which is true, unhelpful, and reads as somebody
+  // having taken their name. Their assistant has been keeping their diary for
+  // a month and the product just told them to go away.
+  //
+  // So this is the claim, arriving at the moment they actually ask for it. The
+  // link goes to that address and nowhere else, which is the same rule the
+  // forgotten-password route follows and the reason the assistant cannot use
+  // it. Nothing here discloses more than the plain 409 already did: that an
+  // account exists at an address the person typing has just claimed as theirs.
+  if (existing && existing.kept_by) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const now = new Date();
+    await db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(existing.id);
+    await db.prepare('INSERT INTO password_resets (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run(token, existing.id, now.toISOString(), new Date(now.getTime() + RESET_TOKEN_TTL_MS).toISOString());
+    await sendEmail({
+      ownerId: existing.id, toEmail: existing.email, category: 'transactional',
+      subject: `Your ${BRAND_FULL} account is waiting for you`,
+      body: `Hi ${existing.name},\n\nSomeone has been keeping your diary on ${BRAND_FULL} `
+        + `on your behalf, and the record is held for you rather than owned by them.\n\n`
+        + `Set a password here and it becomes yours — everything already in it comes with `
+        + `you, and they stay on as your assistant (valid for 1 hour):\n\n/reset-password/${token}\n\n`
+        + `If you were not expecting this, you can ignore it. Nothing changes until you set a password.`,
+    });
+    return res.status(409).json({
+      error: 'Somebody is already keeping this account for you. Check your email — '
+        + 'setting a password makes it yours, and everything in it comes with you.',
+      claimable: true,
+      emailDeliveryConfigured: emailConfigured(),
+    });
+  }
   if (existing) {
     return res.status(409).json({ error: 'An account with that email already exists.' });
   }

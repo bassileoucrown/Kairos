@@ -114,8 +114,24 @@ function client() {
     const driver = () => fetch(`${BASE}/api/trips/pickup/${token}/signal`).then((r) => r.json());
 
     head('Both sides are shown the same thing:');
-    const mine = await ada('GET', sigPath);
-    const theirs = await driver();
+    // READ THE PAIR INSIDE ONE WINDOW. The signal rotates on a fixed clock and
+    // these are two separate requests, so a boundary falling between them makes
+    // the two sides differ — each correctly, for the instant it was asked. That
+    // is this test reading two clocks, not the product handing two people
+    // different signals: on a phone both sides poll and converge, which is what
+    // changesAt is for. It reddened the board once, on Postgres, at a boundary.
+    //
+    // Retrying the PAIR is the fix, and it deliberately assumes nothing about
+    // how long a window is — an earlier attempt waited out the last three
+    // seconds of the window, which is longer than the whole two-second window
+    // this suite configures, so it never read the second side at all. A genuine
+    // disagreement still fails: the last pair read is the one asserted.
+    let mine; let theirs;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      mine = await ada('GET', sigPath);
+      theirs = await driver();
+      if (words(mine.d.signal) === words(theirs.signal)) break;
+    }
     ok('the principal is told what to look for', !!mine.d.signal?.colour, JSON.stringify(mine.d).slice(0, 120));
     ok('the driver is told what to hold up', !!theirs.signal?.colour);
     ok('and it is the same colour and shape',

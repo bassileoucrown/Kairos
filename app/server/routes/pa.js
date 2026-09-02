@@ -61,7 +61,7 @@ router.use(requireAuth);
  * the approval queue and everything else work immediately, and the assistant
  * is retained automatically when the principal later claims it.
  */
-router.post('/kept', requirePlan('assistants'), async (req, res) => {
+router.post('/kept', requirePlan('kept_principals'), async (req, res) => {
   const { name, claimEmail, timezone } = req.body || {};
   if (!name || !String(name).trim()) {
     return res.status(400).json({ error: 'A name is required.' });

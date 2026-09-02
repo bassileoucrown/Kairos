@@ -133,6 +133,17 @@ const FEATURES = {
   contacts: { plan: 'principal', label: 'Contact intelligence' },
   tasks: { plan: 'principal', label: 'Tasks and reminders' },
   pad: { plan: 'principal', label: 'The pad' },
+  // TAKING ON A PRINCIPAL WHO IS NOT ON KAIROS — and deliberately NOT the same
+  // feature as bringing on an assistant, which sits a rung higher.
+  //
+  // They look alike and are opposites. `assistants` is a principal paying to
+  // add people to their office. This is one assistant, alone, paying to do
+  // their job for somebody who will never sign in — the whole point being that
+  // it is reachable by a single person on the first paid rung. Gated as
+  // `assistants` it would have sat on Office, which would have made the
+  // assistant-led lane cost twice what it is meant to and put it out of reach
+  // of exactly the buyer it exists for.
+  kept_principals: { plan: 'principal', label: 'A principal who is not on Kairos' },
   trips: { plan: 'principal', label: 'Trips' },
   direct_line: { plan: 'principal', label: 'The direct line' },
   // THE FLEET, NEVER THE JOURNEY — and the distinction is not pedantry.
