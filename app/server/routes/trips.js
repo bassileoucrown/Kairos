@@ -6,6 +6,7 @@ const { requirePaAccess } = require('../lib/paAccess');
 const trips = require('../lib/trips');
 const tripPrivacy = require('../lib/tripPrivacy');
 const visas = require('../lib/visas');
+const movement = require('../lib/movement');
 const pickup = require('../lib/pickup');
 const pickupSignal = require('../lib/pickupSignal');
 const { limit, clientIp } = require('../lib/rateLimit');
@@ -112,8 +113,31 @@ router.get('/:ownerId/:tripId', requirePaAccess, async (req, res) => {
   const contacts = await db.prepare('SELECT * FROM trip_contacts WHERE trip_id = ? ORDER BY created_at')
     .all(trip.id);
 
+  // GETTING THERE AND AROUND — the cars, shown here for the first time.
+  //
+  // The column has always existed; nothing ever filled it or read it, so a trip
+  // to Abuja and the car to the airport for it were two records that did not
+  // know about each other.
+  //
+  // FILTERED THROUGH THE JOURNEY'S OWN RULE, not the trip's. Seeing a trip does
+  // not entitle anybody to its movements: a movement admits the principal and
+  // whoever arranged it, and that is deliberately narrower than the office. So
+  // somebody the principal has shared a trip with sees the trip in full and the
+  // cars not at all, which is correct — an escort roster is not a travel
+  // detail. viewFor returns null for anybody without access, so the filter is
+  // the same one every other read path uses rather than a second idea of it.
+  const journeyRows = await db.prepare(
+    'SELECT id FROM movements WHERE trip_id = ? AND owner_id = ? ORDER BY departs_at',
+  ).all(trip.id, req.principal.id);
+  const journeys = [];
+  for (const j of journeyRows) {
+    const view = await movement.viewFor(j.id, req.user.id);
+    if (view && view.access === 'full') journeys.push(view);
+  }
+
   res.json({
     trip,
+    journeys,
     // Checked against the trip's own dates rather than today, because "will
     // this passport still be good when I land" is the question being asked.
     documentWarnings: await trips.documentWarnings(req.principal.id, trip),

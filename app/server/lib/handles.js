@@ -32,6 +32,35 @@ const RESERVED = new Set([
   'undefined', 'true', 'false', 'new', 'edit', 'delete',
 ]);
 
+// A handle nobody chose, held only until they do.
+//
+// WHY AN ACCOUNT NEEDS ONE AT ALL. `users.slug` is NOT NULL UNIQUE, and it is
+// read from the booking path, the mention resolver and half a dozen screens.
+// An account has to have something in the column from the moment it exists.
+//
+// WHY IT IS NOT DERIVED FROM THEIR NAME ANY MORE. It used to be: sign up as
+// Adaeze Okonkwo and the app took @adaeze-okonkwo for you, wrote it into
+// handle_history, and offered it back on the profile screen as a suggestion.
+// Two things were wrong with that. A handle held once is held FOR GOOD — see
+// below — so a name nobody had chosen was being spent permanently on their
+// behalf, and if they then picked @ada the first one was burnt for everybody,
+// forever. And a pre-filled field is a decision already made: people accept
+// what is in the box, which is exactly what this one should not be.
+//
+// SO IT IS DELIBERATELY NOT A NAME. `new-` and eight hex characters: unique,
+// obviously provisional, and rejected by handleProblem below so that nobody —
+// including whoever is carrying it — can ever claim it as their own. It is
+// never written to handle_history, so it costs the namespace nothing.
+const PROVISIONAL_RE = /^new-[0-9a-f]{8}$/;
+
+function isProvisional(handle) {
+  return PROVISIONAL_RE.test(String(handle || ''));
+}
+
+function provisionalHandle() {
+  return `new-${require('crypto').randomBytes(4).toString('hex')}`;
+}
+
 /** Accepts "@ada", "ada", " @Ada " — all the ways someone might type one. */
 function normalizeHandle(input) {
   return String(input || '').trim().replace(/^@+/, '').toLowerCase();
@@ -49,6 +78,10 @@ function handleProblem(handle) {
     return 'Use letters, numbers and hyphens only, starting and ending with a letter or number.';
   }
   if (RESERVED.has(handle)) return 'That handle is reserved.';
+  // The shape an unchosen account is carrying. Refused to everybody, including
+  // the person currently holding one — which is what makes it provisional
+  // rather than a default they could keep by never touching the field.
+  if (isProvisional(handle)) return 'That handle is reserved.';
   return null;
 }
 
@@ -172,4 +205,5 @@ async function resolveVisibleHandle(viewerId, rawHandle) {
 module.exports = {
   normalizeHandle, handleProblem, resolveVisibleHandle,
   claimHandle, rememberHandle, everHeldBy, RESERVED,
+  isProvisional, provisionalHandle,
 };

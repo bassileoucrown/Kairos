@@ -712,6 +712,38 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
         <div>
           <strong>{m.departsFrom || '—'}</strong> → <strong>{m.destination || '—'}</strong>
         </div>
+        {/* What this journey is part of. Only ever rendered from what the
+            server sent: `trip` is null both when there is no trip and when
+            this reader is not entitled to its name, and the screen must not be
+            able to tell those apart either. */}
+        {m.access === 'full' && (
+          m.trip
+            ? (
+              <p className="hint">
+                Part of <strong>{m.trip.name}</strong>
+                {m.trip.private ? ' (private)' : ''}
+                {' · '}
+                <button
+                  className="btn btn-sm" type="button"
+                  onClick={() => act(() => api.patch(
+                    `/movement/${ownerId}/movements/${m.id}/trip`, { tripId: null },
+                  ))}
+                >
+                  take it out
+                </button>
+              </p>
+            )
+            : (
+              <TripPick
+                ownerId={ownerId}
+                at={m.departsAt}
+                value=""
+                onChange={(tripId) => tripId && act(() => api.patch(
+                  `/movement/${ownerId}/movements/${m.id}/trip`, { tripId },
+                ))}
+              />
+            )
+        )}
         {m.arrivedAt
           ? <p className="hint">Arrived {when(m.arrivedAt)}.</p>
           : m.lateByMinutes !== null && m.lateByMinutes !== undefined
@@ -837,6 +869,83 @@ function MovementDetail({ ownerId, movementId, onBack, onChanged }) {
 
 // --- The page ----------------------------------------------------------------
 
+/**
+ * Which trip a journey belongs to.
+ *
+ * WHAT IS OFFERED AND WHAT IS ONLY AVAILABLE. The app volunteers a trip whose
+ * dates cover this departure — but only an OFFICE trip, ever. Volunteering
+ * "is this part of the Barbados trip?" is the app saying out loud that there
+ * is a Barbados trip, which on a private one is the disclosure the whole
+ * visibility rule exists to prevent, and it would say it to whoever is booking
+ * the CAR rather than to whoever booked the holiday. So a private trip is
+ * never proposed. It can still be chosen, deliberately, from the list below —
+ * and when it is, the screen says what that means rather than leaving somebody
+ * to assume.
+ *
+ * `value` is a trip id or ''. Every trip listed is one the server has already
+ * decided this reader may see; nothing here filters, it only arranges.
+ */
+function TripPick({ ownerId, at, value, onChange }) {
+  const [options, setOptions] = useState(null);
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (!ownerId || !at) { setOptions(null); return undefined; }
+    let live = true;
+    api.get(`/movement/${ownerId}/trip-options?at=${encodeURIComponent(new Date(at).toISOString())}`)
+      .then((d) => { if (live) setOptions(d); })
+      .catch(() => { /* a suggestion must not be able to fail a form */ });
+    return () => { live = false; };
+  }, [ownerId, at]);
+
+  // The offer, pre-ticked, until somebody touches this control themselves.
+  // Doing it in an effect rather than on render so a deliberate "no" sticks.
+  const suggested = options?.covering?.[0] || null;
+  useEffect(() => {
+    if (!touched && suggested && !value) onChange(suggested.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggested?.id]);
+
+  if (!options) return null;
+  const all = [...(options.covering || []), ...(options.other || [])];
+  if (all.length === 0) return null;
+  const chosen = all.find((t) => t.id === value) || null;
+
+  return (
+    <div className="field">
+      <label htmlFor="mv-trip">Part of a trip</label>
+      <select
+        id="mv-trip"
+        value={value || ''}
+        onChange={(e) => { setTouched(true); onChange(e.target.value); }}
+      >
+        <option value="">On its own</option>
+        {all.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+            {t.destination ? ` — ${t.destination}` : ''}
+            {` (${t.startsOn} to ${t.endsOn})`}
+            {t.private ? ' · private' : ''}
+          </option>
+        ))}
+      </select>
+      {suggested && value === suggested.id && !touched && (
+        <p className="hint">
+          This leaves during <strong>{suggested.name}</strong>, so it has been filed under it.
+          Change it above if that is wrong.
+        </p>
+      )}
+      {chosen?.private && (
+        <p className="hint">
+          {chosen.name} is a private trip. Filing this journey under it changes nothing about
+          who can see the journey — a movement is already only you and the principal — and the
+          trip&rsquo;s name is never shown to anybody who cannot already see the trip.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Movements() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -854,7 +963,7 @@ export default function Movements() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     title: '', departsFrom: '', destination: '', departsAt: '', notes: '',
-    expectedMinutes: '',
+    expectedMinutes: '', tripId: '',
   });
 
   useEffect(() => { resolveActivePrincipal(user).then(setOwnerId); }, [user]);
@@ -880,11 +989,14 @@ export default function Movements() {
         // said" — and zero switches the arrival watch off silently.
         expectedMinutes: form.expectedMinutes
           ? Number.parseInt(form.expectedMinutes, 10) : undefined,
+        // '' means on its own. Sent as null so the server stores an absence
+        // rather than an empty string that would read as a trip id later.
+        tripId: form.tripId || null,
       });
       setCreating(false);
       setForm({
         title: '', departsFrom: '', destination: '', departsAt: '', notes: '',
-        expectedMinutes: '',
+        expectedMinutes: '', tripId: '',
       });
       await load();
       setOpenId(d.movement.id);
@@ -1107,6 +1219,17 @@ export default function Movements() {
                   tell you when nobody has confirmed they arrived.
                 </p>
               </div>
+              {/* Only once there is a departure to match against — an empty
+                  control offering nothing is a control asking a question it
+                  cannot answer. */}
+              {form.departsAt && (
+                <TripPick
+                  ownerId={ownerId}
+                  at={form.departsAt}
+                  value={form.tripId}
+                  onChange={(tripId) => setForm((f) => ({ ...f, tripId }))}
+                />
+              )}
               <div className="field">
                 <label htmlFor="mv-notes">Notes</label>
                 <input

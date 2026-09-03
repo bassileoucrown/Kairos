@@ -84,6 +84,7 @@ const GUIDE = {
     how: [
       'Build a trip, then add the legs and the stays.',
       'Check visas against the passports held in Essentials.',
+      'The cars are under Getting there and around — arrange one on Movements and it offers to file it here.',
       'When a leg moves, everything downstream of it is re-timed rather than left wrong.',
     ],
     screen: 'trips',
@@ -94,7 +95,7 @@ const GUIDE = {
     how: [
       'Add a journey with a pickup, a destination and a time.',
       'Assign a driver and a vehicle; the driver gets their own card with just that journey on it.',
-      'The card can be opened without an account, so a driver does not need to be a user.',
+      'If it leaves during a trip, it offers to file it under that trip. Most journeys belong to no trip at all.',
     ],
     note: 'A driver sees only their own journey. They never see the diary it came from.',
   },

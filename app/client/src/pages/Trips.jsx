@@ -262,7 +262,7 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, isPrincipal =
   });
 
   if (!data) return <p className="hint">Loading…</p>;
-  const { trip, items, travellers, contacts, documentWarnings, visa } = data;
+  const { trip, items, travellers, contacts, documentWarnings, visa, journeys = [] } = data;
   const label = (id) => arrangements.find((a) => a.id === id)?.label || id;
 
   return (
@@ -515,6 +515,49 @@ function TripDetail({ ownerId, tripId, arrangements, homeTimezone, isPrincipal =
         submitLabel="Add traveller"
         onSubmit={(body) => act(() => api.post(`/trips/${ownerId}/${tripId}/travellers`, body))}
       />
+
+      {/* GETTING THERE AND AROUND.
+          The cars, on the trip, which until now they never were: the column
+          linking them has existed since movements were built and nothing ever
+          filled it, so a trip to Abuja and the car to the airport for it were
+          two records that did not know about each other.
+          SHOWN TO FEWER PEOPLE THAN THE TRIP IS. A movement admits the
+          principal and whoever arranged it — deliberately narrower than the
+          office — so somebody the principal has shared this trip with sees the
+          trip in full and the cars not at all. The server filters; this only
+          arranges what it is given, and an empty list here is not evidence
+          that there are no journeys. */}
+      <h3 className="ess-heading">Getting there and around</h3>
+      {journeys.length === 0
+        ? (
+          <div className="empty-state">
+            No cars filed under this trip yet.{' '}
+            <Link to="/movements?tab=journeys">Arrange one on Movements</Link> and it will
+            offer to file it here.
+          </div>
+        )
+        : journeys.map((j) => (
+          <div className="card ess-row" key={j.id}>
+            <div>
+              <strong>{j.title}</strong>
+              <div className="meta">
+                {new Date(j.departsAt).toLocaleString(undefined, {
+                  weekday: 'short', day: 'numeric', month: 'short',
+                  hour: '2-digit', minute: '2-digit',
+                })}
+                {' · '}
+                {j.departsFrom || '—'} → {j.destination || '—'}
+              </div>
+              {/* The one fact that matters after the fact. */}
+              <div className="meta">
+                {j.arrivedAt ? 'Arrived' : 'No arrival recorded yet'}
+              </div>
+            </div>
+            <Link className="btn btn-sm" to={`/movements?tab=journeys&movement=${j.id}`}>
+              Open
+            </Link>
+          </div>
+        ))}
 
       <h3 className="ess-heading">Who to call there</h3>
       {contacts.length === 0 && <div className="empty-state">No local contacts yet.</div>}

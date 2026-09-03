@@ -10,6 +10,7 @@ const enRoute = require('../lib/enRoute');
 const drivers = require('../lib/drivers');
 const series = require('../lib/movementSeries');
 const { knock } = require('../lib/knock');
+const tripPrivacy = require('../lib/tripPrivacy');
 
 // The office's cars, and the journeys the principal is moved on.
 //
@@ -142,6 +143,86 @@ router.get('/:ownerId/movements', requirePaAccess, async (req, res) => {
   res.json({ movements: movements.filter(Boolean) });
 });
 
+/**
+ * The trip a journey may be filed under, or a sentence saying why not.
+ *
+ * ONE GATE, CALLED FROM BOTH DOORS — creating a journey with a trip on it and
+ * attaching one afterwards are the same act and must not be able to disagree
+ * about who may do it. Two rules, and they are different rules:
+ *
+ *   IT MUST BE THIS PRINCIPAL'S TRIP. Otherwise a movement on one account
+ *   could name a trip on another, and the trip's own privacy would never even
+ *   be consulted because it belongs to somebody this reader has no business
+ *   with.
+ *
+ *   AND THE PERSON ATTACHING MUST BE ABLE TO SEE IT. A private trip is
+ *   ABSENT to the office, not merely quiet — see lib/tripPrivacy.js — so an
+ *   assistant who cannot see it must not be able to file against it either.
+ *   Doing so would let them discover it existed by watching which ids the
+ *   server accepted.
+ */
+async function resolveTrip(tripId, ownerId, viewerId) {
+  if (!tripId) return { trip: null };
+  const trip = await db.prepare('SELECT * FROM trips WHERE id = ? AND owner_id = ?')
+    .get(tripId, ownerId);
+  // The same answer for a trip that is not theirs and one they may not see, so
+  // neither can be told apart from a typo.
+  if (!trip || !await tripPrivacy.maySeeTrip(trip, viewerId)) {
+    return { problem: 'That trip is not available.' };
+  }
+  return { trip };
+}
+
+/**
+ * Which trip a journey leaving at this moment probably belongs to.
+ *
+ * WHY THE OFFER IS OFFICE TRIPS ONLY. This is the app volunteering a
+ * connection nobody asked for, and volunteering "is this part of the Barbados
+ * trip?" is the app saying out loud that there is a Barbados trip. On an
+ * office trip that is a convenience. On a private one it is the disclosure the
+ * whole visibility rule exists to prevent — and it would leak to the arranger
+ * of the CAR, who may be a different person from the one who booked the
+ * holiday. A private trip can still be chosen deliberately; it is simply never
+ * proposed. The client lists those separately, and says what it means.
+ *
+ * Cancelled trips are left out for the ordinary reason: nothing is part of a
+ * journey that is not happening.
+ */
+router.get('/:ownerId/trip-options', requirePaAccess, async (req, res) => {
+  const at = new Date(req.query.at || '');
+  if (Number.isNaN(at.getTime())) return res.json({ covering: [], other: [] });
+  // Dates, not instants: a trip runs in local days at the destination, and
+  // "am I away on the 14th" is a calendar question. Same reasoning as the
+  // starts_on / ends_on columns themselves.
+  const day = at.toISOString().slice(0, 10);
+
+  const rows = await db.prepare(`
+    SELECT * FROM trips
+     WHERE owner_id = ? AND status != 'cancelled'
+     ORDER BY starts_on DESC LIMIT 200
+  `).all(req.principal.id);
+
+  const covering = [];
+  const other = [];
+  for (const t of rows) {
+    if (!await tripPrivacy.maySeeTrip(t, req.user.id)) continue;
+    const isPrivate = t.visibility === tripPrivacy.PRIVATE;
+    const entry = {
+      id: t.id,
+      name: t.name,
+      destination: t.destination,
+      startsOn: t.starts_on,
+      endsOn: t.ends_on,
+      private: isPrivate,
+    };
+    // `covering` is what the client may pre-tick. A private trip never gets
+    // there however well its dates fit.
+    if (!isPrivate && day >= t.starts_on && day <= t.ends_on) covering.push(entry);
+    else other.push(entry);
+  }
+  res.json({ covering, other });
+});
+
 // DELIBERATELY NOT GATED, and it must stay that way. A journey is what the
 // arrival alarm and the duress signal hang off — gate creating one and a plan
 // can silence a panic button, which is rule 3 in lib/plans.js broken by the
@@ -155,6 +236,8 @@ router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
   if (!departsAt || Number.isNaN(when.getTime())) {
     return res.status(400).json({ error: 'When does it leave?' });
   }
+  const chosen = await resolveTrip(tripId, req.principal.id, req.user.id);
+  if (chosen.problem) return res.status(400).json({ error: chosen.problem });
   const row = {
     id: crypto.randomUUID(),
     owner_id: req.principal.id,
@@ -162,7 +245,7 @@ router.post('/:ownerId/movements', requirePaAccess, async (req, res) => {
     // time: revoking somebody's PA access later must not silently change who
     // could read a movement that already happened.
     arranged_by: req.user.id,
-    trip_id: tripId || null,
+    trip_id: chosen.trip?.id || null,
     title: String(title).trim(),
     departs_from: String(departsFrom || '').trim(),
     destination: String(destination || '').trim(),
@@ -218,6 +301,22 @@ function requireFull(req, res, nextFn) {
 router.get('/:ownerId/movements/:movementId', requirePaAccess, loadMovement, async (req, res) => {
   res.json({ movement: await movement.viewFor(req.movement.id, req.user.id) });
 });
+
+// Filing a journey under a trip, or taking it back out, after the fact.
+//
+// A separate door from creation because that is how it actually happens: the
+// car is booked on Tuesday and the trip is built on Thursday, or the other way
+// round. Behind requireFull rather than a grant — a stand-in covering one
+// morning is not the person who decides what a safety record belongs to.
+router.patch('/:ownerId/movements/:movementId/trip', requirePaAccess, loadMovement,
+  async (req, res) => requireFull(req, res, async () => {
+    const { tripId } = req.body || {};
+    const chosen = await resolveTrip(tripId || null, req.principal.id, req.user.id);
+    if (chosen.problem) return res.status(400).json({ error: chosen.problem });
+    await db.prepare('UPDATE movements SET trip_id = ? WHERE id = ?')
+      .run(chosen.trip?.id || null, req.movement.id);
+    res.json({ movement: await movement.viewFor(req.movement.id, req.user.id) });
+  }));
 
 router.post('/:ownerId/movements/:movementId/vehicles', requirePaAccess, loadMovement,
   async (req, res) => requireFull(req, res, async () => {

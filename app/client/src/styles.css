@@ -3314,6 +3314,11 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   .what-this-peek { display: none; }
 }
 
+/* The verdict on a handle while it is being typed. Colour is the second
+   signal, never the only one — the words say which it is. */
+.handle-free { color: var(--accent); }
+.handle-taken { color: var(--danger); }
+
 /* ---- The pilot screen ---- */
 .op-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
 .op-main { min-width: 0; flex: 1 1 220px; }

@@ -154,9 +154,47 @@ async function viewFor(movementId, viewerId, now = Date.now()) {
     'SELECT * FROM movement_people WHERE movement_id = ? ORDER BY created_at',
   ).all(movement.id);
 
-  return access === 'full'
-    ? fullView(movement, { vehicles, people })
-    : coordinationView(movement, { vehicles, people });
+  if (access !== 'full') return coordinationView(movement, { vehicles, people });
+
+  const view = fullView(movement, { vehicles, people });
+  view.trip = await tripLabelFor(movement, viewerId);
+  return view;
+}
+
+/**
+ * The trip this journey belongs to, named — or null.
+ *
+ * TWO SEPARATE PERMISSIONS, ASKED SEPARATELY. Being allowed to see a journey
+ * does not make somebody allowed to see the trip it hangs off: a movement
+ * admits the principal, whoever arranged it and a one-day stand-in, while a
+ * private trip admits the principal, whoever arranged THAT, and anybody the
+ * principal named. Those are different lists, and a stand-in covering a
+ * hospital run must not learn the name of a family holiday from the label on
+ * it. So the id travels with the journey, and the NAME only if this reader is
+ * separately entitled to it.
+ *
+ * The coordination view never calls this at all — a stand-in gets no trip, not
+ * even an id, for the same reason they get no notes.
+ */
+async function tripLabelFor(movement, viewerId) {
+  if (!movement.trip_id) return null;
+  const trip = await db.prepare('SELECT * FROM trips WHERE id = ?').get(movement.trip_id);
+  // Deliberately not a foreign key — a movement is a safety record and outlives
+  // the trip it was filed under, so a missing trip is an ordinary outcome and
+  // not a broken row.
+  if (!trip) return null;
+  // Required here rather than at the top: tripPrivacy reads trips, and trips
+  // reads nothing from this file, but the pair is close enough that a lazy
+  // require is cheap insurance against a cycle appearing later.
+  const tripPrivacy = require('./tripPrivacy');
+  if (!await tripPrivacy.maySeeTrip(trip, viewerId)) return null;
+  return {
+    id: trip.id,
+    name: trip.name,
+    startsOn: trip.starts_on,
+    endsOn: trip.ends_on,
+    private: trip.visibility === tripPrivacy.PRIVATE,
+  };
 }
 
 /**
@@ -324,6 +362,6 @@ async function forWindow(ownerId, viewerId, startIso, endIso, now = Date.now()) 
 module.exports = {
   VEHICLE_ROLES, PERSON_ROLES, COORDINATION_ROLES, GRANT_HOURS,
   GRACE_MINUTES, FIT_TOLERANCE_MINUTES,
-  accessFor, viewFor, fullView, coordinationView, grant,
+  accessFor, viewFor, fullView, coordinationView, grant, tripLabelFor,
   visibleWhere, visibleParams, expectedArrival, lateBy, fitsBooking, forWindow,
 };

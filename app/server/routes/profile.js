@@ -2,7 +2,10 @@ const express = require('express');
 const { asyncRouter } = require('../lib/asyncRouter');
 const db = require('../lib/db');
 const { requireAuth, verifyPassword, clearSessionCookie } = require('../lib/auth');
-const { claimHandle } = require('../lib/handles');
+const {
+  claimHandle, handleProblem, everHeldBy, normalizeHandle, isProvisional,
+} = require('../lib/handles');
+const { limit, clientIp } = require('../lib/rateLimit');
 const { isValidTimeZone } = require('../lib/timezone');
 const { publicUser } = require('./auth');
 const { summarizeAccount, deleteAccount } = require('../lib/accountDeletion');
@@ -60,6 +63,37 @@ router.patch('/', async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+// Is this handle free, said before somebody presses the button.
+//
+// NOT A DIRECTORY, and the difference matters because lib/handles.js exists to
+// keep one from forming. Three things hold that line. It needs an account, so
+// probing the namespace costs a signup rather than a page load. It is
+// throttled, so a signed-in account cannot enumerate. And it answers in
+// exactly the words claimHandle answers in — "already taken", whether somebody
+// holds it now or held it in 2023 — so it reveals nothing the submit button
+// would not have revealed a second later.
+//
+// It exists because the alternative is worse manners, not better security:
+// asking somebody to choose a name, letting them type it, and only then saying
+// it was never available.
+const handleCheckLimiter = limit({
+  limit: 60,
+  windowMs: 60 * 60 * 1000,
+  keys: (req) => [`handle:${req.user.id}`, `handle-ip:${clientIp(req)}`],
+  message: 'Too many checks. Try again in a little while.',
+});
+
+router.get('/handle-available', handleCheckLimiter, async (req, res) => {
+  const handle = normalizeHandle(req.query.handle);
+  const problem = handleProblem(handle);
+  if (problem) return res.json({ handle, available: false, problem });
+  const owner = await everHeldBy(handle);
+  if (owner && owner !== req.user.id) {
+    return res.json({ handle, available: false, problem: 'That handle is already taken.' });
+  }
+  res.json({ handle, available: true, problem: null });
+});
+
 router.post('/onboarding-step', async (req, res) => {
   const { step } = req.body || {};
   // 'availability' is retired and kept only so an account halfway through the
@@ -69,6 +103,17 @@ router.post('/onboarding-step', async (req, res) => {
   const allowed = ['profile', 'connect', 'availability', 'meeting_type', 'security_question', 'done'];
   if (!allowed.includes(step)) {
     return res.status(400).json({ error: 'Invalid onboarding step.' });
+  }
+  // NOBODY LEAVES THE PROFILE STEP WITHOUT A HANDLE. The field being `required`
+  // in the form is a courtesy, not a gate — the step is advanced by a request,
+  // and a request can be made without the form. So the rule lives here, where
+  // it cannot be walked around, and it reads the same fact the profile screen
+  // reads rather than a second idea of "has chosen one".
+  if (step !== 'profile') {
+    const me = await db.prepare('SELECT slug FROM users WHERE id = ?').get(req.user.id);
+    if (isProvisional(me?.slug)) {
+      return res.status(400).json({ error: 'Choose a handle before going on.' });
+    }
   }
   await db.prepare('UPDATE users SET onboarding_step = ? WHERE id = ?').run(step, req.user.id);
   const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);

@@ -10,7 +10,9 @@ const {
 } = require('../lib/auth');
 const { isValidTimeZone } = require('../lib/timezone');
 const { isHouseholdStaff } = require('../lib/household');
-const { handleProblem, everHeldBy, rememberHandle } = require('../lib/handles');
+const {
+  handleProblem, everHeldBy, isProvisional, provisionalHandle,
+} = require('../lib/handles');
 const { limit, clear, clientIp } = require('../lib/rateLimit');
 const { DEFAULT_PLAN } = require('../lib/plans');
 const totp = require('../lib/totp');
@@ -60,6 +62,12 @@ function publicUser(u) {
     email: u.email,
     name: u.name,
     slug: u.slug,
+    // Whether that slug is a handle this person actually chose, or the
+    // provisional one their account was created with. The profile step reads
+    // it to decide whether to put anything in the field at all — an empty box
+    // is the whole point, and pre-filling it with `new-3f9c1a20` would be as
+    // much of a suggestion as pre-filling it with their name was.
+    handleChosen: !isProvisional(u.slug),
     timezone: u.timezone,
     onboardingStep: u.onboarding_step,
     accountCategory: u.account_category,
@@ -153,7 +161,17 @@ router.post('/signup', async (req, res) => {
   }
 
   const id = crypto.randomUUID();
-  const slug = await uniqueSlugFromName(name);
+  // NOT derived from their name, and not theirs yet. Signing up used to take
+  // @adaeze-okonkwo on this person's behalf and write it into handle_history —
+  // where a handle stays FOREVER — so a name nobody had chosen was spent
+  // permanently, and picking @ada a minute later burnt the first one for
+  // everybody. They now carry a provisional handle until they choose, on the
+  // profile step, from an empty field. See lib/handles.js.
+  let slug = provisionalHandle();
+  // A collision is a four-billion-to-one event, not an impossibility.
+  while (await db.prepare('SELECT id FROM users WHERE slug = ?').get(slug)) {
+    slug = provisionalHandle();
+  }
   const passwordHash = hashPassword(String(password));
 
   await db.prepare(`
@@ -166,10 +184,11 @@ router.post('/signup', async (req, res) => {
     // and quietly put everybody on the founding plan forever.
     DEFAULT_PLAN,
     new Date().toISOString());
-  // Written down the moment the account exists, so the handle is theirs from
-  // the first day rather than from the first time they change it — which is
-  // what keeps the NEXT Adaeze Okonkwo from being handed this one's name.
-  await rememberHandle(id, slug);
+  // NOT remembered. handle_history is the record of what somebody has held for
+  // good, and a provisional handle is precisely the thing nobody has chosen.
+  // Writing it here would spend a row of that history on a name that is about
+  // to be thrown away. The real one is written by claimHandle when they pick
+  // it, which is the only place a handle is ever assigned.
   // MVP note: email_verified is set to 1 immediately — there is no email
   // delivery configured yet. Wire up real verification before this ships
   // past a private beta.
