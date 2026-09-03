@@ -25,6 +25,11 @@ const crypto = require('crypto');
 const PORT = 4575, BASE = `http://127.0.0.1:${PORT}`, ID = Date.now().toString(36);
 const PW = 'password123';
 const KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+// The handle Ngozi CHOOSES. This suite used to write '@ngozi-bello' on the
+// strength of signup deriving one from her name, which it no longer does —
+// nobody is handed a handle. Named once here so the mention, the click
+// target and the copy menu are all talking about the same person.
+const NGOZI = `ngozi-bello-${ID}`;
 let fails = 0;
 const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x ? ' — ' + x : '')); } else console.log('  ✓ ' + l); };
 const head = (s) => console.log(`\n${s}`);
@@ -84,7 +89,7 @@ function client() {
     const paUp = await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
     const paId = paUp.d.user.id;
-    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
+    await pa('PATCH', '/profile', { slug: NGOZI });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);
@@ -147,13 +152,13 @@ function client() {
     // unrecoverable — but only the newly named, not everybody again.
     const before = (await boss('GET', '/emails')).d.emails.length;
     await boss('PATCH', `/threads/${threadId}/messages/${said.d.id}`,
-      { body: 'Car at six tomorrow @ngozi-bello' });
+      { body: `Car at six tomorrow @${NGOZI}` });
     const mailed = (await boss('GET', '/emails')).d.emails;
     ok('naming somebody in an edit tells them', mailed.length > before,
       `${before} → ${mailed.length}`);
     const second = mailed.length;
     await boss('PATCH', `/threads/${threadId}/messages/${said.d.id}`,
-      { body: 'Car at six sharp tomorrow @ngozi-bello' });
+      { body: `Car at six sharp tomorrow @${NGOZI}` });
     ok('and editing again does not tell them twice',
       (await boss('GET', '/emails')).d.emails.length === second);
 
@@ -408,10 +413,10 @@ function client() {
     // Thursday" — the moment somebody is actually thinking about that person —
     // was inert text.
     await boss('POST', `/threads/${threadId}/messages`,
-      { body: 'Can @ngozi-bello confirm the Thursday dinner?' });
+      { body: `Can @${NGOZI} confirm the Thursday dinner?` });
     await p.reload();
     await p.waitForSelector('.msg-bubble', { timeout: 20000 });
-    const atMention = p.locator('.msg-bubble button.person-link.mention', { hasText: '@ngozi-bello' }).first();
+    const atMention = p.locator('.msg-bubble button.person-link.mention', { hasText: `@${NGOZI}` }).first();
     ok('an @ of a real person is clickable', (await atMention.count()) === 1);
     // The look must not change: an address still has to read as an address, or
     // the distinction between "they were told" and "they were only named" is
@@ -421,7 +426,7 @@ function client() {
       await atMention.getAttribute('class'));
     await atMention.click();
     // Wait for the CARD, not just the box. The menu paints immediately with
-    // whatever label was clicked — "@ngozi-bello" from a mention — and fills in
+    // whatever label was clicked — the @mention — and fills in
     // once the card lands; asserting on the name in between races the fetch.
     await p.waitForSelector('.person-menu .person-handle', { timeout: 15000 });
     ok('and opens the same card', /Ngozi Bello/.test(await p.locator('.person-menu').innerText()),
@@ -482,7 +487,7 @@ function client() {
     await p.waitForSelector('.person-menu .person-handle', { timeout: 15000 });
     const menu = await p.locator('.person-menu').innerText();
     ok('and opens a card naming them', /Ngozi Bello/.test(menu), menu.slice(0, 120));
-    ok('carrying their handle to copy', /@ngozi-bello/.test(menu), menu.slice(0, 160));
+    ok('carrying their handle to copy', menu.includes(`@${NGOZI}`), menu.slice(0, 160));
     ok('and their remit, in words', /PA|hours/i.test(menu), menu.slice(0, 200));
     ok('offering the line between you',
       (await p.locator('.person-menu button:has-text("Open your line")').count())
