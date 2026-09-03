@@ -192,8 +192,18 @@ const live = (p, label) => p.locator(`button:not(.is-soon):has-text("${label}")`
     head('The weekly report carries the read of the week ahead:');
     await p.goto(`${BASE}/report`);
     await p.waitForSelector('.report-ahead', { timeout: 20000 });
-    ok('"Read the week" sits above the counts',
-      (await soon(p, 'Read the week').count()) === 1);
+    // WAIT FOR THE CONTROL, NOT FOR ITS NEIGHBOUR. `.report-ahead` is drawn
+    // from the report's own fetch; the placeholder inside it is drawn from the
+    // capability register's, which is a second request that can land after.
+    // Counting on the strength of the neighbour having arrived is how this
+    // suite went red once in a board and green in the three runs after it —
+    // the same adjacent-wait shape that has flaked half a dozen suites in this
+    // repository. Swallowed rather than thrown, so a control that is genuinely
+    // absent still fails the assertion below with its count rather than
+    // killing the run a long way from the point.
+    await soon(p, 'Read the week').first().waitFor({ timeout: 20000 }).catch(() => {});
+    const ahead = await soon(p, 'Read the week').count();
+    ok('"Read the week" sits above the counts', ahead === 1, `count ${ahead}`);
 
     head('A room carries the question about what was settled in it:');
     await p.goto(`${BASE}/threads/${made.threadId}`);
