@@ -44,13 +44,25 @@ const WORDS = [
   'WILLOW', 'YONDER', 'ZENITH', 'COBALT', 'DRIFTWOOD', 'EVEREST',
 ];
 
-/** Two words. Long enough not to be guessed in a hall, short enough to say. */
-function generateCode() {
+/**
+ * Two words. Long enough not to be guessed in a hall, short enough to say.
+ *
+ * `avoid` is the phrase this is REPLACING, and it is excluded rather than left
+ * to chance. Twenty-eight words taken two at a time is 756 phrases, so a
+ * re-arm handed back the phrase it had just retired about one time in 756 —
+ * and the reason somebody re-arms is usually that the old phrase is no longer
+ * private. Getting it back is the one outcome the act was meant to prevent.
+ * Rare is not the same as harmless when the rare case is the whole point.
+ */
+function generateCode(avoid = null) {
   const pick = () => WORDS[crypto.randomInt(0, WORDS.length)];
-  let a = pick();
-  let b = pick();
-  while (b === a) b = pick();
-  return `${a} ${b}`;
+  for (;;) {
+    let a = pick();
+    let b = pick();
+    while (b === a) b = pick();
+    const code = `${a} ${b}`;
+    if (code !== avoid) return code;
+  }
 }
 
 /** The card's address. Long and random: it is the only thing protecting it. */
@@ -104,7 +116,9 @@ function driverCard(item, { flight, principalFirstName, assistantPhone } = {}) {
  * that boundary would tell a new driver he had already been recognised.
  */
 async function arm(itemId) {
-  const code = generateCode();
+  // What it is being replaced with matters, so the old one is read first.
+  const prev = await db.prepare('SELECT pickup_code FROM itinerary_items WHERE id = ?').get(itemId);
+  const code = generateCode(prev?.pickup_code || null);
   const token = generateToken();
   await db.prepare(`
     UPDATE itinerary_items SET pickup_code = ?, pickup_token = ?, pickup_found_at = NULL
