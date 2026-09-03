@@ -47,6 +47,30 @@ concurrently with a board.
 calls; a `cp` or a `node` run from a directory left over from an earlier command
 fails silently or misleadingly. This has produced two false results.
 
+## Standing instruction: the tier structure stays OFF
+
+The owner's words, 3 September: *"Dont activate tiers structure yet. I want
+testers to be able to use every feature before we activate tier structures."*
+
+So `PLAN_ENFORCEMENT` is set nowhere but `app/tests/bplan.js`, and that is
+correct rather than an oversight. Do not set it in `render.yaml`, in the
+deployment, or as a default in `lib/plans.js`. A tester blocked by a paywall on
+the thing they were asked to test is a finding that never arrives.
+
+Three separate things are all off, and it is worth not confusing them:
+
+- **The gate.** `lib/plans.js` line ~368: `if (!ENFORCED) return next();`.
+  Fifteen of twenty-three features carry a real `requirePlan(...)`, so flipping
+  the flag would start gating them immediately. That is the point of leaving it
+  unflipped.
+- **The meter.** `meterUse()` records a usage row and reads nothing back. The
+  allowances in the tier sheet are a plan, not a limit anybody is hitting.
+- **Billing.** There is none — no Stripe, no Paystack, no Flutterwave, no
+  subscription table. `users.plan` is a column somebody would set by hand.
+
+Turning any of it on is the owner's call and needs the eight unwired features
+(below) decided first. Raise it, do not do it.
+
 ## Held for the owner — do not decide these
 
 Written down rather than remembered, because a context reset loses anything that

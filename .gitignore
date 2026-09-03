@@ -5,3 +5,14 @@ npm-debug.log*
 
 # Collected waitlist signups shouldn't be committed to the repo.
 data/waitlist.json
+
+# Built by docs/tools/capture.js and builddeck.js — the sources are tracked,
+# the megabytes of screenshots and the assembled course are not.
+docs/tools/build/
+
+# The tier documents are output, not source — build-complete.py and
+# build-tiers.py write them. The 19 August sheet is the exception: its
+# generator read a scratch file that is gone, so the artefact is what survives.
+docs/tiers/*.docx
+!docs/tiers/Kairos Tier Sheet (19 August).docx
+__pycache__/
