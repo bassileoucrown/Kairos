@@ -85,11 +85,13 @@ function dayString(offsetDays) {
     const up = await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     let invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);
@@ -98,6 +100,7 @@ function dayString(offsetDays) {
     const driver = client();
     await driver('POST', '/auth/signup',
       { name: 'Tunde Bakare', email: `tunde${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await driver('PATCH', '/profile', { slug: `h${ID}-3` });
     await driver('POST', '/profile/onboarding-step', { step: 'done' });
     invite = await boss('POST', '/members', { email: `tunde${ID}@x.com`, role: 'delegate' });
     await driver('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);

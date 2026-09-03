@@ -105,12 +105,14 @@ function client() {
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     await boss('PATCH', '/profile', { timezone: 'UTC' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     const paUp = await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
     const paId = paUp.d.user.id;
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
@@ -212,6 +214,7 @@ function client() {
     const otherUp = await other('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
     await other('PATCH', '/profile', { timezone: 'UTC' });
+    await other('PATCH', '/profile', { slug: `h${ID}-3` });
     await other('POST', '/profile/onboarding-step', { step: 'done' });
     const inv2 = await other('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv2.d.inviteLink.split('/').pop()}/accept`);

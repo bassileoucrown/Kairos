@@ -91,6 +91,7 @@ function client() {
     const up = await ada('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const adaId = up.d.user.id;
+    await ada('PATCH', '/profile', { slug: `h${ID}-1` });
     await ada('POST', '/profile/onboarding-step', { step: 'done' });
 
     const trip = await ada('POST', `/trips/${adaId}`, {

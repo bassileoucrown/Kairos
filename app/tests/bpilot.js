@@ -117,11 +117,13 @@ function client() {
     const boss = client();
     await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: OPERATOR, password: PW, accountCategory: 'principal' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
 
     r = await pa('POST', '/feedback',

@@ -80,6 +80,7 @@ function client() {
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     await boss('PATCH', '/profile', { timezone: 'UTC' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
     const handle = (await boss('GET', '/auth/me')).d.user.slug;
 
@@ -159,6 +160,7 @@ function client() {
     const del = client();
     await del('POST', '/auth/signup',
       { name: 'Tunde Driver', email: `driver${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await del('PATCH', '/profile', { slug: `h${ID}-2` });
     await del('POST', '/profile/onboarding-step', { step: 'done' });
     let inv = await boss('POST', '/members', { email: `driver${ID}@x.com`, role: 'delegate' });
     await del('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
@@ -183,6 +185,7 @@ function client() {
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-3` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);

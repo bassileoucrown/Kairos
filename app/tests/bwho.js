@@ -77,12 +77,14 @@ function client() {
     const up = await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     const paUp = await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
     const paId = paUp.d.user.id;
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);
@@ -95,6 +97,7 @@ function client() {
     const colleague = client();
     await colleague('POST', '/auth/signup',
       { name: 'Kunle Ade', email: `kunle${ID}@x.com`, password: PW, accountCategory: 'ea' });
+    await colleague('PATCH', '/profile', { slug: `h${ID}-3` });
     await colleague('POST', '/profile/onboarding-step', { step: 'done' });
     const inv2 = await boss('POST', '/members', { email: `kunle${ID}@x.com`, role: 'ea' });
     await colleague('POST', `/invites/${inv2.d.inviteLink.split('/').pop()}/accept`);
@@ -102,6 +105,7 @@ function client() {
     const stranger = client();
     await stranger('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await stranger('PATCH', '/profile', { slug: `h${ID}-4` });
     await stranger('POST', '/profile/onboarding-step', { step: 'done' });
 
     const threadId = (await boss('GET', `/today/${bossId}`)).d.directLine?.threadId;

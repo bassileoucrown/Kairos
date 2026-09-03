@@ -36,9 +36,15 @@ const ok = (l, c, x = '') => { if (!c) { fails++; console.log('  ✗ ' + l + (x 
     await p.fill('#password', PW);
     await p.click('button:has-text("Create account")');
     await p.waitForURL('**/onboarding/profile');
-    ok('onboarding presents a handle, not a booking link',
-      (await p.locator('.onboarding-card').innerText()).includes('You are @'));
+    // The field arrives empty now — nothing is chosen for anybody — so the
+    // point this assertion was always making is checked where it can be: once
+    // there is a handle to talk about, the screen talks about a HANDLE rather
+    // than about the last part of a booking URL.
+    ok('onboarding asks for a handle rather than filling one in',
+      await p.inputValue('#slug') === '', await p.inputValue('#slug'));
     await p.fill('#slug', `ada${ID}`);
+    ok('and presents it as a handle, not a booking link',
+      (await p.locator('.onboarding-card').innerText()).includes(`@ada${ID}`));
     await p.click('button:has-text("Continue")');
     await p.waitForURL('**/onboarding/connect', { timeout: 15000 });
     await p.click('button:has-text("Skip for now")');

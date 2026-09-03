@@ -65,11 +65,13 @@ function client() {
     const up = await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     const token = invite.d.inviteLink.split("/").pop();
@@ -130,6 +132,7 @@ function client() {
     const stranger = client();
     await stranger('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await stranger('PATCH', '/profile', { slug: `h${ID}-3` });
     await stranger('POST', '/profile/onboarding-step', { step: 'done' });
     ok('cannot mark anything done in it',
       [403, 404].includes((await stranger('POST', `/threads/${threadId}/messages/${typedId}/done`)).s));

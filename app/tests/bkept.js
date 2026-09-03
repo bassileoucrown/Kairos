@@ -80,6 +80,7 @@ async function waitReady() {
     const pa = sess();
     const paEmail = `kit${ID}@x.com`;
     await pa('POST', '/auth/signup', { name: 'Kit Staff', email: paEmail, password: PW, timezone: 'UTC', accountCategory: 'chief_of_staff' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-1` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
 
     head('An assistant can take on somebody who is not on Kairos:');
@@ -166,6 +167,7 @@ async function waitReady() {
     // refusal above is about being held and not about the route being broken.
     const real = sess();
     await real('POST', '/auth/signup', { name: 'Real Boss', email: `real${ID}@x.com`, password: PW, timezone: 'UTC', accountCategory: 'principal' });
+    await real('PATCH', '/profile', { slug: `h${ID}-2` });
     await real('POST', '/profile/onboarding-step', { step: 'done' });
     const realId = (await real('GET', '/auth/me')).d.user.id;
     ok('though an ordinary principal opens theirs perfectly well',
@@ -195,6 +197,7 @@ async function waitReady() {
     head('And it is not a way into anybody else\'s account:');
     const outsider = sess();
     await outsider('POST', '/auth/signup', { name: 'Someone Else', email: `else${ID}@x.com`, password: PW, timezone: 'UTC', accountCategory: 'principal' });
+    await outsider('PATCH', '/profile', { slug: `h${ID}-3` });
     await outsider('POST', '/profile/onboarding-step', { step: 'done' });
     const outsiderId = (await outsider('GET', '/auth/me')).d.user.id;
     const second = await pa('POST', `/itinerary/${kept.id}/items`, {

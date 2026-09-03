@@ -63,6 +63,7 @@ function client() {
     const up = await a('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const id = up.d.user.id;
+    await a('PATCH', '/profile', { slug: `h${ID}-1` });
     await a('POST', '/profile/onboarding-step', { step: 'done' });
 
     const trip = async (name, dest, from, to) => (await a('POST', `/trips/${id}`, {
@@ -146,6 +147,7 @@ function client() {
     const other = client();
     await other('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await other('PATCH', '/profile', { slug: `h${ID}-2` });
     await other('POST', '/profile/onboarding-step', { step: 'done' });
     ok('are not readable', [403, 404].includes((await other('GET', `/visas/${id}`)).s));
 

@@ -224,6 +224,7 @@ function client() {
     const boss = client();
     await boss('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     head('What a browser is told before it can subscribe:');
@@ -269,6 +270,7 @@ function client() {
     const other = client();
     await other('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await other('PATCH', '/profile', { slug: `h${ID}-2` });
     await other('POST', '/profile/onboarding-step', { step: 'done' });
     await other('DELETE', '/push/subscribe', { endpoint });
     ok('cannot be done by somebody else who happens to know the endpoint',
@@ -295,6 +297,7 @@ function client() {
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-3` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);

@@ -66,21 +66,33 @@ function client() {
   }
 
   try {
-    // --- Everybody already has one ---------------------------------------
-    head('An account has a handle before anybody chooses one:');
+    // --- Nobody is handed one --------------------------------------------
+    //
+    // Signup USED to derive a handle from the name and this suite asserted it
+    // did. That was the defect rather than the feature: handle_history keeps a
+    // handle for good, so a name nobody had chosen was spent permanently on
+    // their behalf and burnt for everybody the moment they picked another one.
+    head('An account is handed no handle at all:');
     const boss = client();
     await boss('POST', '/auth/signup', {
       name: `Adaeze Okonkwo ${ID}`, email: `boss${ID}@x.com`, password: PW, accountCategory: 'principal',
     });
     let me = (await boss('GET', '/auth/me')).d.user;
-    ok('signup derives one from the name', !!me.slug && me.slug.length >= 3, String(me.slug));
-    ok('and it looks like the person, not like a number',
-      /adaeze-okonkwo/.test(me.slug), me.slug);
-    const derived = me.slug;
+    ok('it carries something, because the column cannot be empty',
+      !!me.slug && me.slug.length >= 3, String(me.slug));
+    ok('but nothing made out of their name', !/adaeze|okonkwo/i.test(me.slug), me.slug);
+    ok('and it says plainly that nothing has been chosen',
+      me.handleChosen === false, String(me.handleChosen));
 
-    // The point of the whole feature: this account never went near the
-    // onboarding step, and @ still resolves for it.
+    // The first one they actually choose. Everything below is about what a
+    // handle costs to change once it is REALLY theirs, so it has to be one
+    // that went through claimHandle and into the history.
+    await boss('PATCH', '/profile', { slug: `first-${ID}` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
+    me = (await boss('GET', '/auth/me')).d.user;
+    ok('choosing one makes it theirs', me.slug === `first-${ID}` && me.handleChosen === true,
+      `${me.slug} ${me.handleChosen}`);
+    const derived = me.slug;
 
     // --- Changing it afterwards -------------------------------------------
     head('And it can be changed once setup is behind you:');
@@ -107,7 +119,9 @@ function client() {
     head('What is refused:');
     const other = client();
     await other('POST', '/auth/signup', { name: 'Ngozi Okafor', email: `ngozi${ID}@x.com`, password: PW });
+    await other('PATCH', '/profile', { slug: `ngozi-${ID}` });
     const theirs = (await other('GET', '/auth/me')).d.user.slug;
+    ok('the other account has chosen a handle of its own', theirs === `ngozi-${ID}`, theirs);
 
     r = await boss('PATCH', '/profile', { slug: theirs });
     ok('somebody else\'s handle', r.s === 409, String(r.s));
@@ -160,6 +174,7 @@ function client() {
     const squatter = client();
     await squatter('POST', '/auth/signup',
       { name: 'Someone Else', email: `squat${ID}@x.com`, password: PW });
+    await squatter('PATCH', '/profile', { slug: `h${ID}-2` });
     await squatter('POST', '/profile/onboarding-step', { step: 'done' });
     r = await squatter('PATCH', '/profile', { slug: oldOne });
     ok('a handle somebody has ever held is refused to everyone else',
@@ -177,7 +192,7 @@ function client() {
   }
 
   console.log(fails === 0
-    ? '\nEverybody has a handle from the start, and can still change it later.'
+    ? '\nEverybody chooses their own handle, and it stays theirs once they have.'
     : `\n${fails} FAILURES`);
   process.exit(fails === 0 ? 0 : 1);
 })().catch((e) => { console.error('\nFAILED: ' + e.message); process.exit(1); });

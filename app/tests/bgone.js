@@ -71,6 +71,7 @@ function client() {
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     await boss('PATCH', '/profile', { timezone: 'UTC' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     // ---- Somebody with nothing kept against them --------------------------

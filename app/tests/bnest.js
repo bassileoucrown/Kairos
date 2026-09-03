@@ -76,6 +76,7 @@ function client() {
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     const bossCookie = up.cookie;
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
@@ -83,6 +84,7 @@ function client() {
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
     const paId = paUp.d.user.id;
     await pa('PATCH', '/profile', { slug: `ngozi-${ID}` });
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const invite = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${invite.d.inviteLink.split('/').pop()}/accept`);
@@ -118,6 +120,7 @@ function client() {
     const stranger = client();
     await stranger('POST', '/auth/signup',
       { name: 'Chidi Eze', email: `chidi${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await stranger('PATCH', '/profile', { slug: `h${ID}-3` });
     await stranger('POST', '/profile/onboarding-step', { step: 'done' });
     r = await stranger('POST', '/tasks', { stageId: leaseId, title: 'Slip this in' });
     ok('a stranger cannot file work on somebody else\'s stage',

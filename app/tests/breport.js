@@ -122,12 +122,14 @@ function client() {
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     await boss('PATCH', '/profile', { timezone: 'Africa/Lagos' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     const pa = client();
     const paUp = await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
     const paId = paUp.d.user.id;
+    await pa('PATCH', '/profile', { slug: `h${ID}-2` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     let inv = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
@@ -136,6 +138,7 @@ function client() {
     const cosUp = await cos('POST', '/auth/signup',
       { name: 'Emeka Nwosu', email: `emeka${ID}@x.com`, password: PW, accountCategory: 'chief_of_staff' });
     const cosId = cosUp.d.user.id;
+    await cos('PATCH', '/profile', { slug: `h${ID}-3` });
     await cos('POST', '/profile/onboarding-step', { step: 'done' });
     inv = await boss('POST', '/members', { email: `emeka${ID}@x.com`, role: 'chief_of_staff' });
     await cos('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);

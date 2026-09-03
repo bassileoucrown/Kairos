@@ -69,6 +69,7 @@ async function ready(base) {
     const up = await ada('POST', '/auth/signup',
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const adaId = up.d.user.id;
+    await ada('PATCH', '/profile', { slug: `h${ID}-1` });
     await ada('POST', '/profile/onboarding-step', { step: 'done' });
 
     head('The desk, asked about directly:');
@@ -105,6 +106,7 @@ async function ready(base) {
     const bola = client();
     await bola('POST', '/auth/signup',
       { name: 'Bola Ade', email: `bola${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await bola('PATCH', '/profile', { slug: `h${ID}-2` });
     await bola('POST', '/profile/onboarding-step', { step: 'done' });
     const nosey = await bola('GET', `/concierge/${adaId}`);
     // 403 from requirePaAccess, which is what every principal-scoped route in

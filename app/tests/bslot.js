@@ -120,6 +120,7 @@ const iso = (ms) => new Date(ms).toISOString();
       { name: 'Adaeze Okonkwo', email: `ada${ID}@x.com`, password: PW, accountCategory: 'principal' });
     const bossId = up.d.user.id;
     await boss('PATCH', '/profile', { timezone: 'UTC' });
+    await boss('PATCH', '/profile', { slug: `h${ID}-1` });
     await boss('POST', '/profile/onboarding-step', { step: 'done' });
 
     head('A meeting agreed on the phone goes straight in:');
@@ -194,6 +195,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const stranger = client();
     await stranger('POST', '/auth/signup',
       { name: 'Nobody Special', email: `no${ID}@x.com`, password: PW, accountCategory: 'principal' });
+    await stranger('PATCH', '/profile', { slug: `h${ID}-2` });
     await stranger('POST', '/profile/onboarding-step', { step: 'done' });
     r = await stranger('POST', '/bookings',
       { ownerId: bossId, startAt: iso(when + 50 * 24 * 3600000), durationMinutes: 30, name: 'Sneaked in' });
@@ -206,6 +208,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const clerk = client();
     await clerk('POST', '/auth/signup',
       { name: 'Kunle Ade', email: `kunle${ID}@x.com`, password: PW, accountCategory: 'delegate' });
+    await clerk('PATCH', '/profile', { slug: `h${ID}-3` });
     await clerk('POST', '/profile/onboarding-step', { step: 'done' });
     const inv = await boss('POST', '/members', { email: `kunle${ID}@x.com`, role: 'delegate' });
     await clerk('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
@@ -219,6 +222,7 @@ const iso = (ms) => new Date(ms).toISOString();
     const pa = client();
     await pa('POST', '/auth/signup',
       { name: 'Ngozi Bello', email: `ngozi${ID}@x.com`, password: PW, accountCategory: 'pa' });
+    await pa('PATCH', '/profile', { slug: `h${ID}-4` });
     await pa('POST', '/profile/onboarding-step', { step: 'done' });
     const inv2 = await boss('POST', '/members', { email: `ngozi${ID}@x.com`, role: 'pa' });
     await pa('POST', `/invites/${inv2.d.inviteLink.split('/').pop()}/accept`);
