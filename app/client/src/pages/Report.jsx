@@ -104,19 +104,33 @@ const NEGLECT_LABEL = {
   task: 'Task', stage: 'Stage', record: 'Record', proposal: 'Waiting on you',
 };
 
+// TWO PARTS SHARE ONE COMPONENT, so each has to carry its own heading.
+//
+// They are drawn together because they are computed together — one fetch of
+// the week ahead produces both the counts and the neglected list. But the
+// reader can ask for either alone, and a heading that outlives the section
+// under it is the exact failure this whole feature exists to prevent: "The
+// week ahead" over nothing reads as a week with nothing in it, not as a
+// section that was not asked for. The same goes in the other direction —
+// "Nothing is sitting untouched" is a verdict, and a document that was never
+// asked to look must not deliver one.
 function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
   const [read, setRead] = useState('');
   const due = ahead.tasksDue.length + ahead.moreTasksDue;
   const stages = ahead.stagesDue.length + ahead.moreStagesDue;
   return (
     <div className="report-ahead">
-      <h3>
-        The week ahead
-        <span className="hint"> · {ahead.window.startDate} to {ahead.window.endDate}</span>
-      </h3>
+      {showAhead && (
+        <h3>
+          The week ahead
+          <span className="hint"> · {ahead.window.startDate} to {ahead.window.endDate}</span>
+        </h3>
+      )}
 
       {/* The counts are below. This is the observation on top of them — where
-          the week is tight, and what would have to move if something slipped. */}
+          the week is tight, and what would have to move if something slipped.
+          It reads the week, so it belongs to the week's part. */}
+      {showAhead && (
       <div className="assist-control" style={{ margin: '0 0 10px' }}>
         <AssistButton
           feature="ai_week_ahead"
@@ -125,7 +139,8 @@ function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
           onResult={(d) => setRead(d.empty ? 'There is nothing in the week ahead yet.' : d.text)}
         />
       </div>
-      {read && <div className="assist-out">{read}</div>}
+      )}
+      {showAhead && read && <div className="assist-out">{read}</div>}
 
       {showAhead && (
       <div className="report-tiles">
@@ -152,11 +167,22 @@ function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
           reader does with a list they cannot argue with is stop reading it. */}
       {showAttention && ahead.neglected.items.length > 0 ? (
         <>
-          <h4>
-            Needs attention
-            {ahead.neglected.total > ahead.neglected.items.length
-              && <span className="hint"> · showing {ahead.neglected.items.length} of {ahead.neglected.total}</span>}
-          </h4>
+          {/* An h4 under the week's h3 when both are here; its own h3 when it
+              is the whole of what was asked for, so it is not a subheading of
+              a heading that is not on the page. */}
+          {showAhead ? (
+            <h4>
+              Needs attention
+              {ahead.neglected.total > ahead.neglected.items.length
+                && <span className="hint"> · showing {ahead.neglected.items.length} of {ahead.neglected.total}</span>}
+            </h4>
+          ) : (
+            <h3>
+              Needs attention
+              {ahead.neglected.total > ahead.neglected.items.length
+                && <span className="hint"> · showing {ahead.neglected.items.length} of {ahead.neglected.total}</span>}
+            </h3>
+          )}
           <ul className="report-open-list">
             {ahead.neglected.items.map((n) => (
               <li key={`${n.kind}-${n.id}`}>
@@ -168,10 +194,15 @@ function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
             ))}
           </ul>
         </>
-      ) : (
+      ) : showAttention && (
         // Said out loud. An empty section reads as a section that failed to
-        // load; this one is the good outcome and should look like it.
-        <p className="hint">Nothing is sitting untouched.</p>
+        // load; this one is the good outcome and should look like it. Only
+        // when it was asked for, though — it is a verdict, and a report that
+        // was not asked to check has not earned one.
+        <p className="hint">
+          {showAhead ? 'Nothing is sitting untouched.'
+            : 'Needs attention — nothing is sitting untouched.'}
+        </p>
       )}
     </div>
   );

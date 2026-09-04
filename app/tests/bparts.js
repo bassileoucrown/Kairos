@@ -20,6 +20,7 @@
 const ROOT = require('path').join(__dirname, '..', '..');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4664, BASE = `http://127.0.0.1:${PORT}`;
 const ID = Date.now().toString(36);
@@ -47,6 +48,39 @@ function client() {
   };
 }
 
+/**
+ * Press the chips named, then wait for the DOCUMENT THOSE CHIPS DESCRIBE.
+ *
+ * The chips are client state and redraw at once; the sections under them come
+ * from a fetch. Waiting on the chip, on the note, or on `.report-ahead` —
+ * which is present both before and after the fetch — reads the previous
+ * document and reddens an assertion about the parts for a reason that is
+ * really about timing. So this waits for the report request carrying exactly
+ * these sections to come back, and then for React to have committed it.
+ */
+async function choose(page, labels, wanted) {
+  const landed = page.waitForResponse(
+    (r) => /\/api\/report\//.test(r.url())
+      && new URLSearchParams(r.url().split('?')[1] || '').get('sections') === wanted
+      && r.status() === 200,
+    { timeout: 20000 },
+  );
+  for (const l of labels) await page.click(`.report-parts button:has-text("${l}")`);
+  await landed;
+  // The response is not the render. Swallowed rather than thrown so that a
+  // document which genuinely never changes still fails on the assertion
+  // itself, with the text it actually had.
+  await page.waitForFunction(
+    (n) => {
+      const note = document.querySelector('.report-parts-note');
+      return !!note && note.textContent.includes(`Showing ${n} of`);
+    },
+    wanted.split(',').length,
+    { timeout: 5000 },
+  ).catch(() => {});
+  await page.waitForTimeout(120);
+}
+
 async function signUp(call, name, email, category, handle) {
   await call('POST', '/auth/signup', { name, email, password: PW, accountCategory: category });
   await call('PATCH', '/profile', { slug: handle });
@@ -66,6 +100,7 @@ async function signUp(call, name, email, category, handle) {
     env: { ...process.env, NODE_ENV: 'production', PORT: String(PORT), ENCRYPTION_KEY: KEY },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
+  let browser = null;
 
   try {
     for (;;) {
@@ -216,10 +251,92 @@ async function signUp(call, name, email, category, handle) {
       !/Did what/.test(f.t) && !/<h2>Who looked at what<\/h2>/.test(f.t),
       'trail content present in their file');
 
+    // ---- The screen -------------------------------------------------------
+    //
+    // Everything above would pass with no picker anywhere in the client — a
+    // feature that works and that nobody can reach. This half only asks
+    // whether the chips are on the screen the register says they are on, and
+    // whether the document under them tells the truth about itself.
+    //
+    // THE HEADING IS PART OF THE DOCUMENT. Two of the five parts are drawn by
+    // one component, because one fetch computes both. A heading that outlives
+    // the section under it — "The week ahead" over an omitted week — is the
+    // same defect as an export that drops a section silently, and it reads as
+    // a week with nothing in it rather than a week nobody asked about. The
+    // other direction is worse: "Nothing is sitting untouched" is a verdict,
+    // and a report that was not asked to look has not earned one.
+    head('The picker is on the screen, and the document under it says what it is:');
+    browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+    });
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 1100 } }))
+      .newPage();
+    const threw = [];
+    page.on('pageerror', (e) => threw.push(e.message));
+
+    await page.goto(`${BASE}/login`);
+    await page.fill('input[type=email]', `boss${ID}@x.com`);
+    await page.fill('input[type=password]', PW);
+    await page.click('button[type=submit]');
+    await page.waitForSelector('nav', { timeout: 20000 });
+    await page.goto(`${BASE}/report`);
+    await page.waitForSelector('.report-parts button', { timeout: 20000 });
+
+    const chips = await page.locator('.report-parts button').allInnerTexts();
+    ok('every part the account holder may have is offered, and the whole with them',
+      chips.length === 6 && chips[0] === 'All of it'
+      && chips.includes('Who looked at what'), JSON.stringify(chips));
+    ok('and the whole report is what is chosen before anybody touches it',
+      (await page.locator('.report-parts button[aria-pressed="true"]').innerText()) === 'All of it',
+      await page.locator('.report-parts button[aria-pressed="true"]').innerText());
+
+    // POSITIVE CONTROL for the two negatives below: both headings are here
+    // when the whole report is, so their absence later is the gating rather
+    // than a section that never rendered.
+    const ahead = page.locator('.report-ahead');
+    await ahead.waitFor({ timeout: 20000 });
+    ok('the whole report carries the week ahead heading',
+      /The week ahead/.test(await ahead.innerText()), (await ahead.innerText()).slice(0, 80));
+    ok('and the attention line under it',
+      /sitting untouched|Needs attention/.test(await ahead.innerText()),
+      (await ahead.innerText()).slice(0, 160));
+
+    // ONE PART, ON SCREEN.
+    await choose(page, ['Still open now'], 'open');
+    ok('picking one part says how many of how many',
+      /Showing 1 of 5 parts/.test(await page.locator('.report-parts-note').innerText()),
+      await page.locator('.report-parts-note').innerText());
+    ok('and the week ahead leaves the screen with it',
+      (await page.locator('.report-ahead').count()) === 0,
+      `report-ahead still drawn ${await page.locator('.report-ahead').count()}×`);
+    ok('as does the trail',
+      (await page.locator('.report-trail').count()) === 0,
+      `report-trail still drawn ${await page.locator('.report-trail').count()}×`);
+
+    // THE HEADING THAT MUST NOT OUTLIVE ITS SECTION.
+    await choose(page, ['Still open now', 'Needs attention'], 'attention');
+    let face = await page.locator('.report-ahead').innerText();
+    ok('asking for attention alone puts no week-ahead heading over it',
+      !/The week ahead/.test(face), face.slice(0, 200));
+    ok('and still says what it found, headed as itself',
+      /Needs attention/.test(face), face.slice(0, 200));
+
+    // AND THE VERDICT THAT MUST NOT BE VOLUNTEERED.
+    await choose(page, ['Needs attention', 'The week ahead'], 'ahead');
+    face = await page.locator('.report-ahead').innerText();
+    ok('asking for the week alone delivers no verdict on what is untouched',
+      !/sitting untouched/.test(face) && !/Needs attention/.test(face), face.slice(0, 200));
+    ok('though the week itself is there',
+      /The week ahead/.test(face), face.slice(0, 120));
+
+    ok('and nothing threw while the parts were being picked',
+      threw.length === 0, JSON.stringify(threw));
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
+    if (browser) await browser.close();
     proc.kill();
   }
 
