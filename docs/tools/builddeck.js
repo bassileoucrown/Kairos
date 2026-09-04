@@ -17,6 +17,9 @@ const OUT = path.join(DIR, 'kairos-course.html');
 const img = (n) => `data:image/jpeg;base64,${fs.readFileSync(path.join(DECK, 'small', `${n}.jpg`)).toString('base64')}`;
 const vid = (n) => `data:video/webm;base64,${fs.readFileSync(path.join(DECK, 'clips', `${n}.webm`)).toString('base64')}`;
 const has = (n) => fs.existsSync(path.join(DECK, 'shots', `${n}.jpg`));
+let CROPPED = [];
+try { CROPPED = JSON.parse(fs.readFileSync(path.join(DECK, 'small', 'cropped.json'), 'utf8')); }
+catch { /* no crop manifest: nothing was long enough to need one */ }
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // **bold** and *quiet* in the prose, because writing <strong> forty times is
@@ -40,7 +43,7 @@ const CH = [
       + 'needs thought is the handle.',
     lessons: [
       {
-        shot: '01-landing', roles: [P, A, V], title: 'The front door',
+        shot: '01-landing', roles: [P, A, S], title: 'The front door',
         what: 'What anybody sees before they sign in.',
         steps: [
           'Open the address you were given.',
@@ -107,7 +110,7 @@ const CH = [
         ],
       },
       {
-        shot: '08-first-day', roles: [P, A], title: 'The first day',
+        shot: '08-first-day', roles: [P, A, S], title: 'The first day',
         what: 'A brand new account, before anything is in it.',
         steps: [
           'Every screen carries a short note saying what it does and how to use it.',
@@ -150,7 +153,7 @@ const CH = [
         ],
       },
       {
-        shot: '12-itinerary', roles: [P, A], title: 'The Itinerary',
+        shot: '12-itinerary', roles: [A], title: 'The Itinerary',
         what: 'Where the day is built: meetings, cars, meals, the school run — not only bookings.',
         steps: [
           'Pick a day.',
@@ -192,7 +195,7 @@ const CH = [
       + 'They are two screens because most journeys belong to no trip at all.',
     lessons: [
       {
-        shot: '13-trips', roles: [P, A], title: 'Trips',
+        shot: '13-trips', roles: [A], title: 'Trips',
         what: 'A period away — flights, hotels, visas, and who to call at the far end.',
         steps: [
           'Build a trip with its dates and destination.',
@@ -217,7 +220,7 @@ const CH = [
           + 'trip with sees the trip in full and the cars not at all. An escort roster is not a travel detail.',
       },
       {
-        shot: '15-movements', roles: [P, A], title: 'Movements',
+        shot: '15-movements', roles: [A], title: 'Movements',
         what: 'Getting the principal there on the ground — the journey, the car, the driver, and whether they arrived.',
         steps: [
           'Add a journey with a pickup, a destination and a time.',
@@ -230,7 +233,7 @@ const CH = [
           + 'journey that mattered — and that is the journey nobody would bother to file.',
       },
       {
-        shot: '16-fleet', roles: [P, A], title: 'The cars',
+        shot: '16-fleet', roles: [A], title: 'The cars',
         what: 'The fleet, with the papers and when each runs out.',
         steps: [
           'Add a car: a name, a plate, a make.',
@@ -241,6 +244,7 @@ const CH = [
       },
     ],
     clip: {
+      roles: [P, A, S],
       name: 'guidance', title: 'Guidance moving with you',
       what: 'The same panel on three different screens, each describing the feature it is on.',
     },
@@ -271,7 +275,7 @@ const CH = [
         ],
       },
       {
-        shot: '42-approvals', roles: [A, P], title: 'Approvals',
+        shot: '42-approvals', roles: [A], title: 'Approvals',
         what: 'Requests for the principal’s time that need a decision before they become appointments.',
         steps: [
           '**Accept** — it lands in the diary and the asker is told.',
@@ -292,7 +296,7 @@ const CH = [
         ],
       },
       {
-        shot: '44-instructions', roles: [A, P], title: 'Standing instructions',
+        shot: '44-instructions', roles: [P, A], title: 'Standing instructions',
         what: 'What this principal always wants, so it is not asked twice.',
         steps: [
           'Write the rule once — never Mondays before ten, always a window seat, no dinners in the week.',
@@ -308,7 +312,7 @@ const CH = [
         ],
       },
       {
-        shot: '46-assist', roles: [A, P], title: 'AI Assist',
+        shot: '46-assist', roles: [A], title: 'AI Assist',
         what: 'Finding a time in plain words, and a contents page for everything else Assist does.',
         steps: [
           'Type when you want something — “an hour with Emeka next week, mornings”.',
@@ -342,7 +346,7 @@ const CH = [
           + 'at a time. Being somebody’s assistant does not put you in their mail.',
       },
       {
-        shot: '49-bookings', roles: [A, P], title: 'Bookings',
+        shot: '49-bookings', roles: [A], title: 'Bookings',
         what: 'Everything already agreed, and what has been asked to change.',
         steps: [
           'Open one to see who is coming, what was asked for, and any notes.',
@@ -350,7 +354,7 @@ const CH = [
         ],
       },
       {
-        shot: '20-report', roles: [A, P], title: 'The Report',
+        shot: '20-report', roles: [P, A], title: 'The Report',
         what: 'What the period actually held — and what has had no attention.',
         steps: [
           'Pick any dates you like. The figures redraw for exactly that range.',
@@ -360,6 +364,7 @@ const CH = [
       },
     ],
     clip: {
+      roles: [A],
       name: 'desk', title: 'Moving around the desk',
       what: 'The overview, into a section, and back out again.',
     },
@@ -406,7 +411,7 @@ const CH = [
         ],
       },
       {
-        shot: '30-tasks', roles: [P, A, S], title: 'Tasks',
+        shot: '30-tasks', roles: [P, A], title: 'Tasks',
         what: 'Everything assigned to you, across every space and every principal.',
         steps: [
           'Work down the list.',
@@ -415,7 +420,7 @@ const CH = [
         ],
       },
       {
-        shot: '31-archive', roles: [P, A], title: 'The Archive',
+        shot: '31-archive', roles: [A], title: 'The Archive',
         what: 'What the office decided was worth keeping after the rooms had finished.',
         steps: [
           '**Keep** a message from a room and a copy lands here, safe from that room being deleted.',
@@ -561,6 +566,7 @@ const CH = [
       },
     ],
     clip: {
+      roles: [P, A, V],
       name: 'booking', title: 'An outsider booking a time',
       what: 'The whole visitor flow, from the page to the form.',
     },
@@ -634,10 +640,12 @@ const chip = (r) => `<span class="chip chip-${r}">${{ [P]: 'Principal', [A]: 'As
 
 function frame(name, caption) {
   if (!has(name)) return '';
+  const cut = CROPPED.includes(name);
   return `<figure class="frame">
     <button class="shot" type="button" data-full="${name}" aria-label="Enlarge: ${esc(caption || name)}">
-      <img src="${img(name)}" alt="${esc(caption || name)}" loading="lazy">
+      <img src="${img(name)}" alt="${esc(caption || name)}" loading="lazy" decoding="async">
     </button>
+    ${cut ? '<p class="cap">The top of a longer screen — it continues below the fold.</p>' : ''}
   </figure>`;
 }
 
@@ -663,7 +671,7 @@ function clipBlock(c) {
   const p = path.join(DECK, 'clips', `${c.name}.webm`);
   if (!fs.existsSync(p)) return '';
   const kb = Math.round(fs.statSync(p).size / 1024);
-  return `<article class="lesson is-clip">
+  return `<article class="lesson is-clip" data-roles="${(c.roles || [P, A]).join(' ')}">
     <header class="lesson-head">
       <span class="num">▶</span>
       <div><h3>${rich(c.title)}</h3><p class="what">${rich(c.what)}</p></div>
@@ -776,6 +784,7 @@ body{margin:0;background:var(--paper);color:var(--body);font-family:var(--sans);
 .filter{margin:34px 0 0;padding:16px 18px;background:var(--card);border:1px solid var(--line);
   border-radius:12px}
 .filter p{margin:0 0 10px;font-size:.84rem;color:var(--muted)}
+.filter-count{font-family:var(--mono);font-size:.78rem;color:var(--green)}
 .filter-row{display:flex;flex-wrap:wrap;gap:7px}
 .fbtn{font:inherit;font-size:.8rem;font-weight:500;padding:5px 12px;border-radius:999px;cursor:pointer;
   background:transparent;color:var(--body);border:1px solid var(--line)}
@@ -794,7 +803,8 @@ body{margin:0;background:var(--paper);color:var(--body);font-family:var(--sans);
 .blurb{margin:0;max-width:62ch;font-size:1.02rem}
 
 .lesson{background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:24px;margin-top:26px;box-shadow:var(--shadow);scroll-margin-top:20px}
+  padding:24px;margin-top:26px;box-shadow:var(--shadow);scroll-margin-top:20px;
+  content-visibility:auto;contain-intrinsic-size:auto 760px}
 .lesson[hidden]{display:none!important}
 .lesson-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:start}
 .num{font-family:var(--mono);font-size:.82rem;color:var(--green);padding-top:5px;
@@ -897,6 +907,7 @@ body{margin:0;background:var(--paper);color:var(--body);font-family:var(--sans);
     </ul>
     <div class="filter">
       <p>Teaching one role? Show only what they need.</p>
+      <p class="filter-count" id="fcount" aria-live="polite"></p>
       <div class="filter-row" role="group" aria-label="Filter by role">
         <button class="fbtn" type="button" data-role="all" aria-pressed="true">Everything</button>
         <button class="fbtn" type="button" data-role="principal" aria-pressed="false">Principal</button>
@@ -998,6 +1009,12 @@ body{margin:0;background:var(--paper);color:var(--body);font-family:var(--sans);
       var live=[].slice.call(c.querySelectorAll('.lesson[data-roles]')).some(function(l){return !l.hidden;});
       c.hidden=!live;
     });
+    var all=document.querySelectorAll('.lesson[data-roles]');
+    var shown=[].slice.call(all).filter(function(l){return !l.hidden;}).length;
+    var out=document.getElementById('fcount');
+    if(out) out.textContent = role==='all'
+      ? 'Showing all ' + all.length + ' lessons.'
+      : 'Showing ' + shown + ' of ' + all.length + ' lessons.';
   });});
 
   // Which chapter you are in.
