@@ -304,7 +304,12 @@ async function onboard(p, name, email, role) {
     const phoneErrs = [];
     phone.on('pageerror', (e) => phoneErrs.push(e.message));
     await phone.goto(`${BASE}${cardLink.replace(/^.*(\/drive\/)/, '$1')}`);
-    await phone.waitForSelector('.drive-card', { timeout: 20000 });
+    // WAIT FOR THE LEG, NOT THE CARD. `.drive-card` is also the wrapper the
+    // loading state renders into, so waiting on it can hand back "Loading…"
+    // and redden "the card opens with no account at all" for a reason that
+    // has nothing to do with accounts. `.drive-leg` exists only in the loaded
+    // branch, and it is the element carrying the text asserted below.
+    await phone.waitForSelector('.drive-leg', { timeout: 20000 });
     const face = await phone.locator('.drive-card').innerText();
     ok('the card opens with no account at all', /Lekki/.test(face), face.slice(0, 200));
     // THE ASSERTION THIS SECTION EXISTS FOR. The link has no password.
