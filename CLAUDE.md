@@ -1,5 +1,31 @@
 # Working notes for Claude
 
+## Deliverables go as FILES, not artifacts
+
+The owner's instruction, 3 September, after a training course was published
+three times and none of the three would open for them.
+
+Published artifacts do not load on the owner's machine. All three versions
+spun forever — and they were structurally very different from one another
+(7.8MB, then 3.4MB with the webfont unblocked, then 3.05MB rendering only what
+is on screen), so the content was never the variable. Older artifacts from
+August behaved the same way. The likeliest cause is their client rather than
+any page: the viewer boots the page inside a sandboxed frame that loads its own
+runtime first, and if that cannot load, every artifact spins whatever is in it.
+That was never confirmed, because it cannot be reproduced from here.
+
+**So send a deliverable with SendUserFile.** A self-contained `.html` file
+reached them first time and worked. Do not spend another round tuning a page
+that cannot be opened; the diagnosis is not worth the delivery.
+
+Two things that made the file work, worth keeping in anything built next:
+everything inline, so nothing is fetched at open time, and the one external
+thing it does want — a webfont — arrives as a `media="print"` stylesheet
+promoted by script after paint, so an unreachable font host costs the page its
+typeface and not its existence.
+
+Revisit if the owner ever reports an artifact opening normally.
+
 ## Pushing
 
 Two separate acts, two separate rules.
