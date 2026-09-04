@@ -104,7 +104,7 @@ const NEGLECT_LABEL = {
   task: 'Task', stage: 'Stage', record: 'Record', proposal: 'Waiting on you',
 };
 
-function WeekAhead({ ahead, ownerId }) {
+function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
   const [read, setRead] = useState('');
   const due = ahead.tasksDue.length + ahead.moreTasksDue;
   const stages = ahead.stagesDue.length + ahead.moreStagesDue;
@@ -127,18 +127,20 @@ function WeekAhead({ ahead, ownerId }) {
       </div>
       {read && <div className="assist-out">{read}</div>}
 
+      {showAhead && (
       <div className="report-tiles">
         <div><strong>{ahead.appointments}</strong><span>appointment{ahead.appointments === 1 ? '' : 's'}</span></div>
         <div><strong>{due}</strong><span>task{due === 1 ? '' : 's'} fall due</span></div>
         <div><strong>{stages}</strong><span>stage{stages === 1 ? '' : 's'} fall due</span></div>
       </div>
+      )}
 
-      {ahead.trips.length > 0 && (
+      {showAhead && ahead.trips.length > 0 && (
         <p className="hint">
           Away: {ahead.trips.map((t) => `${t.name} (${t.startsOn}–${t.endsOn})`).join(', ')}
         </p>
       )}
-      {ahead.expiring.length > 0 && (
+      {showAhead && ahead.expiring.length > 0 && (
         <div className="alert alert-warning">
           <strong>Lapsing this week:</strong>{' '}
           {ahead.expiring.map((e) => `${e.label} (${e.expiresOn})`).join(', ')}
@@ -148,7 +150,7 @@ function WeekAhead({ ahead, ownerId }) {
       {/* Each line carries WHY it is here. A list headed "needs attention"
           that does not say why cannot be argued with, and the first thing a
           reader does with a list they cannot argue with is stop reading it. */}
-      {ahead.neglected.items.length > 0 ? (
+      {showAttention && ahead.neglected.items.length > 0 ? (
         <>
           <h4>
             Needs attention
@@ -238,6 +240,9 @@ export default function Report() {
   const { user } = useAuth();
   const [ownerId, setOwnerId] = useState(null);
   const [back, setBack] = useState(1);
+  // Which sections are wanted. Empty is not "none" — it is "no preference",
+  // which the server reads as the whole report. See lib/reportSections.js.
+  const [picked, setPicked] = useState([]);
   // A period somebody asked for, which wins over the week stepper while it is
   // set. Held as the two dates rather than as a mode flag, so "is this a
   // custom period" has one answer and not two that can disagree.
@@ -260,6 +265,12 @@ export default function Report() {
     ? `from=${encodeURIComponent(applied.from)}&to=${encodeURIComponent(applied.to)}`
     : `week=${back}`;
 
+  // WHICH PARTS. Empty means the whole report, which is both the default and
+  // the thing the parameter is left off for — sending `sections=` with every
+  // id in it would produce the same document while making every link longer
+  // and every bookmark stale the day a section is added.
+  const parts = picked.length ? `&sections=${picked.join(',')}` : '';
+
   // ONLY THE ANSWER TO THE PERIOD STILL BEING ASKED FOR. The same shape that
   // was showing one day's entries under another day's heading on the itinerary:
   // change the dates twice in quick succession, or change them while the first
@@ -275,10 +286,10 @@ export default function Report() {
     const seq = ++reqRef.current;
     setData(null);
     setError('');
-    api.get(`/report/${ownerId}?${period}`)
+    api.get(`/report/${ownerId}?${period}${parts}`)
       .then((r) => { if (seq === reqRef.current) setData(r); })
       .catch((e) => { if (seq === reqRef.current) setError(e.message); });
-  }, [ownerId, period]);
+  }, [ownerId, period, parts]);
 
   if (!data) {
     return (
@@ -300,8 +311,12 @@ export default function Report() {
 
   const open = data.stillOpen || {};
   const anythingOpen = open.approvalsWaiting || open.tasksOverdue || open.recordsOpen;
+  // What the SERVER says this document is made of, not what is ticked here.
+  // The two are normally the same, and when they briefly are not — a request
+  // in flight — the screen should draw what it was actually given.
+  const inDoc = (id) => !data.sections || data.sections.includes(id);
   // Built once so the two links cannot drift into asking for different weeks.
-  const query = `?${period}${who ? `&person=${encodeURIComponent(who)}` : ''}`;
+  const query = `?${period}${parts}${who ? `&person=${encodeURIComponent(who)}` : ''}`;
 
   const custom = !!data.window.custom;
 
@@ -370,6 +385,47 @@ export default function Report() {
         )}
       </form>
 
+      {/* WHICH REPORT. The whole thing is the default and stays the default:
+          nothing ticked means every part, segmented, which is what anybody
+          means by "the report". Ticking is for the times somebody wants one
+          part — an accountant who needs the counts, a principal checking
+          their own custody trail — and the document then says on its face
+          that it is a part, because a forwarded file whose reader cannot tell
+          an omitted section from an empty one misleads by its shape. */}
+      {(data.sectionsAvailable || []).length > 1 && (
+        <div className="report-parts">
+          <span className="hint">Which parts:</span>
+          <button
+            className={'btn btn-sm' + (picked.length === 0 ? ' is-on' : '')}
+            type="button" aria-pressed={picked.length === 0}
+            onClick={() => setPicked([])}
+          >
+            All of it
+          </button>
+          {data.sectionsAvailable.map((sec) => {
+            const on = picked.includes(sec.id);
+            return (
+              <button
+                key={sec.id}
+                className={'btn btn-sm' + (on ? ' is-on' : '')}
+                type="button" aria-pressed={on} title={sec.what}
+                onClick={() => setPicked((was) => (on
+                  ? was.filter((x) => x !== sec.id)
+                  : [...was, sec.id]))}
+              >
+                {sec.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {picked.length > 0 && (
+        <p className="hint report-parts-note">
+          Showing {picked.length} of {(data.sectionsAvailable || []).length} parts. The document and
+          the spreadsheet carry the same choice, and say on the first line that they are a part.
+        </p>
+      )}
+
       {/* PLAIN LINKS, not fetch-and-blob. The session is a cookie and the
           server sends Content-Disposition, so the browser saves the file
           itself — which also means it works on a phone, where a blob URL
@@ -400,7 +456,7 @@ export default function Report() {
           part that changes what somebody does on Monday. Counted as it stands
           now rather than as it stood on Sunday night, so chasing it is not
           chasing something already done. */}
-      {anythingOpen ? (
+      {inDoc('open') && anythingOpen ? (
         <div className="alert alert-warning report-open">
           <strong>Still open right now.</strong>{' '}
           {[
@@ -446,9 +502,11 @@ export default function Report() {
       {/* Sent only to the account holder. Rendered only when it arrives, so
           somebody who is not entitled to it sees no empty section hinting
           that one exists. */}
-      {data.accessTrail && <AccessTrail trail={data.accessTrail} />}
+      {inDoc('trail') && data.accessTrail && <AccessTrail trail={data.accessTrail} />}
 
-      {data.ahead && <WeekAhead ahead={data.ahead} ownerId={ownerId} />}
+      {(inDoc('ahead') || inDoc('attention')) && data.ahead
+        && <WeekAhead ahead={data.ahead} ownerId={ownerId}
+             showAhead={inDoc('ahead')} showAttention={inDoc('attention')} />}
 
       {data.scope === 'self' && (
         <p className="hint">
@@ -473,7 +531,7 @@ export default function Report() {
         </div>
       )}
 
-      {data.people.map((p) => <PersonCard key={p.id} person={p} />)}
+      {inDoc('office') && data.people.map((p) => <PersonCard key={p.id} person={p} />)}
     </AppShell>
   );
 }

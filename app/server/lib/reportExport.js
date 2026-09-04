@@ -19,6 +19,37 @@
 // drift that has bitten this codebase repeatedly, except that here the drift
 // hands somebody a file containing the whole office.
 
+const sections = require('./reportSections');
+
+/**
+ * Which parts this document carries.
+ *
+ * Defaults to everything when the caller says nothing, so an older caller — or
+ * a test — that hands over a report with no `sections` on it still gets the
+ * whole document rather than an empty one.
+ */
+function partsOf(report) {
+  const ids = Array.isArray(report.sections) && report.sections.length
+    ? report.sections
+    : sections.IDS;
+  return { has: (id) => ids.includes(id), ids };
+}
+
+/**
+ * The line that stops a forwarded file from misleading by its shape.
+ *
+ * A reader handed "Still open now" on its own cannot otherwise tell whether
+ * the rest of the office had a quiet week or was simply left out. So every
+ * document says which parts it contains, and a partial one says plainly that
+ * it is a part.
+ */
+function contentsLine(report, ids) {
+  const named = ids.map((id) => sections.labelFor(id)).join(' · ');
+  return report.sectionsWhole === false
+    ? `Part of the report — this document carries ${ids.length === 1 ? 'one section' : `${ids.length} sections`}: ${named}.`
+    : `The whole report, in ${ids.length} sections: ${named}.`;
+}
+
 /** HTML-escape. Names and titles are user text and go into markup. */
 function esc(s) {
   return String(s === null || s === undefined ? '' : s)
@@ -78,28 +109,34 @@ function trailRow(e) {
 }
 
 function toCsv(report) {
+  const { has, ids } = partsOf(report);
   const rows = [
     ['Kairos —', periodTitle(report.window), report.window.startDate, 'to', report.window.endDate]
       .map(cell).join(','),
     [`Office of ${report.principal.name}`].map(cell).join(','),
-    '',
-    ['Person', 'Role', ...COLUMNS.map(([, label]) => label)].map(cell).join(','),
+    [contentsLine(report, ids)].map(cell).join(','),
   ];
-  for (const p of report.people) {
-    rows.push([p.name, p.roleLabel, ...COLUMNS.map(([key]) => p.counts[key] ?? 0)].map(cell).join(','));
+  if (has('office')) {
+    rows.push('', ['What the office did'].map(cell).join(','));
+    rows.push(['Person', 'Role', ...COLUMNS.map(([, label]) => label)].map(cell).join(','));
+    for (const p of report.people) {
+      rows.push([p.name, p.roleLabel, ...COLUMNS.map(([key]) => p.counts[key] ?? 0)].map(cell).join(','));
+    }
   }
   // The tail matters more than the table and a CSV that dropped it would be a
   // flattering document. Kept as labelled rows rather than a second table:
   // one sheet, read top to bottom.
-  rows.push('', ['Still open now'].map(cell).join(','));
-  rows.push(['Approvals waiting', report.stillOpen.approvalsWaiting].map(cell).join(','));
-  rows.push(['Tasks overdue', report.stillOpen.tasksOverdue].map(cell).join(','));
-  rows.push(['Records nobody has answered', report.stillOpen.recordsOpen].map(cell).join(','));
+  if (has('open')) {
+    rows.push('', ['Still open now'].map(cell).join(','));
+    rows.push(['Approvals waiting', report.stillOpen.approvalsWaiting].map(cell).join(','));
+    rows.push(['Tasks overdue', report.stillOpen.tasksOverdue].map(cell).join(','));
+    rows.push(['Records nobody has answered', report.stillOpen.recordsOpen].map(cell).join(','));
+  }
 
   // WHO LOOKED AT WHAT. Only present when the reader is entitled to it —
   // routes/report.js decides, and this file never second-guesses that by
   // reconstructing the rule. Absent means absent, not empty.
-  if (report.accessTrail) {
+  if (has('trail') && report.accessTrail) {
     rows.push('', ['Who looked at what'].map(cell).join(','));
     if (report.accessTrail.entries.length === 0) {
       rows.push(['Nobody opened anything held for you in this period'].map(cell).join(','));
@@ -112,11 +149,14 @@ function toCsv(report) {
     }
   }
 
-  if (report.ahead) {
+  if (has('ahead') && report.ahead) {
     rows.push('', [`The week ahead — ${report.ahead.window.startDate} to ${report.ahead.window.endDate}`]
       .map(cell).join(','));
     rows.push(['Appointments', report.ahead.appointments].map(cell).join(','));
     rows.push(['Away', report.ahead.trips.map((t) => t.name).join('; ') || 'Not travelling'].map(cell).join(','));
+  }
+
+  if (has('attention') && report.ahead) {
     rows.push('', ['Needs attention', 'Why', 'Due'].map(cell).join(','));
     for (const n of report.ahead.neglected.items) {
       rows.push([n.title, n.why, n.dueAt || ''].map(cell).join(','));
@@ -142,6 +182,7 @@ function countsTable(people) {
 }
 
 function toHtml(report) {
+  const { has, ids } = partsOf(report);
   const a = report.ahead;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -179,10 +220,14 @@ function toHtml(report) {
 <body><div class="wrap">
   <h1>${esc(periodTitle(report.window))} ${esc(report.window.startDate)} to ${esc(report.window.endDate)}</h1>
   <p class="sub">Office of ${esc(report.principal.name)} · times in ${esc(report.window.timeZone)}</p>
+  <p class="sub contents">${esc(contentsLine(report, ids))}</p>
 
+  ${has('office') ? `
   <h2>What the office did</h2>
   ${report.people.length ? countsTable(report.people) : '<p class="sub">Nobody is appointed to this office yet.</p>'}
+  ` : ''}
 
+  ${has('open') ? `
   <h2>Still open now</h2>
   <div class="tiles">
     <div class="tile"><strong>${esc(report.stillOpen.approvalsWaiting)}</strong><span>approvals waiting</span></div>
@@ -192,8 +237,9 @@ function toHtml(report) {
   ${report.stillOpen.records.length ? `<ul>${report.stillOpen.records.map((r) => `
     <li><strong>${esc(r.threadName)}</strong> — ${esc(r.body)}
       <span class="why">· ${esc(r.authorName)}, ${esc(String(r.at).slice(0, 10))}</span></li>`).join('')}</ul>` : ''}
+  ` : ''}
 
-  ${report.accessTrail ? `
+  ${has('trail') && report.accessTrail ? `
   <h2>Who looked at what</h2>
   ${report.accessTrail.entries.length ? `
   <table>
@@ -206,7 +252,7 @@ function toHtml(report) {
     : '<p class="sub">Nobody opened anything held for you in this period.</p>'}
   ` : ''}
 
-  ${a ? `
+  ${has('ahead') && a ? `
   <h2>The week ahead — ${esc(a.window.startDate)} to ${esc(a.window.endDate)}</h2>
   <div class="tiles">
     <div class="tile"><strong>${esc(a.appointments)}</strong><span>appointments</span></div>
@@ -215,7 +261,9 @@ function toHtml(report) {
   </div>
   ${a.trips.length ? `<p>Away: ${a.trips.map((t) => `${esc(t.name)} (${esc(t.startsOn)}&ndash;${esc(t.endsOn)})`).join(', ')}</p>` : '<p class="sub">Not travelling.</p>'}
   ${a.expiring.length ? `<p><strong>Lapsing this week:</strong> ${a.expiring.map((e) => `${esc(e.label)} (${esc(e.expiresOn)})`).join(', ')}</p>` : ''}
+  ` : ''}
 
+  ${has('attention') && a ? `
   <h2>Needs attention${a.neglected.total > a.neglected.items.length
     ? ` — showing ${a.neglected.items.length} of ${a.neglected.total}` : ''}</h2>
   ${a.neglected.items.length ? `<ul>${a.neglected.items.map((n) => `
@@ -229,6 +277,9 @@ function toHtml(report) {
     ${report.scope === 'self'
       ? 'This copy covers your own line only.'
       : 'This copy covers the whole office.'}
+    ${report.sectionsWhole === false
+      ? 'It is a chosen part of the report, not all of it — the sections it carries are named at the top.'
+      : ''}
     ${report.accessTrail
       ? 'It carries the record of who opened what is held for you — keep it accordingly.' : ''}
     Counted from what the app already records; nothing is logged specially to produce it.
@@ -240,7 +291,14 @@ function toHtml(report) {
 function filename(report, ext) {
   const who = String(report.principal.name || 'office').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'office';
-  return `kairos-${who}-${report.window.startDate}.${ext}`;
+  // A part says which part in its own name. Somebody with four of these in a
+  // downloads folder should not have to open them to tell them apart, and
+  // "kairos-adaeze-2026-09-01.csv" four times over is exactly that problem.
+  const ids = Array.isArray(report.sections) ? report.sections : [];
+  const part = report.sectionsWhole === false && ids.length
+    ? `-${ids.length === 1 ? ids[0] : 'part'}`
+    : '';
+  return `kairos-${who}-${report.window.startDate}${part}.${ext}`;
 }
 
 module.exports = { toCsv, toHtml, filename, COLUMNS };

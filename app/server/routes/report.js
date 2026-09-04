@@ -4,6 +4,7 @@ const { requirePaAccess } = require('../lib/paAccess');
 const { buildReport } = require('../lib/weeklyReport');
 const { weekAhead } = require('../lib/weekAhead');
 const exporter = require('../lib/reportExport');
+const reportSections = require('../lib/reportSections');
 
 // The week just gone, on the office's side of the desk.
 //
@@ -65,11 +66,22 @@ function scopeFor(req) {
   const from = String(req.query.from || '').trim() || null;
   const to = String(req.query.to || '').trim() || null;
 
+  // WHICH PARTS OF THE REPORT. Resolved here with the trail rule rather than
+  // in either route, for the same reason the person rule is resolved here: the
+  // export hands somebody a file they can forward, and a second copy of "which
+  // sections may this reader have" is a copy that will one day disagree.
+  const picked = reportSections.resolve(req.query.sections, {
+    canSeeTrail: req.paRole === 'owner',
+  });
+
   return {
     back,
     from,
     to,
     onlyUserId,
+    sections: picked.chosen,
+    sectionsWhole: picked.whole,
+    sectionsAvailable: picked.available,
     seesEveryone,
     isOwner: req.paRole === 'owner',
     // WHO SEES THE CUSTODY TRAIL, which is a narrower question than who sees
@@ -97,13 +109,19 @@ function badWindow(res) {
 }
 
 router.get('/:ownerId', requirePaAccess, async (req, res) => {
-  const { back, from, to, onlyUserId, seesEveryone, isOwner, scope, seesAccessTrail } = scopeFor(req);
+  const {
+    back, from, to, onlyUserId, seesEveryone, isOwner, scope, seesAccessTrail,
+    sections, sectionsWhole, sectionsAvailable,
+  } = scopeFor(req);
+  const has = (id) => sections.includes(id);
 
   const report = await buildReport(req.principal.id, {
     back,
     from,
     to,
-    withAccessTrail: seesAccessTrail,
+    // Two conditions, and the entitlement is the one that governs. Asking for
+    // the trail cannot grant it, and not asking for it saves the query.
+    withAccessTrail: seesAccessTrail && has('trail'),
     onlyUserId,
     // WHO IS READING, which is not the same as whose week this is. The open
     // records are links now, and a link to a room this reader cannot open
@@ -118,7 +136,16 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
     // The half that has not happened yet. Scoped to the READER, not to the
     // principal — a list of neglected things somebody cannot open reads as the
     // app being broken rather than as a door being shut.
-    ahead: await weekAhead(req.principal.id, req.user.id),
+    //
+    // Built only when one of the two sections drawn from it was asked for.
+    ahead: has('ahead') || has('attention')
+      ? await weekAhead(req.principal.id, req.user.id)
+      : null,
+    // What this document is made of, so the screen can say so rather than
+    // leaving a reader to wonder whether a missing part is empty or omitted.
+    sections,
+    sectionsWhole,
+    sectionsAvailable,
     // Said plainly on the screen rather than left to be inferred from a short
     // list: an assistant seeing one row should know it is the rule and not a
     // sign that they are the only person working here.
@@ -140,15 +167,18 @@ router.get('/:ownerId', requirePaAccess, async (req, res) => {
  * mattering is not theoretical: a file gets forwarded.
  */
 router.get('/:ownerId/export', requirePaAccess, async (req, res) => {
-  const { back, from, to, onlyUserId, scope, seesAccessTrail } = scopeFor(req);
+  const {
+    back, from, to, onlyUserId, scope, seesAccessTrail, sections, sectionsWhole,
+  } = scopeFor(req);
   const format = req.query.format === 'csv' ? 'csv' : 'html';
+  const has = (id) => sections.includes(id);
 
   const report = await buildReport(req.principal.id, {
     back, from, to, onlyUserId, viewerId: req.user.id,
     // Through the same gate as the screen, which is the whole reason that
     // decision lives in scopeFor. A file gets forwarded, so the export is the
     // route where a copied access rule would do the most damage.
-    withAccessTrail: seesAccessTrail,
+    withAccessTrail: seesAccessTrail && has('trail'),
   });
   if (!report) return res.status(404).json({ error: 'Not found.' });
   if (report.badWindow) return badWindow(res);
@@ -156,7 +186,19 @@ router.get('/:ownerId/export', requirePaAccess, async (req, res) => {
   // The document carries the week ahead too. A file is read away from the app,
   // often by somebody who cannot click through to anything, so leaving out the
   // half that says what is coming would make the export the weaker artifact.
-  const full = { ...report, scope, ahead: await weekAhead(req.principal.id, req.user.id) };
+  const full = {
+    ...report,
+    scope,
+    ahead: has('ahead') || has('attention')
+      ? await weekAhead(req.principal.id, req.user.id)
+      : null,
+    // The exporter renders what it is handed and decides nothing. It is told
+    // which parts are in this document so it can head the file with them —
+    // a forwarded file whose reader cannot tell an omitted section from an
+    // empty one is a document that misleads by its shape.
+    sections,
+    sectionsWhole,
+  };
 
   const body = format === 'csv' ? exporter.toCsv(full) : exporter.toHtml(full);
   res.setHeader('Content-Type', format === 'csv'

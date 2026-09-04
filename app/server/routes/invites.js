@@ -153,12 +153,25 @@ router.post('/:token/accept', requireAuth, async (req, res) => {
   // they are here and have told us what they are, so a Chief of Staff stops
   // being addressed as somebody's PA.
   //
-  // Strictly limited to the three titles that carry identical access. A
-  // `delegate` invitation is narrower on purpose, and letting the invitee
-  // swap it for a full-access title would be privilege escalation by
-  // self-description — the principal decides remit, the person decides only
-  // what they are called.
-  const EQUAL_ACCESS = new Set(['pa', 'ea', 'chief_of_staff']);
+  // STRICTLY LIMITED TO TITLES THAT CARRY IDENTICAL ACCESS, and that set
+  // shrank. `chief_of_staff` used to be in it; it is not any more, because
+  // routes/report.js now lets a Chief of Staff read the whole office's line
+  // while a PA reads only their own. The moment a title started meaning
+  // something, letting the invitee choose it stopped being cosmetic:
+  //
+  //   UPWARDS it was exactly the escalation the paragraph above says it
+  //   prevents. account_category is typed at signup and verified by nobody, so
+  //   somebody invited as a PA could describe themselves as Chief of Staff and
+  //   arrive holding sight of every colleague's week.
+  //
+  //   DOWNWARDS it quietly discarded a decision the principal had made. They
+  //   appoint a Chief of Staff, that person signed up as a PA months earlier,
+  //   and the appointment evaporates on accept with nobody told.
+  //
+  // So adoption is allowed only where it changes the name and nothing else.
+  // Becoming a Chief of Staff — or ceasing to be one — is the principal's act,
+  // through Team, where they can see what they are granting.
+  const EQUAL_ACCESS = new Set(['pa', 'ea']);
   const claimed = req.user.account_category;
   const adoptTitle = EQUAL_ACCESS.has(invite.role) && EQUAL_ACCESS.has(claimed) && claimed !== invite.role;
 

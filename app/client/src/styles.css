@@ -3319,6 +3319,14 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .handle-free { color: var(--accent); }
 .handle-taken { color: var(--danger); }
 
+/* Which parts of the report. Chips rather than checkboxes: the choice is
+   read at a glance and pressed with a thumb. */
+.report-parts { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 12px 0 0; }
+.report-parts .btn.is-on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.report-parts-note { margin: 8px 0 0; }
+
 /* ---- The pilot screen ---- */
 .op-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
 .op-main { min-width: 0; flex: 1 1 220px; }
