@@ -121,7 +121,11 @@ const SOURCES = [
         id: r.id,
         title: r.title,
         detail: [r.start_at.slice(0, 10), r.location].filter(Boolean).join(' · '),
-        href: '/itinerary',
+        // The entry's own page rather than the day sheet. This pointed at
+        // /itinerary, which opens on TODAY — so a result for a dinner three
+        // weeks out landed somewhere that did not contain it, which is the
+        // half-job a link should never do. Entries have their own page now.
+        href: `/schedule/${ownerId}/${r.id}`,
       }));
     },
   },

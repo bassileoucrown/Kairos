@@ -3724,3 +3724,32 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   .find-foot { display: none; }
   .find-veil { padding: 4vh 10px 10px; }
 }
+
+/* ── Opening a schedule row ──────────────────────────────────────────────
+   The row is the target, not the title.
+
+   A stretched link rather than a wrapper: this row already contains a Join
+   link on a video meeting, and an anchor inside an anchor is invalid markup
+   that behaves differently in every browser. The title's own anchor grows a
+   pseudo-element over the whole row instead, and everything else in the row
+   is lifted above it so it stays clickable and selectable. */
+.sched-row.is-openable { position: relative; }
+.sched-row.is-openable .sched-title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* Nothing visible. The row already has its own hover treatment. */
+  border-radius: inherit;
+}
+/* Above the stretched area, so Join still joins and text can still be
+   selected. Applies only to the row's own children — the title link is
+   inside .sched-main and keeps its stretch. */
+.sched-row.is-openable > .sched-time,
+.sched-row.is-openable > a:not(.sched-title-link),
+.sched-row.is-openable > button { position: relative; z-index: 1; }
+.sched-row.is-openable:hover { background: var(--bg); }
+.sched-row.is-openable .sched-title-link { text-decoration: none; color: inherit; }
+.sched-row.is-openable:hover .sched-title-link { text-decoration: underline; }
+/* Keyboard users get the row outlined rather than four words of it. */
+.sched-row.is-openable:focus-within { outline: 2px solid var(--accent, #2f5d4a); outline-offset: 2px; }
+.sched-row.is-openable .sched-title-link:focus-visible { outline: none; }

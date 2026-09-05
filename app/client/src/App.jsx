@@ -22,6 +22,7 @@ import ProjectDetail from './pages/spaces/ProjectDetail.jsx';
 import MyTasks from './pages/spaces/MyTasks.jsx';
 import Today from './pages/Today.jsx';
 import BookingDetail from './pages/BookingDetail.jsx';
+import ScheduleDetail from './pages/ScheduleDetail.jsx';
 import Pad from './pages/Pad.jsx';
 import Itinerary from './pages/Itinerary.jsx';
 import Trips from './pages/Trips.jsx';
@@ -163,6 +164,7 @@ export default function App() {
           an assistant who mails this link to a colleague, or opens it in a
           second tab, must land on the same appointment either way. */}
       <Route path="/appointments/:ownerId/:bookingId" element={<RequireAuth><BookingDetail /></RequireAuth>} />
+      <Route path="/schedule/:ownerId/:itemId" element={<RequireAuth><ScheduleDetail /></RequireAuth>} />
       <Route path="/itinerary" element={<RequireAuth><Itinerary /></RequireAuth>} />
       <Route path="/pad" element={<RequireAuth><Pad /></RequireAuth>} />
       <Route path="/trips" element={<RequireAuth><Trips /></RequireAuth>} />

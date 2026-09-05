@@ -152,8 +152,22 @@ function untilLabel(startAt) {
  * edited where it lives, so it is passed nothing and reads as plain text.
  */
 export function ScheduleEntry({ e, viewerIsPrincipal = true, href = null }) {
+  // THE WHOLE ROW OPENS IT, not the few words of the title.
+  //
+  // The link used to be the title text alone, which is a small target inside a
+  // large one: somebody pressing the row — which is what "clicking the
+  // appointment" means, and what a thumb does on a phone — got nothing at all
+  // and reasonably concluded there was nothing to open.
+  //
+  // Done by stretching the title's own anchor across the row rather than by
+  // wrapping the row in a second one, because this row already contains a Join
+  // link and an anchor inside an anchor is invalid and behaves differently in
+  // every browser. Anything else interactive in here sits above it — see
+  // .sched-row > * in the stylesheet.
   return (
-    <div className={`sched-row kind-${e.kind}` + (e.status === 'proposed' ? ' is-proposed' : '')}>
+    <div className={`sched-row kind-${e.kind}`
+      + (href ? ' is-openable' : '')
+      + (e.status === 'proposed' ? ' is-proposed' : '')}>
       <div className="sched-time">
         <span className="sched-start">{e.startLabel}</span>
         {e.endLabel && <span className="sched-end">{e.endLabel}</span>}
@@ -442,9 +456,14 @@ export default function Today() {
                     )}
                     <ScheduleEntry
                       e={e}
+                      // Both kinds open now. The day is two sources merged
+                      // into one list, so a booking's id arrives prefixed
+                      // `booking:` to keep the two apart — see
+                      // serializeBooking in routes/itinerary.js. An itinerary
+                      // item's does not, and is used as it comes.
                       href={e.source === 'booking'
                         ? `/appointments/${data.principal.id}/${String(e.id).replace(/^booking:/, '')}`
-                        : null}
+                        : `/schedule/${data.principal.id}/${e.id}`}
                     />
                     {e.source === 'itinerary' && row.live && (
                       <button

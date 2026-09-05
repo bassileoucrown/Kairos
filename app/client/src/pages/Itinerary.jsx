@@ -280,8 +280,15 @@ function timeInZone(iso, timeZone) {
  * not moved every week, and guessing otherwise rewrites a year of somebody's
  * diary from a single edit. Said on the form rather than inferred.
  */
-function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
-  const dayKey = dateKeyInZone(item.startAt, timezone);
+export function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
+  // THE DAY IS EDITABLE NOW, not merely the time within it.
+  //
+  // This form derived the day from the entry and never offered it, so moving
+  // a meeting from Tuesday to Thursday meant deleting it and typing it again
+  // — which loses the notes and the series along with the mistake, the exact
+  // thing the comment above the Edit button says this form exists to prevent.
+  // It was doing half the job it described.
+  const [dayKey, setDayKey] = useState(dateKeyInZone(item.startAt, timezone));
   const [kind, setKind] = useState(item.kind || 'meeting');
   const [title, setTitle] = useState(item.title || '');
   const [startTime, setStartTime] = useState(timeInZone(item.startAt, timezone));
@@ -339,6 +346,15 @@ function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
         <label htmlFor={`ed-title-${item.id}`}>What it is</label>
         <input id={`ed-title-${item.id}`} type="text" required value={title}
           onChange={(e) => setTitle(e.target.value)} />
+      </div>
+
+      <div className="field">
+        <label htmlFor={`ed-day-${item.id}`}>Which day</label>
+        <input id={`ed-day-${item.id}`} type="date" required value={dayKey}
+          onChange={(e) => setDayKey(e.target.value)} />
+        {dayKey !== dateKeyInZone(item.startAt, timezone) && (
+          <p className="hint">Moving off {dateKeyInZone(item.startAt, timezone)}.</p>
+        )}
       </div>
 
       <div className="itin-times">
@@ -711,7 +727,12 @@ export default function Itinerary() {
               <ScheduleEntry
                 e={e}
                 viewerIsPrincipal={viewerIsPrincipal}
-                href={e.source === 'booking' ? `/appointments/${ownerId}/${bookingIdOf(e)}` : null}
+                // A booking opens the appointment; anything the office made
+                // opens its own page. Before this, only the first had one and
+                // the second was not clickable at all.
+                href={e.source === 'booking'
+                  ? `/appointments/${ownerId}/${bookingIdOf(e)}`
+                  : `/schedule/${ownerId}/${e.id}`}
               />
               {e.source === 'booking' && noting === e.id && (
                 <BookingNotes ownerId={ownerId} bookingId={bookingIdOf(e)} onChanged={load} />

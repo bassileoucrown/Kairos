@@ -664,6 +664,38 @@ function hiddenFromViewer(row, req) {
   return row.status === 'draft' && req.paRole === 'owner';
 }
 
+/**
+ * One entry, on its own, so it can have a page.
+ *
+ * Everything an entry supports — moving it, relabelling it, changing where it
+ * is, removing it — has existed since the day sheet was built, and could only
+ * be reached from a small tool on the row that drew it. So a person who made a
+ * schedule and then wanted to change it had to find the day it was on first,
+ * which is the wrong way round: the thing they are holding in their head is
+ * the appointment, not the date it sits under. A booking has had its own page
+ * from the start (see BookingDetail); this is the entry the office makes
+ * itself finally getting the same.
+ *
+ * SAME GATE AS EVERY OTHER HANDLER HERE — requirePaAccess for the desk, then
+ * hiddenFromViewer, which keeps a draft an assistant is still writing out of
+ * the principal's sight until it is published or proposed. A detail route that
+ * skipped it would be the one way to read a draft, which is precisely the kind
+ * of second copy of a rule this codebase keeps refusing to write.
+ */
+router.get('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
+  const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
+    .get(req.params.itemId, req.principal.id);
+  if (!row || hiddenFromViewer(row, req)) return res.status(404).json({ error: 'Item not found.' });
+  res.json({
+    item: serializeItem(row, req.principal.timezone || 'UTC'),
+    // What the screen needs to draw its own controls without a second call:
+    // whose day this is, and whether the person looking is the principal.
+    principal: { id: req.principal.id, name: req.principal.name },
+    timezone: req.principal.timezone || 'UTC',
+    viewerIsPrincipal: req.paRole === 'owner',
+  });
+});
+
 router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ? AND owner_id = ?')
     .get(req.params.itemId, req.principal.id);
