@@ -41,6 +41,19 @@ const WIDTHS = [
   [390, 844, 'phone'],
   [414, 896, 'large phone'],
   [768, 1024, 'tablet'],
+  // THE SAME DEVICES TURNED SIDEWAYS. A phone in landscape is not a small
+  // tablet: it is WIDE AND VERY SHORT — 390x844 becomes 844x390 — and short is
+  // the dimension nothing here was ever measured against. A sticky header, a
+  // floating dock and a dialog sized in vh all cost a fixed number of pixels
+  // that is a fifth of a portrait screen and half a landscape one.
+  //
+  // People hold a phone sideways to read a day sheet, to type into a wide
+  // field, and because they are lying down. A car's dashboard mount is
+  // landscape. It is not an edge case.
+  [780, 360, 'small phone, sideways'],
+  [844, 390, 'phone, sideways'],
+  [896, 414, 'large phone, sideways'],
+  [1024, 768, 'tablet, sideways'],
 ];
 
 let fails = 0;
@@ -142,6 +155,107 @@ const MEASURE = () => {
     }
   }
 
+  // ── The other dimension ──────────────────────────────────────────────
+  //
+  // EVERYTHING ABOVE MEASURES WIDTH, and width is the whole of what a portrait
+  // phone tests. Turn the phone sideways and the scarce dimension changes:
+  // 390x844 becomes 844x390, and a header, a floating dock and a dialog sized
+  // in vh each cost a fixed number of pixels that was a fifth of the screen
+  // and is now half of it.
+  //
+  // TWO FAILURES, and they are different.
+  //
+  //   PINNED CHROME. Anything fixed or sticky holds its place while the page
+  //   scrolls under it, so its height comes off the room to work in. When the
+  //   sum of it leaves too little, the screen is technically fine and
+  //   practically unusable — you scroll a two-line window through a day.
+  //
+  //   TRAPPED CONTENT. Something inside a fixed overlay that sits below the
+  //   bottom of the window with nothing between it and the overlay that
+  //   scrolls. The page behind will not scroll it — a fixed layer does not
+  //   move — so it cannot be reached at all. A dialog whose Confirm button is
+  //   below the fold is a dialog that cannot be confirmed.
+  //
+  //   MEASURED ON THE CONTENT, NOT ON THE OVERLAY. The first version asked
+  //   whether the fixed element was taller than the window, which for the
+  //   shape every dialog here uses — a full-screen veil holding a static
+  //   panel — is never true: the veil is inset:0 and exactly the window's
+  //   height whatever is inside it. That check could not fail, and an
+  //   assertion that cannot fail is worse than no assertion, because it
+  //   reports coverage it does not have. Found by sabotage: making the find
+  //   box unscrollable and taller than the screen reddened nothing.
+  const room = de.clientHeight;
+  const pinned = [];
+  const trapped = [];
+
+  // WHAT COUNTS AS A BAND ACROSS THE TOP OR BOTTOM, and what does not.
+  //
+  // The first version of this counted every pinned element and reported the
+  // sidebar as 768px of furniture on a 768px screen — which is nonsense: the
+  // rail is sticky and full-height, but it sits BESIDE the content and costs
+  // it no vertical room at all. A floating button in a corner is the same
+  // shape of false positive from the other end: 40px tall, and it is not
+  // taking a band off anything.
+  //
+  // So a pinned element only counts when it spans most of the content column,
+  // which is what makes it a band the content has to live below or above.
+  const main = document.querySelector('.app-main') || document.body;
+  const mr = main.getBoundingClientRect();
+  const spansTheColumn = (r) => {
+    if (mr.width <= 0) return false;
+    const overlap = Math.min(r.right, mr.right) - Math.max(r.left, mr.left);
+    return overlap > mr.width * 0.6;
+  };
+
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+    const r = el.getBoundingClientRect();
+    if (r.height === 0) continue;
+    // Only what is actually on screen, and only the outermost pinned box —
+    // a sticky header's own children are not each costing a header's height.
+    let nestedInPinned = false;
+    for (let q = el.parentElement; q && q !== de; q = q.parentElement) {
+      const p = getComputedStyle(q).position;
+      if (p === 'fixed' || p === 'sticky') { nestedInPinned = true; break; }
+    }
+    if (nestedInPinned) continue;
+
+    if (spansTheColumn(r)) {
+      pinned.push({ what: describe(el), height: Math.round(r.height), position: cs.position });
+    }
+
+    if (cs.position !== 'fixed') continue;
+
+    // Anything in this overlay that is off the bottom (or the top) of the
+    // window, with no scroller between it and the overlay to bring it back.
+    for (const kid of el.querySelectorAll('*')) {
+      const ks = getComputedStyle(kid);
+      if (ks.display === 'none' || ks.visibility === 'hidden') continue;
+      const kr = kid.getBoundingClientRect();
+      if (kr.height === 0 && kr.width === 0) continue;
+      if (kr.bottom <= room + 1 && kr.top >= -1) continue;
+
+      let rescued = false;
+      for (let q = kid; q && q !== el.parentElement; q = q.parentElement) {
+        const o = getComputedStyle(q).overflowY;
+        if (o === 'auto' || o === 'scroll') { rescued = true; break; }
+      }
+      if (rescued) continue;
+
+      trapped.push({
+        what: describe(kid),
+        height: Math.round(kr.bottom - room),
+        room,
+        text: (kid.textContent || '').trim().slice(0, 40),
+      });
+      break;   // one report per overlay is enough to act on
+    }
+  }
+
+  const pinnedHeight = pinned.reduce((n, p) => n + p.height, 0);
+
   // Deepest offenders only: a parent is wide because its child is, and naming
   // twelve ancestors of one long word helps nobody.
   const deepest = (list) => list.filter((a, i) => !list.some((b, j) =>
@@ -152,6 +266,10 @@ const MEASURE = () => {
     wide: deepest(wide).slice(0, 6),
     spilling: spilling.slice(0, 6),
     squeezed: squeezed.slice(0, 6),
+    room,
+    pinnedHeight,
+    pinned: pinned.sort((a, b) => b.height - a.height).slice(0, 5),
+    trapped: trapped.slice(0, 4),
   };
 };
 
@@ -315,7 +433,58 @@ const MEASURE = () => {
             console.log(`      ${el.what}  ${el.width}px, ${el.chars} chars over ${el.lines} lines  "${el.text}"`);
           }
         }
+        // HALF THE SCREEN IS THE LINE. Below that a person is reading their
+        // day through a letterbox, and on a short screen it is reached by
+        // chrome that costs nothing worth noticing in portrait.
+        if (m.pinnedHeight > m.room * 0.5) {
+          bad++;
+          problems.push({ width: w, screen: name, kind: 'pinned', by: m.pinnedHeight });
+          console.log(`  ✗ ${name} spends ${m.pinnedHeight}px of ${m.room}px on fixed furniture`);
+          for (const el of m.pinned) console.log(`      ${el.what}  ${el.height}px ${el.position}`);
+        }
+        if (m.trapped.length) {
+          bad++;
+          problems.push({ width: w, screen: name, kind: 'trapped', who: m.trapped });
+          console.log(`  ✗ ${name} has a panel taller than the window that cannot scroll`);
+          for (const el of m.trapped) {
+            console.log(`      ${el.what}  ${el.height}px in ${el.room}px  "${el.text}"`);
+          }
+        }
       }
+
+      // ── The overlays ────────────────────────────────────────────────
+      //
+      // MEASURED SEPARATELY BECAUSE THEY DO NOT EXIST UNTIL SOMEBODY OPENS
+      // THEM, and they are the thing a short screen actually breaks. A panel
+      // sized in vh is fine at 844px tall and half the window at 390px; one
+      // that cannot scroll itself has its Confirm button below the fold, and
+      // a dialog that cannot be confirmed is worse than no dialog.
+      //
+      // The find box is the tallest overlay in the app and the one sized in
+      // vh, so it is the one worth walking to on every screen size.
+      await page.goto(`${BASE}/today`, { waitUntil: 'networkidle' }).catch(() => {});
+      await page.waitForSelector('.find-open', { timeout: 20000 }).catch(() => {});
+      await page.click('.find-open').catch(() => {});
+      await page.waitForSelector('.find-input', { timeout: 10000 }).catch(() => {});
+      // Something in it, so it is at its tallest rather than empty.
+      await page.fill('.find-input', 'a').catch(() => {});
+      await page.waitForTimeout(500);
+      const o = await page.evaluate(MEASURE);
+      if (o.trapped.length) {
+        bad++;
+        problems.push({ width: w, screen: 'Find box', kind: 'trapped', who: o.trapped });
+        console.log('  ✗ the find box is taller than the window and cannot scroll');
+        for (const el of o.trapped) console.log(`      ${el.what}  ${el.height}px in ${el.room}px`);
+      }
+      if (o.overflow > 1) {
+        bad++;
+        problems.push({ width: w, screen: 'Find box', kind: 'sideways', by: o.overflow });
+        console.log(`  ✗ the find box scrolls the page sideways by ${o.overflow}px`);
+      }
+      // The box exists at all — otherwise the two checks above are measuring
+      // an empty screen and passing for it.
+      const boxes = await page.locator('.find-box').count();
+      ok(`the find box opens at ${w}x${h}`, boxes === 1, `${boxes} boxes`);
 
       ok(`nothing overflows at ${w}px`, bad === 0, `${bad} screens`);
       await ctx.close();

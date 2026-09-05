@@ -898,7 +898,12 @@ textarea { resize: vertical; min-height: 70px; }
   top: 0;
   z-index: 20;
 }
-.app-header-title { flex: 1; min-width: 0; }
+/* A FLOOR, NOT A BASIS OF ZERO. `flex: 1` is `flex: 1 1 0%`, which lets this
+   shrink to nothing before the row wraps — so with enough buttons beside it
+   the title is measured at 0px and paints out of its own box across them.
+   Asking for 7rem and refusing to go below it makes the ACTIONS wrap instead,
+   which is the right thing to move. */
+.app-header-title { flex: 1 1 7rem; min-width: 7rem; }
 .app-header h1 { font-size: 1.25rem; margin: 0; }
 .app-header-sub { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted); }
 .app-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -3640,8 +3645,11 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
   .find-open-word { display: none; }
 }
 /* And the row itself may wrap rather than push, so no future verb on a page
-   can do the same thing again. */
-.app-header { flex-wrap: wrap; }
+   can do the same thing again. Paired with the title's 7rem floor above —
+   wrapping without it is what let the title crush to nothing at widths
+   between the phone rule's 760px and about 900px, which is exactly where a
+   phone held sideways sits. */
+.app-header { flex-wrap: wrap; row-gap: 10px; }
 
 .find-veil {
   position: fixed;
