@@ -371,10 +371,11 @@ const IDS = SOURCES.map((s) => s.id);
 async function run(q, ctx) {
   const clean = String(q || '').trim();
   if (clean.length < MIN_TERM) {
-    return { term: clean, groups: [], total: 0, tooShort: true };
+    return { term: clean, groups: [], total: 0, failed: [], tooShort: true };
   }
 
   const groups = [];
+  const failed = [];
   let total = 0;
   for (const source of SOURCES) {
     let hits = [];
@@ -382,6 +383,13 @@ async function run(q, ctx) {
       hits = await source.find({ ...ctx, q: clean });
     } catch (err) {
       hits = [];
+      // REPORTED, NOT ONLY LOGGED. Swallowing keeps one broken source from
+      // taking down the whole answer, which is right — but a source that
+      // silently contributes nothing is indistinguishable from a source with
+      // nothing to contribute, and that is how a query broken by a renamed
+      // column goes unnoticed for a month. A search that has quietly stopped
+      // asking the vault is worse than one that says it could not.
+      failed.push(source.id);
       console.error(`search: ${source.id} failed — ${err.message}`);
     }
     if (hits.length) {
@@ -389,7 +397,7 @@ async function run(q, ctx) {
       total += hits.length;
     }
   }
-  return { term: clean, groups, total, tooShort: false };
+  return { term: clean, groups, total, failed, tooShort: false };
 }
 
 module.exports = { SOURCES, IDS, MIN_TERM, PER_SOURCE, run, snippet };

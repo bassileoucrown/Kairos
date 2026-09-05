@@ -355,6 +355,28 @@ const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10
     ok('the check itself can spot an invented route',
       !resolves('/trips/abc123') && resolves('/trips'), 'the route checker is not checking');
 
+    // ---- No source is quietly broken ---------------------------------------
+    //
+    // run() catches a source that throws, so one broken query cannot take down
+    // the whole answer. That is right and it is also how a query broken by a
+    // renamed column goes unnoticed: a source contributing nothing looks
+    // exactly like a source with nothing to contribute. Both column mistakes
+    // in the first version of this register — contacts.company and
+    // kept_items.created_at — were invisible for that reason until the
+    // assertions that happened to cover them went red.
+    head('Nothing is failing quietly:');
+    r = await boss('GET', `/search/${me.id}?q=a`);
+    ok('a short query reports no failures', (r.d.failed || []).length === 0,
+      JSON.stringify(r.d.failed));
+    for (const word of ['passport', 'geneva', 'the', 'scan']) {
+      r = await boss('GET', `/search/${me.id}?q=${word}`);
+      ok(`every source answers for "${word}" without throwing`,
+        (r.d.failed || []).length === 0, JSON.stringify(r.d.failed));
+    }
+    // And from a viewer with a narrower remit, which takes different branches.
+    r = await del('GET', `/search/${me.id}?q=passport`);
+    ok('and for a delegate too', (r.d.failed || []).length === 0, JSON.stringify(r.d.failed));
+
     // ---- The shape of the answer -------------------------------------------
     head('And the box behaves like a box:');
     r = await boss('GET', `/search/${me.id}?q=p`);
