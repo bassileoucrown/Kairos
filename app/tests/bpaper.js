@@ -27,6 +27,7 @@ const ROOT = require('path').join(__dirname, '..', '..');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
+const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4671, BASE = `http://127.0.0.1:${PORT}`;
 const BARE = 4672, BAREBASE = `http://127.0.0.1:${BARE}`;
@@ -139,6 +140,7 @@ async function signUp(call, name, email, category, handle) {
   // database is locked" and a suite that waits thirty seconds for a retry it
   // did not need. Serialising costs a second and removes the contention.
   let bare = null;
+  let browser = null;
   const ready = async (base) => {
     const deadline = Date.now() + 150000;
     for (;;) {
@@ -379,10 +381,83 @@ async function signUp(call, name, email, category, handle) {
     ok('and attaching refuses with 503 rather than pretending', r.s === 503,
       `${r.s} ${r.d?.error || ''}`);
 
+    // ---- The screen -------------------------------------------------------
+    //
+    // Everything above would pass with no control anywhere in the client. This
+    // half walks the vault the way a principal does.
+    //
+    // AND IT MEASURES THE COLUMN. The first version of this list was a third
+    // flex child of the entry row rather than part of it, and a filename
+    // claimed its content width — .ess-main yields, because it is allowed to,
+    // and a passport number rendered one character per line down the page.
+    // Both boards were green through all of it: nothing asserts on width, so
+    // nothing noticed. A rendered box is the only thing that would have.
+    head('The vault offers it, and the entry it belongs to is still readable:');
+    browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+    });
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 1200 } }))
+      .newPage();
+    const threw = [];
+    page.on('pageerror', (e) => threw.push(e.message));
+
+    await page.goto(`${BASE}/login`);
+    await page.fill('input[type=email]', `ada${ID}@x.com`);
+    await page.fill('input[type=password]', PW);
+    await page.click('button[type=submit]');
+    await page.waitForSelector('nav', { timeout: 20000 });
+    await page.goto(`${BASE}/dashboard?tab=essentials`);
+    await page.waitForSelector('.ess-docs', { timeout: 20000 });
+
+    ok('every entry offers the control, by name',
+      (await page.locator('.ess-attach:has-text("Attach a document")').count()) >= 2,
+      String(await page.locator('.ess-attach').count()));
+    ok('and it is a real file picker rather than a placeholder',
+      (await page.locator('.ess-attach input[type=file]').count()) >= 2
+      && (await page.locator('.btn.is-soon:has-text("Attach")').count()) === 0,
+      `${await page.locator('.ess-attach input[type=file]').count()} inputs, `
+      + `${await page.locator('.btn.is-soon:has-text("Attach")').count()} placeholders`);
+    ok('the accepted formats are named on the screen, not discovered by failing',
+      /Word document/.test(await page.locator('.ess-uploads').innerText()),
+      await page.locator('.ess-uploads').innerText());
+
+    // THE COLLAPSED-COLUMN ASSERTION. A masked passport number is about
+    // 90px wide; the broken version was under 20 and ran down the page.
+    const box = await page.locator('.ess-value').first().boundingBox();
+    ok('the entry\'s own value is not crushed into a column of single letters',
+      box && box.width > 120, JSON.stringify(box));
+    ok('and its height is one or two lines, not forty',
+      box && box.height < 80, JSON.stringify(box));
+    ok('with the page not running off the side',
+      !(await page.evaluate(() =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)));
+
+    // The flag, on the screen this time. TWO badges and not more: the two
+    // documents the ratchet caught on an ordinary field, and nothing else. A
+    // badge on every document in a vault of sensitive things would say nothing
+    // at all, so "how many" is the assertion, not "at least one".
+    const flagged = await page.locator('.ess-docs li', { has: page.locator('.pill.is-warn') })
+      .allInnerTexts();
+    ok('the badge is on the two documents that earned it and no others',
+      flagged.length === 2, JSON.stringify(flagged));
+    ok('the passport filed under the ordinary field',
+      flagged.some((t) => /passport-scan\.pdf/.test(t)), JSON.stringify(flagged));
+    ok('and the note whose contents gave it away',
+      flagged.some((t) => /reference\.txt/.test(t)), JSON.stringify(flagged));
+    // POSITIVE CONTROL: the ordinary document on that same entry is on the
+    // screen and unbadged, so the two above are the ratchet rather than a
+    // badge on everything.
+    const plain = await page.locator('.ess-docs li', { hasText: 'floor-plan.pdf' }).innerText();
+    ok('while the genuinely ordinary one beside them carries no badge',
+      !/Sensitive/i.test(plain), plain);
+
+    ok('nothing threw while the vault was on screen', threw.length === 0, JSON.stringify(threw));
+
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));
   } finally {
+    if (browser) await browser.close();
     proc.kill();
     if (bare) bare.kill();
     store.server.close();

@@ -274,11 +274,17 @@ export default function EssentialsTab({ ownerId }) {
         )}
       </div>
 
-      {/* Said plainly rather than left to be discovered. Someone holding a
-          passport expects to be able to photograph it, and finding out only
-          after they have looked for the button is worse than being told. */}
+      {/* Said plainly rather than left to be discovered, in both directions.
+          Somebody holding a passport expects to be able to photograph it, and
+          finding out only after hunting for the button is worse than being
+          told — but the same is true once it works, because the accepted list
+          has refusals in it and discovering those by failing is no better. */}
       <p className="hint ess-uploads">
-        Details only for now — uploading a scan or photograph of a document isn't available yet.
+        {data.documentsAvailable
+          ? `Attach the document behind a detail — ${formats.map((f) => f.label).join(', ')}.`
+            + ' It is encrypted before it leaves the server, and opening one is recorded.'
+          : 'Details only for now — uploading a scan or photograph of a document '
+            + "isn't available yet."}
       </p>
 
       {adding && (
@@ -384,10 +390,16 @@ export default function EssentialsTab({ ownerId }) {
                     </span>
                   )}
                 </div>
-              </div>
+
               {/* What is attached, and what it would cost to open. Filenames
                   and sizes only — the bytes are behind the same gate as the
-                  number above them. */}
+                  number above them.
+                  INSIDE .ess-main, NOT BESIDE IT. The row is a flex line of
+                  two columns, and a third one holding a filename claims its
+                  content width — .ess-main has min-width:0 so it yields, and
+                  what that produced was a passport number rendered one
+                  character per line. The documents belong to the entry, so
+                  they belong in the entry's own column. */}
               {(e.documents || []).length > 0 && (
                 <ul className="ess-docs">
                   {e.documents.map((doc) => (
@@ -412,6 +424,7 @@ export default function EssentialsTab({ ownerId }) {
                   ))}
                 </ul>
               )}
+              </div>
 
               <div className="ess-buttons">
                 {e.masked && !revealed[e.id] && (
