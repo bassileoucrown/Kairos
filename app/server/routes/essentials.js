@@ -9,6 +9,7 @@ const { encrypt, decrypt, mask, isConfigured } = require('../lib/secretBox');
 const { CATEGORIES, findField, canSee, expiryState, daysUntil } = require('../lib/essentials');
 const { limit, clientIp } = require('../lib/rateLimit');
 const { verifyStepUp, factorFor } = require('../lib/stepUp');
+const documents = require('../lib/documents');
 
 // The essentials of a person: passport, preferences, policies, sizes.
 //
@@ -110,6 +111,27 @@ router.get('/catalogue', async (req, res) => {
   res.json({ categories: CATEGORIES, encryptionConfigured: isConfigured() });
 });
 
+/**
+ * What may be attached as a document, and what may not.
+ *
+ * ABOVE THE /:ownerId ROUTES ON PURPOSE — a literal path and a parameter of
+ * the same shape are decided by which was declared first, and `/formats`
+ * declared after them is a principal whose id is "formats".
+ *
+ * The refusals are served alongside the acceptances rather than kept for an
+ * error, so a screen can say what will not go in before somebody spends a
+ * minute choosing a file that was never going to be taken.
+ */
+router.get('/formats', async (req, res) => {
+  res.json({
+    accepted: documents.offered(),
+    refused: documents.notOffered(),
+    maxBytes: documents.MAX_BYTES,
+    available: documents.isAvailable(),
+    unavailable: documents.isAvailable() ? '' : documents.UNAVAILABLE,
+  });
+});
+
 router.get('/:ownerId', requirePaAccess, notWhileHeld, async (req, res) => {
   const ctx = viewerContext(req);
   const rows = await db.prepare(
@@ -121,14 +143,30 @@ router.get('/:ownerId', requirePaAccess, notWhileHeld, async (req, res) => {
   // rather than 403.
   const visible = rows.filter((r) => canSee(r.sensitivity, ctx));
 
+  // WHAT IS ATTACHED, NOT WHAT IS IN IT. These are filenames and sizes; the
+  // bytes cost a second factor and come from their own endpoint. Filtered
+  // again on the document's own sensitivity, because a scan can be stricter
+  // than the entry it hangs on — see flagFor in lib/documents.js.
+  const attached = new Map();
+  if (visible.length) {
+    for (const r of visible) {
+      const docs = (await documents.forEssential(r.id))
+        .filter((d) => canSee(d.sensitivity, ctx));
+      if (docs.length) attached.set(r.id, docs);
+    }
+  }
+
   res.json({
     principal: { id: req.principal.id, name: req.principal.name },
     canSeeSensitive: canSee('sensitive', ctx),
     encryptionConfigured: isConfigured(),
+    // Said once for the whole screen rather than per entry: whether this
+    // deployment can hold a file at all.
+    documentsAvailable: documents.isAvailable(),
     // What a reveal will cost, so the screen asks for the right thing rather
     // than prompting for a password and then discovering it wanted a code.
     stepUpFactor: await factorFor(req.user.id),
-    essentials: visible.map((r) => serialize(r)),
+    essentials: visible.map((r) => ({ ...serialize(r), documents: attached.get(r.id) || [] })),
     // Said here so the live list can offer the way through to them. A count
     // rather than the rows: an archived document is still a passport number,
     // and shipping every one of them to a screen that only wants to say
@@ -471,6 +509,195 @@ router.delete('/:ownerId/:id', requirePaAccess, notWhileHeld, async (req, res) =
   if (!row || !canSee(row.sensitivity, ctx)) return res.status(404).json({ error: 'Not found.' });
 
   await db.prepare('DELETE FROM essentials WHERE id = ?').run(row.id);
+  await logAccess({
+    actorId: req.user.id, ownerId: req.principal.id, essentialId: row.id,
+    action: 'delete', field: row.field,
+  });
+  res.status(204).end();
+});
+
+// ============================================================
+// Documents
+// ============================================================
+//
+// The file behind the field. Everything above this line is about values a
+// person types; this is about the passport page itself.
+//
+// IT HANGS ON AN ESSENTIAL, ALWAYS, and that is what makes it safe rather than
+// what makes it tidy. The entry it hangs on has already decided who may see
+// it, that opening it costs a second factor, and that opening it is written to
+// the trail the principal reads. A document endpoint that answered those
+// questions for itself would be a second copy of the vault's rule — and the
+// copy that drifts is the one that hands somebody a passport.
+//
+// So there is exactly one new decision here: attaching is filing, and opening
+// is revealing. Attaching costs what creating an entry costs. Opening costs
+// what revealing a number costs, to the letter.
+
+// The upload body skips the global 100 KB parser — see index.js — so this is
+// the ceiling that actually applies at the door. The real cap is enforced in
+// lib/documents.js, which refuses by name and says the size; this only has to
+// be wide enough that a legitimate file reaches that refusal instead of dying
+// here as an unexplained 413.
+const documentJson = express.json({ limit: '25mb' });
+
+/**
+ * A one-time pass to fetch bytes, held for sixty seconds.
+ *
+ * WHY NOT JUST DOWNLOAD IT FROM THE POST. Opening a document costs a second
+ * factor, and a second factor cannot travel in a URL — so the act has to be a
+ * POST. But a browser saves a file properly only from a plain navigation with
+ * the server naming it, which has to be a GET. (The report export learned this
+ * the same way: a blob built in JavaScript often does not save on a phone.)
+ *
+ * So the POST is the act — it takes the factor, writes the trail line, and
+ * hands back a pass — and the GET is the delivery. The pass is single-use, it
+ * is bound to the person and the document, and it dies in a minute, so a URL
+ * that leaks into a history or a log is a URL that no longer opens anything.
+ *
+ * In memory, like the rate limiter: on a restart every outstanding pass is
+ * forgotten, which costs somebody one extra press and cannot fail open.
+ */
+const passes = new Map();
+const PASS_TTL_MS = 60 * 1000;
+
+function issuePass(userId, documentId) {
+  const ticket = crypto.randomBytes(24).toString('base64url');
+  passes.set(ticket, { userId, documentId, expiresAt: Date.now() + PASS_TTL_MS });
+  // Swept opportunistically rather than on a timer, so the process has nothing
+  // running when nobody is using this.
+  for (const [k, v] of passes) if (v.expiresAt < Date.now()) passes.delete(k);
+  return ticket;
+}
+
+function spendPass(ticket, userId, documentId) {
+  const held = passes.get(String(ticket || ''));
+  if (!held) return false;
+  passes.delete(String(ticket || ''));
+  if (held.expiresAt < Date.now()) return false;
+  return held.userId === userId && held.documentId === documentId;
+}
+
+/** The entry a document is being hung on, or null if this viewer has no such entry. */
+async function essentialFor(req) {
+  const row = await db.prepare('SELECT * FROM essentials WHERE id = ? AND owner_id = ?')
+    .get(req.params.id, req.principal.id);
+  if (!row || !canSee(row.sensitivity, viewerContext(req))) return null;
+  return row;
+}
+
+// Attaching is filing, so it costs what filing costs: the same plan gate as an
+// entry, the same access-log line, and no second factor. Handing a document IN
+// gives nothing away — it is taking one out that has to be paid for.
+router.post('/:ownerId/:id/documents', requirePaAccess, notWhileHeld, requirePlan('vault'),
+  documentJson, async (req, res) => {
+    const row = await essentialFor(req);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+
+    const { filename, mimeType, data } = req.body || {};
+    const bytes = Buffer.from(String(data || ''), 'base64');
+
+    const result = await documents.attach({
+      ownerId: req.principal.id,
+      essentialId: row.id,
+      uploadedBy: req.user.id,
+      filename,
+      mimeType,
+      bytes,
+      fieldSensitivity: row.sensitivity,
+      label: row.label,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error, code: result.code });
+    }
+
+    await logAccess({
+      actorId: req.user.id, ownerId: req.principal.id, essentialId: row.id,
+      action: 'create', field: row.field,
+    });
+    res.status(201).json({ document: result.document });
+  });
+
+// Opening one is a reveal in every sense — it is the document, not a mask of
+// it — so it is gated identically: the second factor, the same limiter, and a
+// line in the trail naming who opened what.
+router.post('/:ownerId/:id/documents/:docId/open', requirePaAccess, notWhileHeld, revealLimiter,
+  async (req, res) => {
+    const row = await essentialFor(req);
+    if (!row) return res.status(404).json({ error: 'Not found.' });
+
+    const doc = await db.prepare('SELECT * FROM documents WHERE id = ? AND essential_id = ?')
+      .get(req.params.docId, row.id);
+    // A DOCUMENT CAN BE STRICTER THAN THE ENTRY IT HANGS ON. A scan filed
+    // under an ordinary field that is plainly a passport is stored sensitive,
+    // and this is where that costs something — a delegate who can read the
+    // field still cannot open the file.
+    if (!doc || !canSee(doc.sensitivity, viewerContext(req))) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
+
+    const step = await verifyStepUp(req, {
+      code: req.body?.code,
+      password: req.body?.password,
+    });
+    if (!step.ok) return res.status(step.status).json({ error: step.error, needs: step.needs });
+
+    await logAccess({
+      actorId: req.user.id, ownerId: req.principal.id, essentialId: row.id,
+      action: 'reveal', field: row.field,
+    });
+    res.json({ ticket: issuePass(req.user.id, doc.id), expiresInSeconds: PASS_TTL_MS / 1000 });
+  });
+
+// The delivery half. The act was the POST above; this only spends the pass it
+// handed out.
+//
+// SERVED AS AN ATTACHMENT, ALWAYS, with nosniff. Nothing in the accepted list
+// is a document a browser will execute — the ones that are, are refused by
+// name in lib/documents.js — but a store that serves user bytes inline is one
+// bad allow-list entry away from running somebody's script on this origin, and
+// the header costs nothing.
+router.get('/:ownerId/:id/documents/:docId', requirePaAccess, notWhileHeld, async (req, res) => {
+  const row = await essentialFor(req);
+  if (!row) return res.status(404).json({ error: 'Not found.' });
+
+  const doc = await db.prepare('SELECT * FROM documents WHERE id = ? AND essential_id = ?')
+    .get(req.params.docId, row.id);
+  if (!doc || !canSee(doc.sensitivity, viewerContext(req))) {
+    return res.status(404).json({ error: 'Not found.' });
+  }
+  if (!spendPass(req.query.ticket, req.user.id, doc.id)) {
+    return res.status(403).json({
+      error: 'That pass has been used or has run out. Open the document again.',
+      code: 'pass_spent',
+    });
+  }
+
+  const opened = await documents.open(doc.id);
+  if (!opened) {
+    return res.status(500).json({
+      error: 'This document cannot be decrypted — the encryption key has changed since it '
+        + 'was stored.',
+    });
+  }
+  res.set('Content-Type', opened.mimeType || 'application/octet-stream');
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Content-Disposition',
+    `attachment; filename="${opened.filename.replace(/[^A-Za-z0-9._-]+/g, '-')}"`);
+  res.send(opened.bytes);
+});
+
+router.delete('/:ownerId/:id/documents/:docId', requirePaAccess, notWhileHeld, async (req, res) => {
+  const row = await essentialFor(req);
+  if (!row) return res.status(404).json({ error: 'Not found.' });
+
+  const doc = await db.prepare('SELECT * FROM documents WHERE id = ? AND essential_id = ?')
+    .get(req.params.docId, row.id);
+  if (!doc || !canSee(doc.sensitivity, viewerContext(req))) {
+    return res.status(404).json({ error: 'Not found.' });
+  }
+
+  await documents.remove(doc.id);
   await logAccess({
     actorId: req.user.id, ownerId: req.principal.id, essentialId: row.id,
     action: 'delete', field: row.field,

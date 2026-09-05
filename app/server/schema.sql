@@ -1757,3 +1757,47 @@ CREATE TABLE IF NOT EXISTS booking_recordings (
 );
 CREATE INDEX IF NOT EXISTS idx_booking_recordings ON booking_recordings(booking_id);
 CREATE INDEX IF NOT EXISTS idx_booking_recordings_expiry ON booking_recordings(expires_at);
+
+-- ============================================================
+-- Documents
+-- ============================================================
+
+-- The file itself, when the number alone is not enough.
+--
+-- ALWAYS HUNG ON AN ESSENTIAL. A document does not float: it is the passport
+-- page behind the passport number, the policy behind the policy number. That
+-- is not tidiness — it is where the access rule comes from. The entry it hangs
+-- on has already decided who may see it, whether opening it costs a second
+-- factor, and whether the opening is written to the custody trail, and those
+-- three answers were hard enough to arrive at once. A documents table with its
+-- own owner_id and its own idea of who may read it would be a second copy of
+-- that rule, and the copy that drifts is the one that hands somebody a
+-- passport.
+--
+-- `sensitivity` is stored rather than read through the join, because it can be
+-- STRICTER than the field's. See flagFor in lib/documents.js: a scan filed
+-- under an ordinary field that is plainly an identity document is filed as
+-- sensitive, and that decision has to survive on the row rather than being
+-- recomputed from a filename every time somebody lists the vault.
+--
+-- The bytes are not here and never will be. object_key points into the store;
+-- what is at that key is already encrypted before it leaves the process.
+CREATE TABLE IF NOT EXISTS documents (
+  id           TEXT PRIMARY KEY,
+  owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  essential_id TEXT NOT NULL REFERENCES essentials(id) ON DELETE CASCADE,
+  object_key   TEXT,
+  format       TEXT NOT NULL DEFAULT '',
+  mime_type    TEXT NOT NULL DEFAULT '',
+  filename     TEXT NOT NULL DEFAULT '',
+  bytes        INTEGER NOT NULL DEFAULT 0,
+  sensitivity  TEXT NOT NULL DEFAULT 'sensitive',
+  -- 'field', 'name' or 'contents': which of the three decided the line above.
+  -- Kept so the screen can say WHY something was filed as sensitive when it
+  -- was not the field's doing, and so a wrong guess can be found later.
+  flagged_by   TEXT NOT NULL DEFAULT 'field',
+  uploaded_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_documents_essential ON documents(essential_id);
+CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents(owner_id);

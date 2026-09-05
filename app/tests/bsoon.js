@@ -131,8 +131,10 @@ async function ready(base) {
     head('The vault:');
     await p.goto(`${BASE}/dashboard?tab=essentials`);
     await p.waitForSelector('.btn.is-soon', { timeout: 15000 });
-    ok('offers attaching a scan, by name',
-      (await p.locator('.btn.is-soon:has-text("Attach a scan")').count()) === 1);
+    // Named for what it takes, which is no longer only a scan: a Word letter
+    // and a board pack go in through the same control.
+    ok('offers attaching a document, by name',
+      (await p.locator('.btn.is-soon:has-text("Attach a document")').count()) === 1);
 
     head('Concierge:');
     await p.goto(`${BASE}/concierge`);

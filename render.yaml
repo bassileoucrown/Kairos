@@ -123,6 +123,38 @@ services:
       # are refused, with an explanation.
       - key: ENCRYPTION_KEY
         sync: false
+      # Where a document is kept, once somebody attaches the passport page and
+      # not only the number. Five variables, all five needed — see
+      # server/lib/objectStore.js for why listing fewer would have an operator
+      # set them and then read "not configured".
+      #
+      # Any S3-compatible store: Cloudflare R2, Backblaze B2, DigitalOcean
+      # Spaces, AWS S3, or MinIO on your own hardware. The endpoint is the
+      # bucket's own host with no bucket name on the end, for example
+      #   https://<account>.r2.cloudflarestorage.com
+      # Region is what the provider calls it; R2 wants us-east-1 whatever it
+      # says elsewhere, because that is what its signatures expect.
+      #
+      # MAKE THE BUCKET PRIVATE. Kairos never generates a public URL and
+      # everything it puts there is already encrypted with ENCRYPTION_KEY
+      # before it leaves the server, so a leaked object is ciphertext — but a
+      # public bucket is still a list of how many documents each principal
+      # has, and that is worth nothing to anybody but an attacker.
+      #
+      # Until all five and ENCRYPTION_KEY are set, the vault says "Attach a
+      # document — needs STORAGE_BUCKET, STORAGE_KEY, ENCRYPTION_KEY" and
+      # refuses uploads with that sentence. Set them and the control appears
+      # by itself; nothing else has to change.
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_REGION
+        sync: false
+      - key: STORAGE_KEY
+        sync: false
+      - key: STORAGE_SECRET
+        sync: false
       # Comma-separated email addresses allowed to publish notices to everyone.
       #
       # Deliberately here rather than a column on users: there is no request

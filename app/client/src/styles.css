@@ -1270,6 +1270,32 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
    with three verbs and spilled 18px the moment Archive became the fourth.
    Letting it shrink is what lets it wrap; nothing on .ess-row needed to change. */
 .ess-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* What is attached to an entry. A list rather than a row of chips, because a
+   filename is long and a passport scan sitting beside a hotel confirmation
+   should read as two things and not as one run-on line. */
+.ess-docs { list-style: none; margin: 8px 0 0; padding: 0; }
+.ess-docs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+.ess-docs li:first-child { border-top: none; }
+/* The file picker cannot be styled and a button cannot open one, so the label
+   IS the button and the input is hidden inside it. Not display:none — a
+   hidden-by-display input is skipped by some assistive technology and by
+   Safari's own keyboard handling; this keeps it focusable and invisible. */
+.ess-attach { cursor: pointer; }
+.ess-attach input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
 .ess-secret {
   background: var(--bg);
   border: 1px solid var(--border);

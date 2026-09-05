@@ -342,10 +342,14 @@ const GUIDE = {
     does: 'The details an assistant is asked for constantly — passport numbers, air miles, seat preferences.',
     how: [
       'Add one detail. It is encrypted before it is stored.',
+      'Attach the document behind it — PDF, a photograph, or a Word file. It is sealed '
+        + 'before it leaves the server.',
       'Grant a specific person access to a specific kind of detail, not to all of it.',
-      'Opening this asks for the principal\'s code, every time.',
+      'Opening a detail or a document asks for the principal\'s code, every time.',
     ],
-    note: 'AI never reads or writes here, under any instruction. The vault is off limits to it entirely.',
+    note: 'AI never reads or writes here, under any instruction. The vault is off limits to it '
+      + 'entirely. A document that looks like an identity paper is filed as sensitive even when '
+      + 'the field it was attached to is not.',
     screen: 'vault',
   },
   settings: {

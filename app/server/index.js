@@ -63,7 +63,7 @@ const PORT = process.env.PORT || 4000;
 
 app.disable('x-powered-by');
 
-// 100 KB everywhere, and one exception that has to be carved out here rather
+// 100 KB everywhere, and two exceptions that have to be carved out here rather
 // than at the route.
 //
 // A voice note is a recording inside a JSON body, and no recording fits in
@@ -72,9 +72,20 @@ app.disable('x-powered-by');
 // as a 500 on any note longer than a few seconds. So the voice paths skip the
 // global parser and declare their own ceiling, and every other endpoint keeps
 // the tight limit that stops an ordinary JSON route being handed megabytes.
+//
+// A document is the same shape of problem and now the larger one: the cap is
+// 15 MB of file, which is about 20 MB once base64 has swollen it. The route's
+// own ceiling is what actually holds — see lib/documents.js — and this only
+// has to be wide enough to let a legitimate upload reach it. A file over the
+// real cap is refused there, by name and with a reason, rather than dying here
+// as an unexplained 413.
 const standardJson = express.json({ limit: '100kb' });
+const BIG_BODY = [
+  /^\/api\/threads\/[^/]+\/voice$/,
+  /^\/api\/essentials\/[^/]+\/[^/]+\/documents$/,
+];
 app.use((req, res, next) => {
-  if (req.method === 'POST' && /^\/api\/threads\/[^/]+\/voice$/.test(req.path)) return next();
+  if (req.method === 'POST' && BIG_BODY.some((re) => re.test(req.path))) return next();
   return standardJson(req, res, next);
 });
 

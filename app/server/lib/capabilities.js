@@ -105,15 +105,23 @@ function build() {
   });
 
   // ---- The vault -----------------------------------------------------
+  // BUILT, AND WAITING ON A BUCKET. It was 'soon' while there was no code
+  // behind the button; there is now — see lib/documents.js and the document
+  // handlers in routes/essentials.js — so this is a deployment that is missing
+  // something specific rather than work that has not been done. The two states
+  // are different promises to whoever reads them, and leaving this as 'soon'
+  // would ask an operator to wait for something already sitting in front of
+  // them.
   add({
     id: 'document_scans',
-    control: 'Attach a scan',
+    control: 'Attach a document',
     screen: 'vault',
-    label: 'Attach a scan',
-    what: 'The passport page itself, encrypted, when the number alone is not enough.',
+    label: 'Attach a document',
+    what: 'The passport page itself — PDF, photograph or Word — encrypted, when the number '
+      + 'alone is not enough.',
     available: connectors.isConfigured('storage') && encryptionConfigured(),
-    needs: ['STORAGE_BUCKET', 'STORAGE_KEY'],
-    state: 'soon',
+    needs: ['STORAGE_BUCKET', 'STORAGE_KEY', 'ENCRYPTION_KEY'],
+    state: 'needs_key',
   });
 
   // ---- The direct line -----------------------------------------------

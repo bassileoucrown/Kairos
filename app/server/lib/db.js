@@ -206,6 +206,25 @@ if (USE_PG && CONFIG_ERROR) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const sqlite = new DatabaseSync(path.join(DATA_DIR, 'kairos.sqlite'));
   sqlite.exec('PRAGMA foreign_keys = ON;');
+  // WAIT FOR A LOCK RATHER THAN THROWING AT ONE.
+  //
+  // SQLite's default is to give up the instant the file is held by somebody
+  // else, and what that produces is "database is locked" thrown out of an
+  // ordinary read — a session lookup, in the case that found this — while the
+  // other holder is doing something that takes milliseconds.
+  //
+  // It surfaced when the schema grew: two servers sharing one file is a thing
+  // several suites do deliberately (a deployment with a credential beside one
+  // without), and the second server applying the schema is a write lock the
+  // first one's reads can land in the middle of. Adding a table lengthened
+  // that window enough to tip it over, which is the tell that the window was
+  // always the problem rather than the table.
+  //
+  // Five seconds, which is forever for a schema that takes tens of
+  // milliseconds and still bounded, so a genuine deadlock fails rather than
+  // hanging the request. Postgres has no equivalent line because it does not
+  // have this behaviour: it is the one-file backend that needs telling.
+  sqlite.exec('PRAGMA busy_timeout = 5000;');
 
   // Wrapped in promises so the calling code is identical to the Postgres path
   // — the whole point of the adapter.

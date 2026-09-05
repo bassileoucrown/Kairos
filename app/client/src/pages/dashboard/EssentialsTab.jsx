@@ -69,6 +69,7 @@ export default function EssentialsTab({ ownerId }) {
   const [ask, askDialog] = useAsk();
   const [data, setData] = useState(null);
   const [catalogue, setCatalogue] = useState([]);
+  const [formats, setFormats] = useState([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [revealed, setRevealed] = useState({});
@@ -94,6 +95,10 @@ export default function EssentialsTab({ ownerId }) {
     if (!ownerId) return;
     load();
     api.get('/essentials/catalogue').then((d) => setCatalogue(d.categories)).catch(() => {});
+    // The accepted list comes from the server so the file picker and the door
+    // can never disagree — a picker that offers .doc and a server that refuses
+    // it is a rule discovered by failing.
+    api.get('/essentials/formats').then((d) => setFormats(d.accepted || [])).catch(() => {});
   }, [ownerId]);
 
   // Asks for whatever the server says this account's second gate costs — a
@@ -115,6 +120,63 @@ export default function EssentialsTab({ ownerId }) {
     try {
       const d = await api.post(`/essentials/${ownerId}/${id}/reveal`, stepUpBody(data?.stepUpFactor, answer));
       setRevealed((r) => ({ ...r, [id]: d.essential.value }));
+    } catch (err) { setError(err.message); }
+  }
+
+  // ---- Documents --------------------------------------------------------
+  //
+  // ATTACHING IS FILING; OPENING IS REVEALING. That is the whole shape of it
+  // on this screen too — putting a passport page in costs nothing beyond
+  // choosing it, and taking one out costs exactly what the number beside it
+  // costs, down to the same prompt and the same line in the principal's trail.
+  //
+  // THE DOWNLOAD IS A PLAIN NAVIGATION, not a blob built here. The server
+  // names the file and sends it as an attachment, which is the only version of
+  // this that reliably saves on a phone — the report export learned the same
+  // lesson. The second factor cannot travel in a URL, so the act is a POST
+  // that hands back a one-time pass and the navigation spends it.
+  async function attach(essentialId, file) {
+    setError('');
+    if (!file) return;
+    try {
+      const data64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('That file could not be read.'));
+        // The result is a data: URL; the payload is after the comma.
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.readAsDataURL(file);
+      });
+      const d = await api.post(`/essentials/${ownerId}/${essentialId}/documents`, {
+        filename: file.name, mimeType: file.type, data: data64,
+      });
+      setNotice(d.document.flagNote
+        ? `${d.document.filename} attached. ${d.document.flagNote}`
+        : `${d.document.filename} attached.`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function openDocument(essentialId, doc) {
+    setError('');
+    const at = `/essentials/${ownerId}/${essentialId}/documents/${doc.id}`;
+    let pass = null;
+    try {
+      pass = await api.post(`${at}/open`, {});
+    } catch (err) {
+      if (err.status !== 401) { setError(err.message); return; }
+      const answer = await ask(stepUpAsk(data?.stepUpFactor, `open ${doc.filename}`));
+      if (!answer) return;
+      try { pass = await api.post(`${at}/open`, stepUpBody(data?.stepUpFactor, answer)); }
+      catch (err2) { setError(err2.message); return; }
+    }
+    window.location.assign(`/api${at}?ticket=${encodeURIComponent(pass.ticket)}`);
+  }
+
+  async function removeDocument(essentialId, doc) {
+    if (!window.confirm(`Delete ${doc.filename} permanently?`)) return;
+    try {
+      await api.del(`/essentials/${ownerId}/${essentialId}/documents/${doc.id}`);
+      load();
     } catch (err) { setError(err.message); }
   }
 
@@ -323,9 +385,55 @@ export default function EssentialsTab({ ownerId }) {
                   )}
                 </div>
               </div>
+              {/* What is attached, and what it would cost to open. Filenames
+                  and sizes only — the bytes are behind the same gate as the
+                  number above them. */}
+              {(e.documents || []).length > 0 && (
+                <ul className="ess-docs">
+                  {e.documents.map((doc) => (
+                    <li key={doc.id}>
+                      <button className="btn btn-sm" type="button"
+                        onClick={() => openDocument(e.id, doc)}>
+                        Open {doc.filename}
+                      </button>
+                      <span className="hint">
+                        {doc.formatLabel} · {Math.max(1, Math.round(doc.bytes / 1024))} KB
+                        {doc.sensitivity === 'sensitive' ? ' · opening is recorded' : ''}
+                      </span>
+                      {/* Only when something other than the field decided it —
+                          a badge on every document in a vault of sensitive
+                          things says nothing at all. */}
+                      {doc.flagNote && <span className="pill is-warn">Sensitive</span>}
+                      <button className="btn btn-danger btn-sm" type="button"
+                        onClick={() => removeDocument(e.id, doc)}>
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="ess-buttons">
                 {e.masked && !revealed[e.id] && (
                   <button className="btn btn-sm" type="button" onClick={() => reveal(e.id)}>Reveal</button>
+                )}
+                {/* A label rather than a button, because a file input cannot be
+                    styled and a button cannot open a file picker. The input is
+                    the control; this is its face. */}
+                {data.documentsAvailable && (
+                  <label className="btn btn-sm ess-attach">
+                    Attach a document
+                    <input
+                      type="file"
+                      accept={formats.map((f) => f.accept).join(',')}
+                      onChange={(ev) => {
+                        const file = ev.target.files?.[0];
+                        // Cleared so choosing the same file twice still fires.
+                        ev.target.value = '';
+                        attach(e.id, file);
+                      }}
+                    />
+                  </label>
                 )}
                 <button className="btn btn-sm" type="button" onClick={() => confirmStill(e.id)}>
                   Still correct
