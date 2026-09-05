@@ -26,8 +26,14 @@ function parseRoles(csv) {
 
 // Only a Chief of Staff can hand out and withdraw other assistants' access —
 // the single genuinely hierarchical capability among the assistant roles.
-function roleCanDelegate(accountCategory) {
-  return accountCategory === 'chief_of_staff';
+//
+// TAKES THE APPOINTMENT, not the self-description. The two share a vocabulary
+// ('pa', 'ea', 'chief_of_staff'), which is what let the wrong one be passed in
+// for as long as it was: `memberships.role` is what the principal decided and
+// `users.account_category` is what somebody typed at signup. Only the first
+// should ever reach this.
+function roleCanDelegate(membershipRole) {
+  return membershipRole === 'chief_of_staff';
 }
 
 async function getSpace(spaceId) {
@@ -205,10 +211,22 @@ async function applyRoleDefaults(space) {
   // The existing principal<->assistant relationship (memberships) is what
   // makes someone an assistant at all; space_members is the per-space grant
   // layered on top of it.
+  //
+  // FILTERED ON THE MEMBERSHIP ROLE, NOT ON account_category. Those look
+  // interchangeable and are not: `memberships.role` is what the PRINCIPAL
+  // appointed somebody as, and `users.account_category` is what that person
+  // typed about themselves at signup, verified by nobody.
+  //
+  // Reading the wrong one meant somebody invited as a delegate — scheduling
+  // only — who had described themselves as "PA" was auto-added to every Work
+  // space the principal created, and so could read every room in it. That is
+  // the same defect as the one invites.js carried, in a second place: an
+  // unverified self-description deciding access the principal thought they had
+  // decided. The default string ('pa,ea,chief_of_staff') is unchanged and
+  // means what it always read as — those three appointments in, delegate out.
   const assistants = await db.prepare(`
-    SELECT u.id, u.account_category
+    SELECT m.member_user_id AS id, m.role
     FROM memberships m
-    JOIN users u ON u.id = m.member_user_id
     WHERE m.owner_id = ? AND m.status = 'active' AND m.member_user_id IS NOT NULL
   `).all(space.owner_id);
 
@@ -222,10 +240,10 @@ async function applyRoleDefaults(space) {
 
   let added = 0;
   for (const a of assistants) {
-    if (!roles.includes(a.account_category)) continue;
+    if (!roles.includes(a.role)) continue;
     await insert.run(
       crypto.randomUUID(), space.id, a.id,
-      roleCanDelegate(a.account_category) ? 1 : 0,
+      roleCanDelegate(a.role) ? 1 : 0,
       new Date().toISOString(),
     );
     added += 1;

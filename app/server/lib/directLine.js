@@ -39,10 +39,14 @@ async function ensureDirectLine(principalId) {
   const principal = await db.prepare('SELECT id, name FROM users WHERE id = ?').get(principalId);
   if (!principal) return null;
 
+  // m.role, not u.account_category: the appointment the principal made rather
+  // than the description somebody typed about themselves at signup. Only
+  // can_delegate turns on it here — everybody with an active membership is on
+  // the direct line by design — but reading the unverified field for anything
+  // is how the same bug keeps arriving in a new place.
   const assistants = await db.prepare(`
-    SELECT u.id, u.account_category
+    SELECT m.member_user_id AS id, m.role
     FROM memberships m
-    JOIN users u ON u.id = m.member_user_id
     WHERE m.owner_id = ? AND m.status = 'active' AND m.member_user_id IS NOT NULL
   `).all(principalId);
 
@@ -85,7 +89,7 @@ async function ensureDirectLine(principalId) {
     await db.prepare(`
       INSERT INTO space_members (id, space_id, user_id, role, can_delegate, created_at)
       VALUES (?, ?, ?, 'member', ?, ?)
-    `).run(crypto.randomUUID(), space.id, a.id, roleCanDelegate(a.account_category) ? 1 : 0, now);
+    `).run(crypto.randomUUID(), space.id, a.id, roleCanDelegate(a.role) ? 1 : 0, now);
   }
   for (const c of current) {
     if (shouldBeIn.has(c.user_id)) continue;

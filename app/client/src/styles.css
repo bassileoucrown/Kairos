@@ -3608,3 +3608,119 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .coming-row code,
 .soon-why code,
 .minute-record code { overflow-wrap: anywhere; }
+
+/* ── Find ────────────────────────────────────────────────────────────────
+   One box, over whatever screen you were on.
+
+   Deliberately NOT a page. Search that navigates you somewhere to type
+   costs you the screen you were on, and the whole value of this is
+   answering a question without losing your place. */
+.find-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-soft, inherit);
+  cursor: pointer;
+}
+.find-open:hover { border-color: var(--accent, var(--border)); }
+.find-open span[aria-hidden] { font-size: 16px; line-height: 1; }
+/* THE WORD GOES BEFORE THE HEADER DOES. At 768px the header is already
+   carrying a hamburger, a back button, a title, whatever verbs the page
+   itself put there and the account menu — adding "⌕ Find" to that pushed the
+   Itinerary header past the viewport and blayout caught it. The icon is the
+   control; the word is a convenience that can be spent. 900px rather than
+   640px because the screen that overflowed was a tablet, not a phone. */
+@media (max-width: 900px) {
+  .find-open-word { display: none; }
+}
+/* And the row itself may wrap rather than push, so no future verb on a page
+   can do the same thing again. */
+.app-header { flex-wrap: wrap; }
+
+.find-veil {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 20, 17, 0.42);
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  /* Near the top rather than centred: the results grow downwards, and a box
+     that centres itself jumps every time the answer changes length. */
+  padding: 8vh 16px 16px;
+}
+.find-box {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  width: 100%;
+  max-width: 620px;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.find-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 18px;
+  font: inherit;
+  font-size: 17px;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+}
+.find-input:focus { outline: none; }
+.find-results { overflow-y: auto; padding: 6px 0; }
+.find-note { margin: 14px 18px; color: var(--text-soft, #667); font-size: 14px; }
+.find-error { color: var(--danger, #8c3227); }
+.find-group h3 {
+  margin: 10px 18px 4px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-soft, #667);
+}
+.find-group ul { list-style: none; margin: 0; padding: 0; }
+.find-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 8px 18px;
+  cursor: pointer;
+  color: inherit;
+}
+.find-hit.is-on { background: var(--bg); }
+.find-hit-title { font-weight: 550; }
+.find-hit-detail { font-size: 13px; color: var(--text-soft, #667); }
+.find-foot {
+  margin: 0;
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-soft, #667);
+}
+.find-foot kbd {
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 2px;
+}
+@media (max-width: 640px) {
+  /* No chord on a phone, so the line that explains the chord is noise. */
+  .find-foot { display: none; }
+  .find-veil { padding: 4vh 10px 10px; }
+}

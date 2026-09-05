@@ -7,6 +7,7 @@ import TimeUp from './TimeUp.jsx';
 import PadDock from './PadDock.jsx';
 import TellUs from './TellUs.jsx';
 import WhatThisDoes from './WhatThisDoes.jsx';
+import FindBox from './FindBox.jsx';
 import { track, startUsage } from '../lib/usage.js';
 import { useVisiblePoll } from '../lib/useVisiblePoll.js';
 
@@ -271,6 +272,28 @@ export default function AppShell({ children, title, actions, active, guide }) {
   // a rail that renumbers itself behind your back.
   const [arrived, setArrived] = useState(() => new Set());
   const [navOpen, setNavOpen] = useState(false);
+  const [finding, setFinding] = useState(false);
+
+  // Ctrl-K, and Cmd-K on a Mac, from anywhere in the app.
+  //
+  // NOT WHILE SOMEBODY IS TYPING. The chord is caught on the document, so
+  // without this a person writing "⌘K" into a message — or any browser that
+  // routes it oddly — would have the box open under their hands mid-sentence.
+  // The one exception is the find box's own input, which is already open.
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== 'k' && e.key !== 'K') return;
+      if (!e.metaKey && !e.ctrlKey) return;
+      const el = document.activeElement;
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
+        || el.isContentEditable);
+      if (typing && !el.classList.contains('find-input')) return;
+      e.preventDefault();
+      setFinding(true);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Only worth asking when there is more than one diary in play. A principal
   // with no assistants would be asking the server to tell them what their own
@@ -500,6 +523,10 @@ export default function AppShell({ children, title, actions, active, guide }) {
           is that it reaches somebody who is looking at something else. */}
       <TimeUp principalId={activeId} />
 
+      {/* Scoped to the desk the switcher says you are at, which is the same
+          id every other screen in this shell is drawn from. */}
+      <FindBox ownerId={activeId} open={finding} onClose={() => setFinding(false)} />
+
       <main className="app-main">
         <header className="app-header">
           <button
@@ -522,6 +549,19 @@ export default function AppShell({ children, title, actions, active, guide }) {
             )}
           </div>
           <div className="app-header-actions">
+            {/* A visible control as well as the shortcut. A palette that only
+                opens on a chord is a palette most people never learn exists,
+                and on a phone there is no chord to press at all. */}
+            <button
+              className="find-open"
+              type="button"
+              onClick={() => setFinding(true)}
+              aria-label="Find anything"
+              title="Find anything (Ctrl-K)"
+            >
+              <span aria-hidden="true">⌕</span>
+              <span className="find-open-word">Find</span>
+            </button>
             {actions}
             <AccountMenu user={user} onSignOut={handleLogout} />
           </div>

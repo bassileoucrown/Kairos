@@ -300,12 +300,25 @@ router.post('/:spaceId/members', requireSpaceAccess, async (req, res) => {
   if (user.id === req.space.owner_id) return res.status(400).json({ error: 'They already own this space.' });
 
   const memberRole = role === 'guest' ? 'guest' : 'member';
+  // CAN THEY HAND THIS SPACE OUT TO OTHERS? Only if the space's owner actually
+  // appointed them Chief of Staff. It used to read the account_category they
+  // typed at signup, which nobody verifies — so anybody who had described
+  // themselves that way arrived in a space they were added to as a plain
+  // member and could immediately admit other people to it.
+  //
+  // Somebody with no membership at all — an outside collaborator added to one
+  // room — gets 0, which is the right answer and was never the one being
+  // computed.
+  const appointment = await db.prepare(`
+    SELECT role FROM memberships
+     WHERE owner_id = ? AND member_user_id = ? AND status = 'active'
+  `).get(req.space.owner_id, user.id);
   try {
     await db.prepare(`
       INSERT INTO space_members (id, space_id, user_id, role, can_delegate, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), req.space.id, user.id, memberRole,
-      roleCanDelegate(user.account_category) ? 1 : 0, new Date().toISOString());
+      roleCanDelegate(appointment?.role) ? 1 : 0, new Date().toISOString());
   } catch {
     return res.status(409).json({ error: 'They already have access to this space.' });
   }

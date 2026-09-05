@@ -682,7 +682,15 @@ export default function Trips() {
   const [ownerId, setOwnerId] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [openId, setOpenId] = useState(null);
+  // Openable from a URL, the way Movements already is — `?trip=<id>`.
+  //
+  // The trip a person opens has always been a click on this screen, which is
+  // fine until something else needs to point at one. Search does: a result
+  // that lands you on the list of trips and leaves you to find the one you
+  // just searched for is a result that did half its job.
+  const [openId, setOpenId] = useState(
+    () => new URLSearchParams(window.location.search).get('trip') || null,
+  );
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', destination: '', destinationTimezone: '', startsOn: '', endsOn: '' });
 
