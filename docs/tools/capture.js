@@ -24,6 +24,7 @@ const { spawn } = require('child_process');
 const { chromium } = require(`${ROOT}/node_modules/playwright-core`);
 
 const PORT = 4711, BASE = `http://127.0.0.1:${PORT}`;
+const STORE_PORT = 4712;
 const PW = 'password123';
 const KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ID = 'demo';
@@ -85,11 +86,38 @@ async function ready(page, selector, timeout = 20000) {
   for (const f of fs.existsSync(DATA) ? fs.readdirSync(DATA) : []) {
     if (f.startsWith('kairos.sqlite')) fs.rmSync(`${DATA}/${f}`);
   }
+  // Somewhere for a document to go. THE COURSE PHOTOGRAPHS A CONFIGURED
+  // DEPLOYMENT, so the vault lesson shows the control rather than the notice
+  // saying it needs a bucket — a tester reading the course has one, or is
+  // about to. The store is this process, holding bytes in a Map; what reaches
+  // it is already encrypted, exactly as it would be at Cloudflare.
+  const objects = new Map();
+  const store = require('http').createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      if (req.method === 'PUT') { objects.set(req.url, Buffer.concat(chunks)); res.writeHead(200); }
+      else if (req.method === 'GET') {
+        const v = objects.get(req.url);
+        if (!v) { res.writeHead(404); res.end(); return; }
+        res.writeHead(200); res.end(v); return;
+      } else if (req.method === 'DELETE') { objects.delete(req.url); res.writeHead(204); }
+      else res.writeHead(405);
+      res.end();
+    });
+  });
+  await new Promise((r) => store.listen(STORE_PORT, '127.0.0.1', r));
+
   const proc = spawn('node', ['--experimental-sqlite', 'index.js'], {
     cwd: `${ROOT}/app/server`,
     env: {
       ...process.env, NODE_ENV: 'production', PORT: String(PORT),
       ENCRYPTION_KEY: KEY,
+      STORAGE_BUCKET: 'kairos-course',
+      STORAGE_ENDPOINT: `http://127.0.0.1:${STORE_PORT}`,
+      STORAGE_REGION: 'us-east-1',
+      STORAGE_KEY: 'AKIAIOSFODNN7EXAMPLE',
+      STORAGE_SECRET: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       // Named so the pilot screen is reachable for the operator shot.
       ANNOUNCEMENT_AUTHORS: `ada${ID}@x.com`,
       REMINDER_SWEEP_MS: String(60 * 60 * 1000),
@@ -332,7 +360,33 @@ async function ready(page, selector, timeout = 20000) {
       category: 'travel_identity', field: 'known_traveller_number',
       label: 'Global Entry', value: 'GE 55120987', expiresOn: day(400),
     });
-    say('vault filled');
+    // An ordinary entry, which exists here so the flag below has somewhere to
+    // be caught: a scheduling delegate can read an office address.
+    const officeEntry = (await boss('POST', `/essentials/${me.id}`, {
+      category: 'logistics', field: 'office_address', label: 'Office address',
+      value: '12 Kingsway Road, Ikoyi, Lagos',
+    })).d.essential;
+    const passportEntry = (await boss('GET', `/essentials/${me.id}`)).d.essentials
+      .find((e) => e.field === 'passport_number');
+
+    // The documents behind the numbers. Real bytes rather than placeholders,
+    // because the screen shows the format and the size and both would be a lie
+    // otherwise — and the fourth one is the point of the lesson: a passport
+    // filed under an ordinary field, which the vault marks sensitive anyway.
+    const attach = (essId, filename, buf, mimeType) => boss(
+      'POST', `/essentials/${me.id}/${essId}/documents`,
+      { filename, mimeType, data: buf.toString('base64') },
+    );
+    const PDF = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(240 * 1024, 0x20)]);
+    const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(1900 * 1024, 7)]);
+    const DOCX = Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('word/document.xml'),
+      Buffer.alloc(38 * 1024, 0)]);
+    await attach(passportEntry.id, 'passport-page.jpg', JPEG, 'image/jpeg');
+    await attach(officeEntry.id, 'lease-agreement.docx', DOCX,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    await attach(officeEntry.id, 'passport-scan.pdf', PDF, 'application/pdf');
+    say('vault filled, documents attached');
 
     // A notice, so the notices screen is not empty.
     await boss('POST', '/announcements', {
@@ -431,8 +485,23 @@ async function ready(page, selector, timeout = 20000) {
     await p.goto(`${BASE}/report`); await ready(p);
     await shot(p, '20-report', 'The Report: what the period actually held, for any dates you ask for.', { full: true });
 
-    await p.goto(`${BASE}/dashboard?tab=essentials`); await ready(p);
+    // Two parts chosen, so the shot teaches the picker rather than merely
+    // showing that it exists. Waited on the note the client draws from its own
+    // state — .report-parts is there before and after, which would photograph
+    // the previous document.
+    await p.click('.report-parts button:has-text("Still open now")').catch(() => {});
+    await p.click('.report-parts button:has-text("Needs attention")').catch(() => {});
+    await p.waitForSelector('.report-parts-note', { timeout: 10000 }).catch(() => {});
+    await shot(p, '20b-report-parts', 'Choosing which parts of the report you want. Name nothing and you get the whole thing, segmented; name two and the document says on its first line that it is a part.', { full: true });
+
+    await p.goto(`${BASE}/dashboard?tab=essentials`); await ready(p, '.ess-docs');
     await shot(p, '21-essentials', 'Essentials. Encrypted, and every reveal is asked for and written down. AI never reads or writes here, under any instruction.', { full: true });
+
+    // The flag, in a picture: the badge sits on the passport filed under an
+    // ordinary field, and on nothing else on the screen.
+    await p.click('.ess-docs button:has-text("Open passport-page.jpg")').catch(() => {});
+    await p.waitForTimeout(700);
+    await shot(p, '21b-vault-open-document', 'Opening a document costs exactly what revealing the number beside it costs — the same second factor, and the same line in the principal’s trail.');
 
     await p.goto(`${BASE}/dashboard?tab=security`); await ready(p);
     await shot(p, '22-security', 'Security: who is signed in as you, and the codes that guard the sensitive parts. No code is ever asked for at the front door.', { full: true });
@@ -594,5 +663,6 @@ async function ready(page, selector, timeout = 20000) {
   } finally {
     if (browser) await browser.close().catch(() => {});
     proc.kill();
+    store.close();
   }
 })();

@@ -362,6 +362,22 @@ const CH = [
           'Open records nobody answered are listed, and clickable straight through.',
         ],
       },
+      {
+        shot: '20b-report-parts', roles: [P, A], title: 'Choosing which report you want',
+        what: 'The report is five parts. Take all of it, or take one.',
+        steps: [
+          'Name nothing and you get the **whole report, segmented** — which is what the '
+            + 'report has always been, and what anybody means by asking for it.',
+          'Or tick the parts you want. The line underneath says how many of how many.',
+          'Document and Spreadsheet carry the same choice, and the file is named after the part.',
+        ],
+        note: 'A part **says on its own first line that it is a part**, because a file gets '
+          + 'forwarded and a reader who cannot tell an omitted section from an empty one is '
+          + 'being misled by its shape. *Who looked at what* is offered only to the account '
+          + 'holder: a Chief of Staff asking for it by name is ignored exactly as a made-up '
+          + 'section is, and gets the four parts they are entitled to rather than an empty '
+          + 'document that would announce the refusal.',
+      },
     ],
     clip: {
       roles: [A],
@@ -493,6 +509,26 @@ const CH = [
         note: 'A scheduling delegate genuinely **cannot** see a BVN — it is structural, not a permission '
           + 'flag. And AI never reads or writes here under any instruction: the vault is off limits to '
           + 'it entirely, and it refuses rather than asks.',
+      },
+      {
+        shot: '21b-vault-open-document', roles: [P, A], title: 'The document, not just the number',
+        what: 'The passport page itself — a PDF, a photograph, or a Word file — kept behind the '
+          + 'detail it belongs to.',
+        steps: [
+          'Press **Attach a document** on any entry. PDF, JPEG, PNG, HEIC, WebP, Word, Excel, '
+            + 'PowerPoint, plain text and CSV, up to 15 MB.',
+          'It is encrypted *before it leaves the server*, so the storage provider holds '
+            + 'unreadable bytes.',
+          'Opening one costs the same code as revealing the number beside it, and shows in the '
+            + 'Report by name.',
+          'Remove takes the file and its row away together.',
+        ],
+        note: 'Two things worth knowing. **The name is not the file** — a PDF that is really a '
+          + 'zip is refused, and a macro-carrying .docm renamed .docx is caught by the macro '
+          + 'project still inside it. And **the flag only goes up**: a scan called *passport-scan* '
+          + 'filed under an ordinary field like an office address is stored as sensitive anyway, '
+          + 'so a scheduling delegate who can read that field still cannot open the file. Nothing '
+          + 'can make a document *less* protected than the entry it hangs on.',
       },
       {
         shot: '22-security', roles: [P, A, S], title: 'Security',
