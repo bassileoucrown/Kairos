@@ -164,7 +164,7 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
             label={isTravel ? 'From' : 'Where'}
             value={location} placeId={locationPlaceId}
             onChange={(text, id) => { setLocation(text); setLocationPlaceId(id); }}
-            kind={kind} tripId={tripId} personal={kind === 'personal'}
+            kind={kind} personal={kind === 'personal'}
             placeholder={isTravel ? 'Lagos (LOS), Terminal 1' : 'The office'} />
         </div>
         {isTravel && (
@@ -173,7 +173,7 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
               id="itin-destination" ownerId={ownerId} label="To"
               value={destination} placeId={destinationPlaceId}
               onChange={(text, id) => { setDestination(text); setDestinationPlaceId(id); }}
-              kind={kind} tripId={tripId} personal={kind === 'personal'}
+              kind={kind} personal={kind === 'personal'}
               placeholder="London (LHR), Terminal 5" />
           </div>
         )}
