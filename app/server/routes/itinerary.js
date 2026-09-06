@@ -18,6 +18,7 @@ const { directLineFor } = require('../lib/directLine');
 const { requirePlan } = require('../lib/plans');
 const plans = require('../lib/plans');
 const travelTime = require('../lib/travelTime');
+const travelBuffer = require('../lib/travelBuffer');
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -530,11 +531,35 @@ router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, async (req, 
     .get(req.params.itemId, req.principal.id);
   if (!item) return res.status(404).json({ error: 'Not found.' });
 
+  // NOT FOR A PRIVATE TRIP, AND NOT FOR PERSONAL TIME.
+  //
+  // This route predates the rule and did not check. It is inert on a
+  // deployment with no MAPS_API_KEY, which is every deployment today, so this
+  // is a hole rather than a leak — but the hole is the whole of the promise: a
+  // private trip is absent from the office precisely so that where a private
+  // person goes is not handed to anybody, and a maps provider is somebody.
+  // Refused for every caller including the principal, matching lib/travelBuffer.
+  if (item.kind === travelBuffer.PERSONAL_KIND) {
+    return res.status(403).json({
+      error: 'This is personal time, so its route is never sent to the maps provider.',
+      personal: true,
+    });
+  }
+  if (item.trip_id) {
+    const trip = await db.prepare('SELECT visibility FROM trips WHERE id = ?').get(item.trip_id);
+    if (trip && trip.visibility === tripPrivacy.PRIVATE) {
+      return res.status(403).json({
+        error: 'This leg is on a private trip, so its route is never sent to the maps provider.',
+        personal: true,
+      });
+    }
+  }
+
   const from = req.body?.from || item.location;
   const to = req.body?.to || item.destination;
   const departAt = Date.parse(req.body?.departAt || item.start_at);
 
-  const result = await travelTime.estimate({ from, to, departAt });
+  const result = await travelTime.estimate({ from, to, departAt, fresh: !!req.body?.fresh });
   if (result.error) {
     // Not configured is our work outstanding, so it reads as a 501 rather than
     // a 400 that looks like the assistant typed something wrong.
@@ -559,6 +584,39 @@ router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, async (req, 
     // silently replacing a number somebody chose on purpose.
     previousMinutes: Number(item.travel_minutes || 0),
   });
+});
+
+// --- Where the day does not leave enough room ---------------------------
+//
+// The gaps between everything on a day, each measured against what the road
+// says that drive takes AT THE HOUR IT HAPPENS. Read-only by construction:
+// there is no `apply` here at all. Applying a number is the per-item route
+// above, one item at a time, by a person who looked at it.
+//
+// GET rather than POST despite costing money per call, because it answers a
+// question and changes nothing — and a screen that re-asks on refresh is the
+// behaviour we want. `?fresh=1` skips the reuse window for somebody about to
+// commit to leaving.
+router.get('/:ownerId/travel-buffers', requirePaAccess, async (req, res) => {
+  const from = req.query.from;
+  const to = req.query.to;
+  if (!from || !to) {
+    return res.status(400).json({ error: 'Ask for a window: from and to, as ISO timestamps.' });
+  }
+  const result = await travelBuffer.suggest({
+    ownerId: req.principal.id,
+    viewerId: req.user.id,
+    from,
+    to,
+    fresh: req.query.fresh === '1',
+  });
+
+  // Metered once for the request, not once per leg: the invoice is per lookup
+  // and the lookups are inside, but a day with six gaps is one act by one
+  // person and counting it six times would misreport demand.
+  if (result.pairs.some((p) => !p.skipped)) await plans.meterUse(req, 'travel_time');
+
+  res.json(result);
 });
 
 // --- The draft → proposed → confirmed path ------------------------------

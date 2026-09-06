@@ -96,8 +96,40 @@ function label() {
 // Traffic does not change meaningfully between 09:01 and 09:07, and every one
 // of these calls is billed per element. Bucketing means an assistant nudging a
 // meeting by five minutes and re-estimating four times pays for one lookup.
+//
+// The bucket is an ABSOLUTE instant, not an hour-of-week, which matters: the
+// same Thursday 6pm in two different weeks is two different buckets and two
+// different lookups. A key that folded weekdays together would answer next
+// Thursday with last Thursday's traffic, which is not a cache — it is a
+// lookup table wearing a cache's clothes, and it would defeat the feature.
 const BUCKET_MS = 15 * 60 * 1000;
-const CACHE_TTL_MS = Number(process.env.MAPS_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+
+/**
+ * How long an answer stays good for, judged by how far off the departure is.
+ *
+ * This replaces a flat six-hour TTL, which was wrong in the one case that
+ * matters most. A drive at 18:00 estimated at 09:00 was served from the cache
+ * until 15:00 — so the assistant checking at 14:30, precisely because they
+ * were about to commit to leaving, got the morning's guess. The number was
+ * six hours old at the moment it needed to be current.
+ *
+ * Traffic is only knowable close to the event. Far out, the provider is
+ * returning a historical model rather than live conditions, so re-asking every
+ * ninety seconds buys nothing but invoice. Close in, it is the whole point.
+ *
+ * MAPS_CACHE_TTL_MS still works, but only as a CEILING — an operator can make
+ * this fresher and cannot make it staler. Env vars that can quietly reintroduce
+ * the defect they were meant to tune are not a setting, they are a trap.
+ */
+function freshnessMs(departAt) {
+  const away = departAt - Date.now();
+  let ms;
+  if (away <= 2 * 60 * 60 * 1000) ms = 90 * 1000;            // imminent: live
+  else if (away <= 24 * 60 * 60 * 1000) ms = 15 * 60 * 1000; // today-ish
+  else ms = 6 * 60 * 60 * 1000;                              // a model anyway
+  const ceiling = Number(process.env.MAPS_CACHE_TTL_MS);
+  return Number.isFinite(ceiling) && ceiling > 0 ? Math.min(ms, ceiling) : ms;
+}
 
 function cacheKey(from, to, departAt) {
   const bucket = Math.floor(departAt / BUCKET_MS) * BUCKET_MS;
@@ -106,11 +138,20 @@ function cacheKey(from, to, departAt) {
     .digest('hex');
 }
 
-async function cached(key) {
+async function cached(key, departAt) {
   const row = await db.prepare('SELECT * FROM travel_estimates WHERE id = ?').get(key);
   if (!row) return null;
-  if (Date.now() - new Date(row.created_at).getTime() > CACHE_TTL_MS) return null;
-  return { minutes: row.minutes, traffic: !!row.with_traffic, distanceKm: row.distance_km, cached: true };
+  const readAt = new Date(row.created_at).getTime();
+  const age = Date.now() - readAt;
+  if (age > freshnessMs(departAt)) return null;
+  return {
+    minutes: row.minutes,
+    traffic: !!row.with_traffic,
+    distanceKm: row.distance_km,
+    cached: true,
+    readAt: row.created_at,
+    ageSeconds: Math.round(age / 1000),
+  };
 }
 
 async function remember(key, from, to, departAt, result) {
@@ -128,7 +169,7 @@ async function remember(key, from, to, departAt, result) {
  * person can act on. Never throws: a maps outage must not take a day sheet
  * down with it, and the hand-typed number is still there.
  */
-async function estimate({ from, to, departAt }) {
+async function estimate({ from, to, departAt, fresh = false }) {
   if (!isConfigured()) {
     return { error: `Travel time is not configured on this deployment — it needs ${PROVIDERS[providerName()].keyVar}.`, unconfigured: true };
   }
@@ -138,10 +179,14 @@ async function estimate({ from, to, departAt }) {
   const at = Number(departAt) || Date.now();
   const key = cacheKey(from, to, at);
 
-  try {
-    const hit = await cached(key);
-    if (hit) return { ...hit, provider: label() };
-  } catch { /* a cache miss and a cache failure are the same thing here */ }
+  // `fresh` is somebody pressing "check again" because they are about to act
+  // on the answer. That intent outranks the invoice.
+  if (!fresh) {
+    try {
+      const hit = await cached(key, at);
+      if (hit) return { ...hit, provider: label() };
+    } catch { /* a cache miss and a cache failure are the same thing here */ }
+  }
 
   const p = PROVIDERS[providerName()];
   let res;
@@ -160,8 +205,11 @@ async function estimate({ from, to, departAt }) {
   const read = p.read(body);
   if (read.error) return read;
 
+  const readAt = new Date().toISOString();
   try { await remember(key, from, to, at, read); } catch { /* the answer is still good */ }
-  return { ...read, provider: label(), cached: false };
+  // readAt on every answer, cached or not, so a screen can say when the road
+  // was actually asked instead of implying that a number on it is current.
+  return { ...read, provider: label(), cached: false, readAt, ageSeconds: 0 };
 }
 
-module.exports = { estimate, isConfigured, label, providerName, BUCKET_MS };
+module.exports = { estimate, isConfigured, label, providerName, BUCKET_MS, freshnessMs };
