@@ -129,6 +129,34 @@ Also still unbuilt and not to be started unasked: desk-scoped billing; the
 written delegation recorded at setup; mail drafting and sending (the grant
 carries `sendMode` and nothing consumes it).
 
+## Built, tested, and not yet on a screen
+
+Different from the list above: these are not decisions waiting on the owner,
+they are finished work with a missing half. Written down because a feature that
+passes its suite and cannot be reached by a person is the easiest kind of work
+to forget was ever done, and the second easiest to build twice.
+
+1. **The travel-buffer screen.** `lib/travelBuffer.js`, its route
+   `GET /api/itinerary/:ownerId/travel-buffers?from&to`, and `bbuffer` are
+   done. For every adjacent pair on a day it returns the drive at the departure
+   instant, the margin, the shortfall, whether the lookup was exact (a pinned
+   `place_id`) or a phrase, and when the road was actually asked. Nothing
+   consumes it. The screen wants: the tight gaps first, the shortfall as the
+   headline number, `readAt` shown rather than implied, a "check again" that
+   passes `fresh=1`, and applying a suggestion going through the existing
+   per-item route one leg at a time — never in bulk, because the point of the
+   feature is that a person decides. Inert until `MAPS_API_KEY` is set; the
+   endpoint marks every gap `unconfigured` rather than failing.
+
+2. **eslint on the client, with `no-undef`.** Offered, not built. `vite build`
+   compiles an undefined variable inside JSX without complaint — it is a
+   runtime ReferenceError, not a compile error — and there is no lint config
+   or lint script in `app/client`. That is exactly how a `tripId` that did not
+   exist in `AddItem`'s scope crashed the whole add-an-item form, took four UI
+   suites down, and reached a full two-board run before anything noticed.
+   Until this exists, the standing rule is cheaper than the tooling: **after
+   any change to a React component, run one UI suite before running a board.**
+
 ## Verifying a negative
 
 Asserting that something is absent passes when the code is broken *and* when the
