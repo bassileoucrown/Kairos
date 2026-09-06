@@ -53,6 +53,14 @@ const WIDTHS = [
   [780, 360, 'small phone, sideways'],
   [844, 390, 'phone, sideways'],
   [896, 414, 'large phone, sideways'],
+  // THE ONE THAT ACTUALLY BROKE, and it was not in this list. An iPhone SE
+  // sideways is 667 wide — narrow enough that the header wrapped into two
+  // rows, wide enough that the rule hiding the account name (which stops at
+  // 620px) did not fire. The four sizes above are all 780px or wider and all
+  // of them wrapped to one row, so the matrix reported green on a screen
+  // spending 29% of itself on its own header. A matrix that omits the width
+  // where a rule stops applying cannot see the rule stop applying.
+  [667, 375, 'small phone, sideways, narrow'],
   [1024, 768, 'tablet, sideways'],
 ];
 
@@ -261,6 +269,39 @@ const MEASURE = () => {
   const deepest = (list) => list.filter((a, i) => !list.some((b, j) =>
     j !== i && b.what !== a.what && b.what.includes(a.what)));
 
+  // ↓ header measurement below; `deepest` is declared once, just above.
+  // THE HEADER, AND HOW MANY ROWS IT IS SPENDING.
+  //
+  // The pinned check above draws its line at half the screen, which is the
+  // right line for "furniture has eaten the day". It is the wrong line for
+  // this: the header wrapping from one row to two cost 29% of an iPhone SE
+  // turned sideways, and 29% walks under a 50% threshold without a sound.
+  //
+  // Rows are counted rather than pixels guessed at, because the height that
+  // matters is not a number anybody chose — it is a wrap, and a wrap either
+  // happened or it did not. Children that share a top edge are one row.
+  const header = document.querySelector('.app-header');
+  let headerRows = 0, headerHeight = 0;
+  if (header) {
+    headerHeight = Math.round(header.getBoundingClientRect().height);
+    // Clustered by vertical OVERLAP, not by a shared top edge. The first
+    // version of this bucketed tops to the nearest 6px and reported two and
+    // three rows on headers that render as one — the children are centred
+    // against each other, so a 28px avatar and a 44px title block on the same
+    // row start 8px apart and were counted twice. Two boxes are on one row
+    // when their vertical ranges meet; a wrapped box starts below everything
+    // above it.
+    const boxes = [...header.children]
+      .map((k) => k.getBoundingClientRect())
+      .filter((r) => r.width > 0 || r.height > 0)          // not display:none
+      .sort((a, b) => a.top - b.top);
+    let rowBottom = -Infinity;
+    for (const r of boxes) {
+      if (r.top >= rowBottom - 2) { headerRows += 1; rowBottom = r.bottom; }
+      else rowBottom = Math.max(rowBottom, r.bottom);
+    }
+  }
+
   return {
     overflow: de.scrollWidth - limit,
     wide: deepest(wide).slice(0, 6),
@@ -270,6 +311,9 @@ const MEASURE = () => {
     pinnedHeight,
     pinned: pinned.sort((a, b) => b.height - a.height).slice(0, 5),
     trapped: trapped.slice(0, 4),
+    headerRows,
+    headerHeight,
+    winH: window.innerHeight,
   };
 };
 
@@ -449,6 +493,17 @@ const MEASURE = () => {
           for (const el of m.trapped) {
             console.log(`      ${el.what}  ${el.height}px in ${el.room}px  "${el.text}"`);
           }
+        }
+        // ONE ROW OF HEADER ON A SHORT SCREEN. Two is affordable at 844px
+        // tall and is a third of the screen at 375px, and the difference is
+        // one label — the account name — that the avatar beside it already
+        // says. Only asserted where it is true: a tablet sideways is 768px
+        // tall and may wrap as much as it likes.
+        if (m.winH <= 460 && m.headerRows > 1) {
+          bad++;
+          problems.push({ width: w, screen: name, kind: 'header', rows: m.headerRows });
+          console.log(`  ✗ ${name} header wraps to ${m.headerRows} rows`
+            + ` — ${m.headerHeight}px of ${m.winH}px (${Math.round((m.headerHeight / m.winH) * 100)}%)`);
         }
       }
 

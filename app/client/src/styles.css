@@ -3761,3 +3761,44 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 /* Keyboard users get the row outlined rather than four words of it. */
 .sched-row.is-openable:focus-within { outline: 2px solid var(--accent, #2f5d4a); outline-offset: 2px; }
 .sched-row.is-openable .sched-title-link:focus-visible { outline: none; }
+
+/* ── A phone held sideways ───────────────────────────────────────────────
+   Every other media query in this file is a max-width, and landscape
+   satisfies all of them: 844x390 has MORE width than 390x844 and less than
+   half the height. So none of them fire, and the chrome that is affordable
+   in portrait is charged against a viewport with a third of the height.
+
+   Measured before this rule existed, on Today:
+     390x844 portrait   header 107px of 844  (13%)
+     844x390 sideways   header  67px of 390  (17%)
+     780x360 sideways   header  67px of 360  (19%)
+     667x375 sideways   header 107px of 375  (29%)
+
+   The last of those is an iPhone SE turned over, and 29% is the whole of the
+   fault: at 667px the account's full name is still shown — the rule that
+   hides it stops at 620px — and that one label is what pushes the row past
+   the edge and wraps the header into two. The wrap is correct, it is what
+   stops the title being crushed; what is wrong is paying for it out of a
+   375px screen when the avatar beside it already says whose account this is.
+
+   So: spend less chrome when the viewport is short. Not a different layout —
+   the same layout, charged honestly. 460px is chosen to sit above the
+   tallest phone landscape in the test matrix (414) and well below the
+   shortest tablet landscape (768), which needs none of this. */
+@media (max-height: 460px) {
+  .account-name, .account-caret { display: none; }
+  /* The rule at max-width: 760px gives the actions a 100% flex-basis so they
+     take a line of their own, leaving the first line to the menu button, Back
+     and the title. That is the right call on a phone held upright, where the
+     row genuinely will not fit and there is height to spare. Sideways it is
+     exactly backwards: 667px of width holds the whole row in about 480px, and
+     the second line is being bought with the height there is least of. So the
+     basis goes back to auto — which is not "never wrap", it is "wrap only if
+     you must", and flex-wrap still catches anything narrower. */
+  .app-header-actions { flex-basis: auto; }
+  .app-header { padding-top: 8px; padding-bottom: 8px; }
+  .app-body { padding-top: 10px; }
+  /* The overlay already scales with vh, but 8% of 360 is 29px of dead band
+     above a box that has nowhere to grow. */
+  .find-veil { padding-top: 4vh; }
+}
