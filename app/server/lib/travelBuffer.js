@@ -1,6 +1,7 @@
 const db = require('./db');
 const travelTime = require('./travelTime');
 const tripPrivacy = require('./tripPrivacy');
+const places = require('./places');
 
 // How much room the day actually needs between two things, asked of the road.
 //
@@ -58,9 +59,17 @@ function marginFor(driveMinutes) {
   return Math.max(5, Math.min(20, Math.round(driveMinutes * 0.25)));
 }
 
-/** Where a leg leaves from: where it ends up, or failing that where it was. */
+/**
+ * Where a leg leaves from: where it ends up, or failing that where it was.
+ *
+ * Returns the words AND the id for whichever end was used, because they must
+ * travel together — asking the road about the id while showing the person the
+ * other end's words is exactly the mix-up this is meant to prevent.
+ */
 function originOf(item) {
-  return String(item.destination || '').trim() || String(item.location || '').trim();
+  const dest = String(item.destination || '').trim();
+  if (dest) return { text: dest, placeId: item.destination_place_id || null };
+  return { text: String(item.location || '').trim(), placeId: item.location_place_id || null };
 }
 
 function endOf(item) {
@@ -80,7 +89,8 @@ async function suggest({ ownerId, viewerId, from, to, fresh = false }) {
   const configured = travelTime.isConfigured();
 
   const items = await db.prepare(`
-    SELECT id, kind, title, start_at, end_at, location, destination, travel_minutes, trip_id, status
+    SELECT id, kind, title, start_at, end_at, location, destination, travel_minutes, trip_id, status,
+           location_place_id, destination_place_id
     FROM itinerary_items
     WHERE owner_id = ? AND status = 'confirmed' AND start_at >= ? AND start_at <= ?
     ORDER BY start_at ASC
@@ -132,12 +142,12 @@ async function suggest({ ownerId, viewerId, from, to, fresh = false }) {
     }
 
     const origin = originOf(a);
-    const dest = String(b.location || '').trim();
-    if (!origin || !dest) {
+    const dest = { text: String(b.location || '').trim(), placeId: b.location_place_id || null };
+    if (!origin.text || !dest.text) {
       pairs.push({
         ...base,
         skipped: 'no-place',
-        why: !origin
+        why: !origin.text
           ? `“${a.title}” has no location to leave from.`
           : `“${b.title}” has no location to travel to.`,
       });
@@ -150,7 +160,14 @@ async function suggest({ ownerId, viewerId, from, to, fresh = false }) {
 
     // Asked for the moment of departure, not for "now" and not for a typical
     // Thursday. That instant is the whole feature.
-    const road = await travelTime.estimate({ from: origin, to: dest, departAt: leaves, fresh });
+    // `place_id:…` when the place was picked from the map, the typed words
+    // when it was not. Same call either way; the first is simply unambiguous.
+    const road = await travelTime.estimate({
+      from: places.asQuery(origin.text, origin.placeId),
+      to: places.asQuery(dest.text, dest.placeId),
+      departAt: leaves,
+      fresh,
+    });
     if (road.error) {
       pairs.push({ ...base, skipped: 'error', why: road.error });
       continue;
@@ -160,8 +177,13 @@ async function suggest({ ownerId, viewerId, from, to, fresh = false }) {
     const needed = road.minutes + margin;
     pairs.push({
       ...base,
-      from: origin,
-      to: dest,
+      // The words, always — a screen shows a person what they wrote.
+      from: origin.text,
+      to: dest.text,
+      // Whether the road was asked about an exact place or about a phrase.
+      // The difference is the whole reason the id is stored, so it is said
+      // rather than left for somebody to assume.
+      exact: !!(origin.placeId && dest.placeId),
       departAt: new Date(leaves).toISOString(),
       driveMinutes: road.minutes,
       marginMinutes: margin,

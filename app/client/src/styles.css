@@ -3802,3 +3802,29 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
      above a box that has nowhere to grow. */
   .find-veil { padding-top: 4vh; }
 }
+
+/* ── A place, rather than a phrase ───────────────────────────────────────
+   Still a text field. The list is an offer, and everything works with it
+   ignored — which is why it is positioned over the page rather than pushing
+   the form down: a suggestion that reflows the fields under somebody's cursor
+   is a suggestion that gets dismissed by accident. */
+.place-field { position: relative; }
+.place-hits {
+  position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+  margin: 4px 0 0; padding: 4px 0; list-style: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  max-height: 240px; overflow-y: auto;
+}
+.place-hit {
+  display: flex; flex-direction: column; gap: 1px;
+  width: 100%; text-align: left; background: none; border: none;
+  font: inherit; color: inherit; padding: 8px 12px; cursor: pointer;
+}
+.place-hit:hover, .place-hit.is-on { background: var(--bg); }
+.place-hit-main { font-weight: 550; font-size: 0.9rem; }
+.place-hit-sub { font-size: 0.78rem; color: var(--text-muted); }
+/* Quiet: it confirms a good thing happened, it is not a warning. */
+.place-pinned {
+  margin: 4px 0 0; font-size: 0.72rem; color: var(--text-muted);
+}

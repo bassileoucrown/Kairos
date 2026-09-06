@@ -37,9 +37,27 @@ const head = (s) => console.log(`\n${s}`);
 // a negative here: "was this address ever sent" is a different question from
 // "did the address appear in the answer", and only the first one is privacy.
 const asked = [];
+const typed = [];
 let minutesToReturn = 40;
 const maps = http.createServer((req, res) => {
   const u = new URL(req.url, `http://127.0.0.1:${MAPS_PORT}`);
+  // Two logs, because they are two different exposures. `asked` is one route
+  // for a leg that exists; `typed` is what somebody was in the middle of
+  // writing. The second is the one a rule that only guards saved rows misses.
+  if (u.pathname.startsWith('/places')) {
+    typed.push({ input: u.searchParams.get('input'), sessiontoken: u.searchParams.get('sessiontoken') });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'OK',
+      predictions: [
+        { place_id: 'PLACE_1', description: 'Radisson Blu, Ikeja',
+          structured_formatting: { main_text: 'Radisson Blu', secondary_text: 'Ikeja, Lagos' } },
+        { place_id: 'PLACE_2', description: 'Eko Hotel',
+          structured_formatting: { main_text: 'Eko Hotel', secondary_text: 'Victoria Island, Lagos' } },
+      ],
+    }));
+    return;
+  }
   asked.push({
     origins: u.searchParams.get('origins'),
     destinations: u.searchParams.get('destinations'),
@@ -67,6 +85,7 @@ function boot() {
       ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       MAPS_API_KEY: 'test-key',
       MAPS_BASE_URL: `http://127.0.0.1:${MAPS_PORT}/dm`,
+      PLACES_BASE_URL: `http://127.0.0.1:${MAPS_PORT}/places`,
     },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
@@ -253,6 +272,69 @@ async function signup(who, name, email) {
     const forced = (r6.d.pairs || []).find((p) => p.beforeTitle === 'Bank wk2');
     ok('the road was asked again', asked.length >= 1, JSON.stringify(asked));
     ok('and the new number came back', forced && forced.driveMinutes === 95, JSON.stringify(forced));
+
+    // ---- A place, rather than a phrase ----------------------------------
+    head('What was typed can be resolved to a place the map knows:');
+    typed.length = 0;
+    const found = await call('GET',
+      `/api/itinerary/${owner}/places?q=Radisson&kind=meeting&session=abc`, null, 'p');
+    ok('the search answers', found.status === 200, JSON.stringify(found.d));
+    ok('with places carrying an id', (found.d.places || []).length > 0
+      && found.d.places[0].placeId === 'PLACE_1', JSON.stringify(found.d.places));
+    ok('and the session token was passed on, so it bills once per edit',
+      typed[0]?.sessiontoken === 'abc', JSON.stringify(typed));
+
+    head('A pinned place is asked about exactly, not as words:');
+    const pinned = await mk({
+      kind: 'meeting', title: 'Pinned start', startAt: nw(16), endAt: nw(17),
+      location: 'Radisson Blu, Ikeja', locationPlaceId: 'PLACE_1',
+    });
+    await mk({
+      kind: 'meeting', title: 'Pinned end', startAt: nw(19), endAt: nw(20),
+      location: 'Eko Hotel', locationPlaceId: 'PLACE_2',
+    });
+    asked.length = 0;
+    const rp = await call('GET',
+      `/api/itinerary/${owner}/travel-buffers?from=${nw(0)}&to=${nw(23)}&fresh=1`, null, 'p');
+    const leg = (rp.d.pairs || []).find((p) => p.beforeTitle === 'Pinned end');
+    const pinnedCall = asked.find((a) => /PLACE_1/.test(a.origins));
+    ok('the road was asked about the place id', !!pinnedCall
+      && pinnedCall.origins === 'place_id:PLACE_1' && pinnedCall.destinations === 'place_id:PLACE_2',
+      JSON.stringify(asked));
+    ok('but the screen is still told the words somebody wrote',
+      leg && leg.from === 'Radisson Blu, Ikeja' && leg.to === 'Eko Hotel', JSON.stringify(leg));
+    ok('and it says the lookup was exact', leg && leg.exact === true, JSON.stringify(leg));
+
+    head('Editing the words unpins the place, so the two cannot disagree:');
+    await call('PATCH', `/api/itinerary/${owner}/items/${pinned.item.id}`,
+      { location: 'the other Radisson' }, 'p');
+    const reread = (await call('GET', `/api/itinerary/${owner}/items/${pinned.item.id}`, null, 'p')).d;
+    ok('the id is gone', (reread.item.locationPlaceId ?? null) === null, JSON.stringify(reread.item?.locationPlaceId));
+    asked.length = 0;
+    const rq = await call('GET',
+      `/api/itinerary/${owner}/travel-buffers?from=${nw(0)}&to=${nw(23)}&fresh=1`, null, 'p');
+    ok('and the road is asked about the new words instead',
+      asked.some((a) => a.origins === 'the other Radisson'), JSON.stringify(asked));
+    const unpinned = (rq.d.pairs || []).find((p) => p.beforeTitle === 'Pinned end');
+    ok('which is no longer an exact lookup, and says so',
+      unpinned && unpinned.exact === false, JSON.stringify(unpinned));
+
+    // THE KEYSTROKE LEAK. The distance rule guards a saved item; this guards
+    // the search box, which sends the beginning of a private destination and
+    // then a bit more of it, before anything has been saved at all.
+    head('Personal time is never even typed into the provider:');
+    typed.length = 0;
+    const noSearch = await call('GET',
+      `/api/itinerary/${owner}/places?q=Lekki&kind=personal`, null, 'p');
+    ok('the search is refused', noSearch.status === 403, `${noSearch.status} ${JSON.stringify(noSearch.d)}`);
+    ok('and nothing was typed at the provider', typed.length === 0, JSON.stringify(typed));
+
+    head('Nor is a private trip:');
+    typed.length = 0;
+    const noTrip = await call('GET',
+      `/api/itinerary/${owner}/places?q=Banana&kind=meeting&tripId=${tripId}`, null, 'p');
+    ok('the search is refused', noTrip.status === 403, `${noTrip.status} ${JSON.stringify(noTrip.d)}`);
+    ok('and nothing was typed at the provider', typed.length === 0, JSON.stringify(typed));
 
     // ---- The freshness policy itself ------------------------------------
     //

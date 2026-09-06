@@ -10,6 +10,7 @@ import { zonedToUtc, dateKeyInZone } from '../lib/timezones.js';
 import { useAsk } from '../components/Ask.jsx';
 import BookingNotes from '../components/BookingNotes.jsx';
 import MoveAppointment from '../components/MoveAppointment.jsx';
+import PlaceField from '../components/PlaceField.jsx';
 
 const KINDS = [
   { value: 'flight', label: 'Flight' },
@@ -55,7 +56,9 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('');
   const [location, setLocation] = useState('');
+  const [locationPlaceId, setLocationPlaceId] = useState(null);
   const [destination, setDestination] = useState('');
+  const [destinationPlaceId, setDestinationPlaceId] = useState(null);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [endTimezone, setEndTimezone] = useState('');
@@ -88,6 +91,7 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
         startTimezone: timezone,
         endTimezone: isTravel && endTimezone ? endTimezone : undefined,
         location, destination, reference, notes,
+        locationPlaceId, destinationPlaceId,
         // Left off entirely for a one-off rather than sent as "none", so the
         // server's "is this repeating" question has one answer, not two.
         recurrence: repeat ? { freq: repeat, count: Number(repeatCount) } : undefined,
@@ -155,14 +159,21 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
 
       <div className="itin-row">
         <div className="field">
-          <label htmlFor="itin-location">{isTravel ? 'From' : 'Where'}</label>
-          <input id="itin-location" type="text" value={location} onChange={(e) => setLocation(e.target.value)}
+          <PlaceField
+            id="itin-location" ownerId={ownerId}
+            label={isTravel ? 'From' : 'Where'}
+            value={location} placeId={locationPlaceId}
+            onChange={(text, id) => { setLocation(text); setLocationPlaceId(id); }}
+            kind={kind} tripId={tripId} personal={kind === 'personal'}
             placeholder={isTravel ? 'Lagos (LOS), Terminal 1' : 'The office'} />
         </div>
         {isTravel && (
           <div className="field">
-            <label htmlFor="itin-destination">To</label>
-            <input id="itin-destination" type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
+            <PlaceField
+              id="itin-destination" ownerId={ownerId} label="To"
+              value={destination} placeId={destinationPlaceId}
+              onChange={(text, id) => { setDestination(text); setDestinationPlaceId(id); }}
+              kind={kind} tripId={tripId} personal={kind === 'personal'}
               placeholder="London (LHR), Terminal 5" />
           </div>
         )}
@@ -294,7 +305,9 @@ export function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
   const [startTime, setStartTime] = useState(timeInZone(item.startAt, timezone));
   const [endTime, setEndTime] = useState(item.endAt ? timeInZone(item.endAt, timezone) : '');
   const [location, setLocation] = useState(item.location || '');
+  const [locationPlaceId, setLocationPlaceId] = useState(item.locationPlaceId || null);
   const [destination, setDestination] = useState(item.destination || '');
+  const [destinationPlaceId, setDestinationPlaceId] = useState(item.destinationPlaceId || null);
   const [reference, setReference] = useState(item.reference || '');
   const [notes, setNotes] = useState(item.notes || '');
   const [error, setError] = useState('');
@@ -316,6 +329,10 @@ export function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
         // thing somebody can actually do. The server maps '' to NULL.
         endAt: endTime ? zonedToUtc(endDateFor(dayKey, startTime, endTime), endTime, timezone) : '',
         location, destination: isTravel ? destination : '', reference, notes,
+        // Sent explicitly, including as null. The server drops an id whenever
+        // the words are updated without one, so staying silent here would
+        // quietly unpin a place the person never touched.
+        locationPlaceId, destinationPlaceId: isTravel ? destinationPlaceId : null,
       });
       onSaved();
     } catch (err) { setError(err.message); } finally { setSaving(false); }
@@ -374,15 +391,20 @@ export function EditItem({ ownerId, item, timezone, onSaved, onCancel }) {
       </div>
 
       <div className="field">
-        <label htmlFor={`ed-loc-${item.id}`}>{isTravel ? 'From' : 'Where'}</label>
-        <input id={`ed-loc-${item.id}`} type="text" value={location}
-          onChange={(e) => setLocation(e.target.value)} />
+        <PlaceField
+          id={`ed-loc-${item.id}`} ownerId={ownerId}
+          label={isTravel ? 'From' : 'Where'}
+          value={location} placeId={locationPlaceId}
+          onChange={(text, id) => { setLocation(text); setLocationPlaceId(id); }}
+          kind={item.kind} tripId={item.tripId} personal={item.kind === 'personal'} />
       </div>
       {isTravel && (
         <div className="field">
-          <label htmlFor={`ed-dest-${item.id}`}>To</label>
-          <input id={`ed-dest-${item.id}`} type="text" value={destination}
-            onChange={(e) => setDestination(e.target.value)} />
+          <PlaceField
+            id={`ed-dest-${item.id}`} ownerId={ownerId} label="To"
+            value={destination} placeId={destinationPlaceId}
+            onChange={(text, id) => { setDestination(text); setDestinationPlaceId(id); }}
+            kind={item.kind} tripId={item.tripId} personal={item.kind === 'personal'} />
         </div>
       )}
       <div className="field">

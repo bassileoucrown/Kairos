@@ -19,11 +19,30 @@ const { requirePlan } = require('../lib/plans');
 const plans = require('../lib/plans');
 const travelTime = require('../lib/travelTime');
 const travelBuffer = require('../lib/travelBuffer');
+const places = require('../lib/places');
 
 const router = asyncRouter();
 router.use(requireAuth);
 
 const KINDS = new Set(['flight', 'train', 'car', 'hotel', 'meeting', 'meal', 'personal', 'call', 'note']);
+
+/**
+ * An id is kept only when there is text for it to be the id OF.
+ *
+ * The failure this prevents: somebody picks "Radisson Blu, Ikeja" from the
+ * list, then edits the words to "the other Radisson" and saves. Without this
+ * the row keeps the first id, and from then on the screen shows one place
+ * while every distance lookup silently asks about a different one — a
+ * disagreement with no symptom until a principal is an hour late.
+ *
+ * The client clears the id whenever the text is edited by hand; this is the
+ * server not depending on it having remembered to.
+ */
+function placeIdFor(text, placeId) {
+  const id = String(placeId || '').trim();
+  if (!id) return null;
+  return String(text || '').trim() ? id.slice(0, 300) : null;
+}
 const STATUSES = new Set(['draft', 'proposed', 'confirmed']);
 
 // What each viewer is allowed to see on a principal's itinerary.
@@ -80,6 +99,10 @@ function serializeItem(i, ownerTz) {
     overnight: !!(i.end_at && dayKeyInZone(i.end_at, endTz) !== dayKeyInZone(i.start_at, startTz)),
     location: i.location,
     destination: i.destination,
+    // Sent back so an edit can keep an id it did not change. Not shown to
+    // anybody: it is the machine's copy of the words above it.
+    locationPlaceId: i.location_place_id || null,
+    destinationPlaceId: i.destination_place_id || null,
     reference: i.reference,
     notes: i.notes,
     bookingId: i.booking_id,
@@ -339,6 +362,7 @@ router.get('/:ownerId/upcoming', requirePaAccess, async (req, res) => {
 router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   const { kind, title, startAt, endAt, startTimezone, endTimezone,
     location, destination, reference, notes,
+    locationPlaceId, destinationPlaceId,
     tripId, arrangement, provider, contactName, contactPhone, terminal, seat } = req.body || {};
 
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'Give it a title.' });
@@ -419,8 +443,8 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
         (id, owner_id, created_by, kind, title, start_at, end_at, start_timezone, end_timezone,
          location, destination, reference, notes, status, created_at,
          trip_id, arrangement, provider, contact_name, contact_phone, terminal, seat,
-         series_id, recurrence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         series_id, recurrence, location_place_id, destination_place_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.principal.id, req.user.id, kind, String(title).trim(),
       occurrence.startAt, occurrence.endAt,
       startTimezone || null, endTimezone || null,
@@ -429,7 +453,12 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
       tripId || null, arrangement || '', String(provider || '').trim(),
       String(contactName || '').trim(), String(contactPhone || '').trim(),
       String(terminal || '').trim(), String(seat || '').trim(),
-      seriesId, repeat ? repeat.freq : null);
+      seriesId, repeat ? repeat.freq : null,
+      // Only kept when the id belongs to the text being saved. An id left over
+      // from an earlier edit, pointing somewhere the words no longer describe,
+      // is worse than no id: the screen would say one place and the road would
+      // be asked about another. See placeIdFor.
+      placeIdFor(location, locationPlaceId), placeIdFor(destination, destinationPlaceId));
   }
 
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(ids[0]);
@@ -584,6 +613,49 @@ router.post('/:ownerId/items/:itemId/travel-time', requirePaAccess, async (req, 
     // silently replacing a number somebody chose on purpose.
     previousMinutes: Number(item.travel_minutes || 0),
   });
+});
+
+// --- Finding a place, so a leg means one point on the earth --------------
+//
+// REFUSED BEFORE THE SEARCH, NOT AFTER IT. Autocomplete is a request per
+// keystroke, and it happens while somebody is still typing — before there is
+// an item to check the kind of. So the caller says what the search is for, and
+// a search for personal time or a private trip never leaves this process.
+//
+// This is the same rule as the distance lookup and it matters more here, not
+// less: a distance lookup sends one private destination once, whereas a search
+// box sends the beginning of it, then a bit more, then a bit more.
+//
+// The client is not trusted to be the only guard — a `kind` it forgets to send
+// would silently reopen the hole — so a tripId is checked against the database
+// and `personal` is refused outright.
+router.get('/:ownerId/places', requirePaAccess, async (req, res) => {
+  const kind = String(req.query.kind || '').trim();
+  if (kind === travelBuffer.PERSONAL_KIND) {
+    return res.status(403).json({
+      error: 'This is personal time, so what you type is never sent to the maps provider.',
+      personal: true,
+    });
+  }
+  if (req.query.tripId) {
+    const trip = await db.prepare('SELECT visibility FROM trips WHERE id = ? AND owner_id = ?')
+      .get(req.query.tripId, req.principal.id);
+    if (trip && trip.visibility === tripPrivacy.PRIVATE) {
+      return res.status(403).json({
+        error: 'This is a private trip, so what you type is never sent to the maps provider.',
+        personal: true,
+      });
+    }
+  }
+
+  const result = await places.suggest({
+    query: req.query.q,
+    // One token for the life of one edit: the provider bills a session, not
+    // every letter of it. The client makes it and sends it back unchanged.
+    sessionToken: req.query.session ? String(req.query.session).slice(0, 64) : undefined,
+  });
+  if (result.error) return res.status(result.unconfigured ? 501 : 400).json(result);
+  res.json(result);
 });
 
 // --- Where the day does not leave enough room ---------------------------
@@ -763,6 +835,7 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
     kind: 'kind', title: 'title', startAt: 'start_at', endAt: 'end_at',
     startTimezone: 'start_timezone', endTimezone: 'end_timezone',
     location: 'location', destination: 'destination', reference: 'reference', notes: 'notes',
+    locationPlaceId: 'location_place_id', destinationPlaceId: 'destination_place_id',
     isAnchor: 'is_anchor', travelMinutes: 'travel_minutes',
     householdMemberId: 'household_member_id',
   };
@@ -774,6 +847,9 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
     if (key === 'kind' && !KINDS.has(value)) return res.status(400).json({ error: 'Unknown item kind.' });
     if (key === 'title' && !String(value).trim()) return res.status(400).json({ error: 'Give it a title.' });
     if (key === 'isAnchor') value = value ? 1 : 0;
+    if (key === 'locationPlaceId' || key === 'destinationPlaceId') {
+      value = String(value || '').trim().slice(0, 300) || null;
+    }
     if (key === 'travelMinutes') {
       value = Math.max(0, Math.round(Number(value) || 0));
     }
@@ -788,6 +864,23 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
     updates.push(`${column} = ?`);
     values.push(value === '' && (key === 'endAt' || key.endsWith('Timezone')) ? null : value);
   }
+  // WORDS CHANGED, ID NOT MENTIONED — THE ID GOES.
+  //
+  // Rewriting "Radisson Blu, Ikeja" to "the other Radisson" while an old id
+  // sits in the row leaves the screen saying one place and every distance
+  // lookup asking about another, with nothing on screen to show the two have
+  // parted company. Silence about the id is not consent to keep it; a caller
+  // that means to keep it sends it.
+  for (const [text, id, column] of [
+    ['location', 'locationPlaceId', 'location_place_id'],
+    ['destination', 'destinationPlaceId', 'destination_place_id'],
+  ]) {
+    if (req.body?.[text] !== undefined && req.body?.[id] === undefined) {
+      updates.push(`${column} = ?`);
+      values.push(null);
+    }
+  }
+
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(row.id);

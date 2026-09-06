@@ -672,6 +672,20 @@ function ready() {
       // who writes about something personal once.
       await ensureColumn('mail_threads', 'visibility', "TEXT NOT NULL DEFAULT 'office'");
       await ensureIndex('idx_mail_threads_visibility', 'mail_threads(account_id, visibility)');
+      // WHAT THE MAP ACTUALLY MATCHED, kept beside the words a person typed.
+      //
+      // `location` and `destination` are free text and stay that way: "the
+      // usual place on Awolowo Road" is what an assistant writes and what the
+      // principal reads, and replacing it with a formatted address would make
+      // the day sheet worse. The place id is the machine's copy of the same
+      // fact — unambiguous, and what the distance lookup should ask about.
+      //
+      // Nullable on purpose. Every existing row has none, every hand-typed
+      // entry has none, and the lookup falls back to the text exactly as it
+      // does today. This makes an answer sharper when it is present; it is
+      // never a requirement for one.
+      await ensureColumn('itinerary_items', 'location_place_id', 'TEXT');
+      await ensureColumn('itinerary_items', 'destination_place_id', 'TEXT');
       await ensureIndex('idx_itinerary_series', 'itinerary_items(series_id)');
       await ensureIndex('idx_itinerary_trip', 'itinerary_items(trip_id)');
       await ensureIndex('idx_itinerary_pickup', 'itinerary_items(pickup_token)');
