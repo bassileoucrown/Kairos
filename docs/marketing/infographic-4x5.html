@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Kairos by Exousia</title>
+<style>
+  /* Kairos — social infographic, 1080 x 1350 (4:5, the tallest a feed will
+     show without cropping).
+
+     The palette is the product's own, not one invented for a poster:
+     #FAF9F6 paper, #3E6357 accent, #1C2127 ink, #8A6A24 the warn/bronze —
+     lifted straight from app/client/src/styles.css so the image and the app
+     look like the same company.
+
+     The motif is the day-spine: the app renders Today as "the day in order,
+     with a marker showing where now sits in it", and that vertical rule with
+     its markers is repeated here down the five systems. It is the product's
+     own shape rather than a decorative stripe. */
+
+  :root {
+    --paper:  #FAF9F6;
+    --ink:    #1C2127;
+    --muted:  #6B6659;
+    --green:  #3E6357;
+    --deep:   #24372F;
+    --gold:   #8A6A24;
+    --gold-l: #C9A548;
+    --border: #E3E0D6;
+    --soft:   #E9EFEC;
+    --serif:  'Bitstream Charter', 'Charter', Georgia, serif;
+    --sans:   'Liberation Sans', Arial, Helvetica, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1080px; height: 1350px;
+    background: var(--paper); color: var(--ink);
+    font-family: var(--sans);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  .eyebrow {
+    font-size: 15px; font-weight: 700; letter-spacing: 3.4px;
+    text-transform: uppercase;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .head {
+    background: var(--deep); color: #fff;
+    padding: 36px 64px 32px;
+  }
+  .head .eyebrow { color: var(--gold-l); }
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 84px; line-height: 0.98; font-weight: 700;
+    margin: 10px 0 0; letter-spacing: -1.5px;
+  }
+  .wordmark span { color: var(--gold-l); }
+  .promise {
+    font-family: var(--serif);
+    font-size: 25px; line-height: 1.36; color: #DCE5E0;
+    margin: 13px 0 0; max-width: 880px;
+  }
+
+  /* ── The inversion ──────────────────────────────────────────────── */
+  .turn {
+    padding: 26px 64px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .turn p {
+    font-family: var(--serif);
+    font-size: 27.5px; line-height: 1.3; margin: 0; max-width: 950px;
+  }
+  .turn b { color: var(--green); font-weight: 700; }
+  .turn .fade { color: var(--muted); }
+
+  /* ── The five systems, on the day-spine ─────────────────────────── */
+  .systems { padding: 28px 64px 18px; flex: 1; }
+  .systems > .eyebrow { color: var(--gold); margin-bottom: 22px; }
+
+  .spine { position: relative; padding-left: 46px; }
+  .spine::before {
+    content: ''; position: absolute; left: 7px; top: 9px; bottom: 10px;
+    width: 2px; background: var(--border);
+  }
+  .row { position: relative; padding: 0 0 18px; }
+  .row::before {
+    content: ''; position: absolute; left: -46px; top: 7px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--paper); border: 3px solid var(--green);
+  }
+  /* Custody is the one nobody else has, so its marker is filled. */
+  .row.is-key::before { background: var(--gold); border-color: var(--gold); }
+  .row h3 {
+    font-family: var(--serif);
+    font-size: 26px; margin: 0 0 5px; font-weight: 700; letter-spacing: -0.2px;
+  }
+  .row p {
+    font-size: 18px; line-height: 1.42; color: var(--muted);
+    margin: 0; max-width: 900px;
+  }
+  .row p em { color: var(--ink); font-style: normal; font-weight: 700; }
+
+  /* ── The four promises ──────────────────────────────────────────── */
+  .promises {
+    margin: 0 64px; padding: 18px 24px 19px;
+    background: var(--soft); border: 1px solid #D5E0DA; border-radius: 10px;
+  }
+  .promises > .eyebrow { color: var(--green); margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; }
+  .p-item { display: flex; gap: 11px; align-items: flex-start; }
+  .tick {
+    flex: 0 0 auto; width: 19px; height: 19px; margin-top: 2px;
+    fill: none; stroke: var(--green); stroke-width: 2.6;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .p-item span { font-size: 17.5px; line-height: 1.36; }
+  .p-item b { font-weight: 700; }
+
+  /* ── Proof and who made it ──────────────────────────────────────── */
+  .foot { background: var(--deep); color: #fff; padding: 20px 64px 22px; }
+  .stats { display: flex; gap: 0; }
+  .stat { flex: 1; }
+  .stat b {
+    display: block; font-family: var(--serif);
+    font-size: 40px; line-height: 1; color: var(--gold-l); font-weight: 700;
+  }
+  .stat span {
+    display: block; font-size: 14px; line-height: 1.3; margin-top: 5px;
+    color: #B9C6BF;
+  }
+  .sig {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid #3A5148;
+  }
+  .sig .who { font-size: 16px; font-weight: 700; letter-spacing: 0.2px; }
+  .sig .where { font-size: 14px; color: #9FB1A9; }
+</style>
+</head>
+<body>
+
+  <header class="head">
+    <p class="eyebrow">Exousia Prime Emporium Ltd · Lagos</p>
+    <h1 class="wordmark">Kairos<span>.</span></h1>
+    <p class="promise">
+      The operating system for a principal’s day — and for the assistant
+      who runs it.
+    </p>
+  </header>
+
+  <section class="turn">
+    <p>
+      <span class="fade">Every other scheduling tool is built for the person
+      doing the booking.</span>
+      Kairos is built for the person whose time is being <b>protected</b>,
+      and the assistant who protects it.
+    </p>
+  </section>
+
+  <section class="systems">
+    <p class="eyebrow">Five systems, working as one</p>
+    <div class="spine">
+
+      <div class="row">
+        <h3>Booking with a door policy</h3>
+        <p>Four tiers of access, so a stranger and a board member are never
+          treated the same. Some meetings confirm themselves. Some arrive as a
+          <em>request your assistant approves</em> — or declines.</p>
+      </div>
+
+      <div class="row">
+        <h3>A desk of their own for the assistant</h3>
+        <p>Not a permission bolted onto someone else’s calendar. A real
+          workspace: approvals, briefs, instructions, correspondence and
+          minutes — across <em>every principal they run</em>.</p>
+      </div>
+
+      <div class="row">
+        <h3>The day, and getting through it</h3>
+        <p>Today in order. Trips, movements, driver cards, check-calls, and
+          travel time read from <em>live traffic at the hour you actually
+          leave</em> — not a number somebody typed once.</p>
+      </div>
+
+      <div class="row is-key">
+        <h3>Custody — the part nobody else has</h3>
+        <p>Passports, visas, policies and the documents behind them.
+          <em>Encrypted before they leave the server</em>, opened only with a
+          second factor, and every single reveal written down.</p>
+      </div>
+
+      <div class="row">
+        <h3>Intelligence that refuses</h3>
+        <p>It drafts, it catches you up, it reads the week ahead. It
+          <em>never sends on anyone’s behalf</em>, and it cannot reach the
+          vault at all.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="promises">
+    <p class="eyebrow">Four things Kairos will not do</p>
+    <div class="grid">
+      <div class="p-item">
+        <svg class="tick" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>
+        <span>Show a scheduling assistant your <b>passport number</b>. They see
+          the diary, not the drawer.</span>
+      </div>
+      <div class="p-item">
+        <svg class="tick" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>
+        <span>Tell the office where you are on a <b>private trip</b>. You choose
+          who knows, one person at a time.</span>
+      </div>
+      <div class="p-item">
+        <svg class="tick" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>
+        <span>Open a sensitive detail <b>without leaving a trace</b> — and the
+          trail is written for you to read.</span>
+      </div>
+      <div class="p-item">
+        <svg class="tick" viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>
+        <span>Send anything as you. <b>AI drafts, people send</b> — and only a
+          delegate you named may send at all.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="stats">
+      <div class="stat"><b>39</b><span>features live<br>today</span></div>
+      <div class="stat"><b>122</b><span>automated<br>test suites</span></div>
+      <div class="stat"><b>2</b><span>databases, every<br>release, both green</span></div>
+      <div class="stat"><b>Lagos</b><span>built for how Africa<br>actually works</span></div>
+    </div>
+    <div class="sig">
+      <span class="who">Kairos by Exousia</span>
+      <span class="where">Exousia Prime Emporium Ltd · Lagos, Nigeria</span>
+    </div>
+  </footer>
+
+</body>
+</html>
