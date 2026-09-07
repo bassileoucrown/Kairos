@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Kairos by Exousia — poster</title>
+<style>
+  /* Kairos by Exousia — the full poster, 1080 x 1350.
+     Denser than the post series: a logo lock-up, the app on a phone, what it
+     does, who it is for, and the payoff band — one image that answers every
+     first question.
+
+     WHO IT IS FOR IS FOUR AUDIENCES, NOT TWO. A principal may have several
+     assistants at once (memberships carries pa, ea and chief_of_staff), a
+     household of staff with job titles of their own, drivers, and a family.
+     The product's real distinction is that it keeps them apart, so the panel
+     names them separately rather than collapsing them into "your team".
+
+     No photograph. The reference for this layout sits on a desk photo; a
+     stand-in would look like a stock image pretending to be a product shot,
+     so the ground is a quiet warm wash instead. Drop a real photo in behind
+     .bg if there is one. */
+
+  :root{
+    --paper:#FAF9F6; --ink:#1C2127; --muted:#6B6659; --green:#3E6357;
+    --deep:#24372F; --gold:#8A6A24; --gold-l:#C9A548; --border:#E3E0D6;
+    --soft:#E9EFEC; --line:#EDEAE2;
+    --serif:'Bitstream Charter','Charter',Georgia,serif;
+    --sans:'Liberation Sans',Arial,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    width:1080px;height:1350px;overflow:hidden;position:relative;
+    background:var(--paper);color:var(--ink);font-family:var(--sans);
+    display:flex;flex-direction:column;
+  }
+  /* A quiet wash rather than a photograph — warm at the top left, cooling
+     towards the green band so the two do not fight. */
+  .bg{
+    position:absolute;inset:0;z-index:0;
+    background:
+      radial-gradient(900px 620px at 12% 4%, #FFFDF7 0%, rgba(255,253,247,0) 62%),
+      radial-gradient(780px 560px at 96% 20%, #EDF2EE 0%, rgba(237,242,238,0) 60%),
+      linear-gradient(180deg,#FBFAF6 0%, #F5F4EE 62%, #F1F0E9 100%);
+  }
+  .layer{position:relative;z-index:1;display:flex;flex-direction:column;height:100%}
+
+  /* ── The lock-up ─────────────────────────────────────────────────── */
+  .top{display:flex;align-items:center;gap:20px;padding:42px 56px 0}
+  .mark{
+    flex:0 0 auto;width:80px;height:80px;border-radius:22px;background:var(--green);
+    display:grid;place-items:center;box-shadow:0 6px 18px rgba(36,55,47,.22);
+  }
+  .mark span{font-family:var(--serif);font-size:46px;font-weight:700;color:#fff;line-height:1}
+  .lock .n{font-family:var(--serif);font-size:52px;font-weight:700;line-height:1;letter-spacing:-1px}
+  .lock .b{font-family:var(--serif);font-size:22px;color:var(--muted);margin-top:2px}
+  .rule{width:1px;height:56px;background:var(--border);margin:0 4px}
+  .claim{font-size:15px;font-weight:700;letter-spacing:3.4px;line-height:1.7;color:var(--muted)}
+  .promise{margin-left:auto;text-align:right}
+  .promise i{
+    display:block;font-family:var(--serif);font-style:italic;font-size:27px;
+    line-height:1.2;color:var(--green);font-weight:700;
+  }
+  .promise svg{display:block;margin:4px 0 0 auto;width:210px;height:12px}
+
+  /* ── Three columns ───────────────────────────────────────────────── */
+  .body{flex:1;display:flex;gap:22px;padding:26px 56px 0}
+  .left{flex:1 1 0;min-width:0}
+  .mid{flex:0 0 306px}
+  .right{flex:0 0 268px}
+
+  h1{margin:0;font-size:46px;line-height:1.1;letter-spacing:-0.9px;font-weight:700}
+  h1 em{font-style:normal;color:var(--green);display:block}
+  .intro{font-size:17.5px;line-height:1.5;color:var(--muted);margin:14px 0 0}
+
+  .feat{display:flex;gap:15px;margin-top:22px}
+  .ico{
+    flex:0 0 auto;width:48px;height:48px;border-radius:14px;background:var(--green);
+    display:grid;place-items:center;
+  }
+  .ico svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .feat .t{font-size:20px;font-weight:700;line-height:1.2}
+  .feat .s{font-size:15.5px;line-height:1.42;color:var(--muted);margin-top:3px}
+
+  /* ── The phone ───────────────────────────────────────────────────── */
+  .phone{width:306px;background:#12161A;border-radius:44px;padding:9px;
+    box-shadow:0 20px 44px rgba(28,33,39,.22)}
+  .screen{background:#fff;border-radius:36px;overflow:hidden}
+  .status{display:flex;justify-content:space-between;align-items:center;
+    padding:9px 18px 4px;font-size:12px;font-weight:700;color:var(--ink)}
+  .ph-top{display:flex;align-items:center;gap:9px;padding:6px 16px 12px}
+  .ph-mark{width:30px;height:30px;border-radius:9px;background:var(--green);
+    display:grid;place-items:center}
+  .ph-mark span{font-family:var(--serif);font-size:18px;font-weight:700;color:#fff;line-height:1}
+  .ph-name{font-family:var(--serif);font-size:19px;font-weight:700;line-height:1}
+  .ph-name b{display:block;font-family:var(--sans);font-size:10px;font-weight:700;
+    color:var(--muted);letter-spacing:.6px}
+  .bell{margin-left:auto;width:17px;height:17px;fill:none;stroke:var(--muted);stroke-width:1.9}
+  .greet{padding:0 16px}
+  .greet .g{font-size:19px;font-weight:700;line-height:1.2}
+  .greet .g2{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .datebar{margin:11px 16px 0;border:1px solid var(--line);border-radius:9px;
+    padding:9px 12px;display:flex;align-items:center;font-size:13px;font-weight:700}
+  .datebar svg{margin-left:auto;width:15px;height:15px;fill:none;stroke:var(--muted);stroke-width:1.8}
+  .pills{display:flex;gap:7px;margin:10px 16px 0}
+  .pill{flex:1;text-align:center;font-size:12.5px;font-weight:700;padding:8px 0;
+    border-radius:999px;background:#F3F2ED;color:var(--muted)}
+  .pill.on{background:var(--green);color:#fff}
+  .rows{margin:11px 6px 0}
+  .r{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:10px}
+  .r + .r{border-top:1px solid var(--line)}
+  .r .d{flex:0 0 auto;width:7px;height:7px;border-radius:50%;margin-top:15px}
+  .r .sq{flex:0 0 auto;width:29px;height:29px;border-radius:9px;display:grid;place-items:center}
+  .r .sq svg{width:15px;height:15px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .r .x{flex:1;min-width:0}
+  .r .x .tm{font-size:10.5px;color:var(--muted);font-weight:700}
+  .r .x .ti{font-size:13.5px;font-weight:700;margin-top:1px}
+  .r .x .pl{font-size:11px;color:var(--muted);margin-top:1px}
+  .nav{display:flex;border-top:1px solid var(--line);margin-top:8px;padding:8px 0 11px}
+  .nv{flex:1;text-align:center;font-size:9.5px;color:var(--muted);font-weight:700}
+  .nv svg{display:block;margin:0 auto 3px;width:17px;height:17px;fill:none;
+    stroke:var(--muted);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .nv.on{color:var(--green)} .nv.on svg{stroke:var(--green)}
+
+  /* ── Built for ───────────────────────────────────────────────────── */
+  /* The phone is one screen of several, and saying so is the whole "more
+     than two people" point in one line. */
+  .under{margin-top:16px;background:var(--soft);border:1px solid #D5E0DA;
+    border-radius:14px;padding:14px 16px}
+  .under .t{font-size:15px;font-weight:700;line-height:1.25}
+  .under .s{font-size:13.5px;line-height:1.4;color:var(--muted);margin-top:4px}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:18px;
+    padding:20px 20px 18px;box-shadow:0 8px 24px rgba(28,33,39,.06)}
+  .card h2{font-family:var(--serif);font-size:26px;margin:0 0 15px;font-weight:700}
+  .who{display:flex;gap:12px;margin-bottom:15px}
+  .who .c{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--soft);
+    display:grid;place-items:center}
+  .who .c svg{width:20px;height:20px;fill:none;stroke:var(--green);stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .who .t{font-size:17px;font-weight:700;line-height:1.2}
+  .who .s{font-size:14px;line-height:1.38;color:var(--muted);margin-top:2px}
+  .card .note{
+    border-top:1px solid var(--line);margin-top:4px;padding-top:14px;
+    font-family:var(--serif);font-style:italic;font-size:16px;line-height:1.4;
+  }
+
+  /* ── The band ────────────────────────────────────────────────────── */
+  .band{background:var(--deep);color:#fff;padding:26px 56px 24px;margin-top:26px}
+  .band .hdr{text-align:center;font-size:15px;font-weight:700;letter-spacing:3.6px;
+    color:#CFDCD5;margin-bottom:16px}
+  .four{display:flex}
+  .q{flex:1;text-align:center;padding:0 8px;position:relative}
+  .q + .q::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:1px;
+    background:#3A5148}
+  .q svg{width:26px;height:26px;fill:none;stroke:var(--gold-l);stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;margin-bottom:7px}
+  .q .t{font-size:17px;font-weight:700}
+  .q .s{font-size:13px;color:#A9BBB2;margin-top:2px}
+  .sig{display:flex;align-items:center;justify-content:center;gap:12px;
+    padding:16px 0 0;margin-top:16px;border-top:1px solid #3A5148}
+  .sig .m{width:38px;height:38px;border-radius:11px;background:#fff;display:grid;place-items:center}
+  .sig .m span{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--green);line-height:1}
+  .sig .n{font-family:var(--serif);font-size:26px;font-weight:700;line-height:1}
+  .sig .n b{display:block;font-family:var(--sans);font-size:12px;font-weight:700;
+    color:#9FB1A9;letter-spacing:.4px;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="layer">
+
+  <!-- ── Lock-up ────────────────────────────────────────────────── -->
+  <div class="top">
+    <div class="mark"><span>K</span></div>
+    <div class="lock">
+      <div class="n">Kairos</div>
+      <div class="b">by Exousia</div>
+    </div>
+    <div class="rule"></div>
+    <div class="claim">YOUR TIME.<br>PROTECTED.</div>
+    <div class="promise">
+      <i>Plan today.<br>Arrive on time.</i>
+      <svg viewBox="0 0 210 12"><path d="M3 8C48 2 150 1 207 6" fill="none"
+        stroke="#8A6A24" stroke-width="3" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <!-- ── Three columns ──────────────────────────────────────────── -->
+  <div class="body">
+
+    <div class="left">
+      <h1>More than a calendar.<em>The system that runs a principal’s day.</em></h1>
+      <p class="intro">Kairos by Exousia is built for people whose time is spoken
+        for — and for everyone around them who keeps it that way. One principal,
+        one diary, and each person seeing only their own part of it.</p>
+
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+        <div><div class="t">The day, in order</div>
+          <div class="s">What is happening now at the top, and when to leave — not only when to arrive.</div></div>
+      </div>
+
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 6.5"/><path d="M3 18.5h.01"/></svg></div>
+        <div><div class="t">One queue for every request</div>
+          <div class="s">Bookings arrive in one place for an assistant to approve, decline, or offer another time.</div></div>
+      </div>
+
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.2 2.7-5 6-5s6 1.8 6 5"/><circle cx="17.5" cy="9.5" r="2.4"/><path d="M15.6 14.2c2.9.2 5.4 1.6 5.4 4.8"/></svg></div>
+        <div><div class="t">Everyone in their place</div>
+          <div class="s">Several assistants, drivers and house staff — each with their own view, and only their own.</div></div>
+      </div>
+
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 13l2-5h14l2 5"/><path d="M3 13h18v5H3z"/><circle cx="7" cy="18.5" r="1.5"/><circle cx="17" cy="18.5" r="1.5"/></svg></div>
+        <div><div class="t">Trips that hold together</div>
+          <div class="s">Flights, cars, drivers and who to call at the other end — as one thing, not five messages.</div></div>
+      </div>
+
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6z"/></svg></div>
+        <div><div class="t">Yours to decide</div>
+          <div class="s">You choose what the office can see, and what stays with you alone.</div></div>
+      </div>
+    </div>
+
+    <!-- ── The app ── -->
+    <div class="mid">
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▮▮▮ ⌁</span></div>
+        <div class="ph-top">
+          <div class="ph-mark"><span>K</span></div>
+          <div class="ph-name">Kairos<b>BY EXOUSIA</b></div>
+          <svg class="bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+        </div>
+        <div class="greet">
+          <div class="g">Good morning, Bassileou</div>
+          <div class="g2">Here is your day at a glance.</div>
+        </div>
+        <div class="datebar">Tue, 10 Sep 2026
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        </div>
+        <div class="pills"><div class="pill on">Today</div><div class="pill">Week</div><div class="pill">Month</div></div>
+        <div class="rows">
+          <div class="r"><i class="d" style="background:#3E6357"></i>
+            <div class="sq" style="background:#E9EFEC"><svg viewBox="0 0 24 24" stroke="#3E6357"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>
+            <div class="x"><div class="tm">8:00 – 9:00 AM</div><div class="ti">Strategy meeting</div><div class="pl">Board room · Exousia</div></div></div>
+          <div class="r"><i class="d" style="background:#2F6FA8"></i>
+            <div class="sq" style="background:#E7EFF6"><svg viewBox="0 0 24 24" stroke="#2F6FA8"><path d="M4 6h11v12H4z"/><path d="M15 10l5-3v10l-5-3"/></svg></div>
+            <div class="x"><div class="tm">10:30 – 11:30 AM</div><div class="ti">Client call</div><div class="pl">Video</div></div></div>
+          <div class="r"><i class="d" style="background:#6E9B3E"></i>
+            <div class="sq" style="background:#EDF3E5"><svg viewBox="0 0 24 24" stroke="#6E9B3E"><path d="M6 3v8a2 2 0 004 0V3M8 11v10M17 3c-1.5 2-2 4-2 6h4c0-2-.5-4-2-6zM17 9v12"/></svg></div>
+            <div class="x"><div class="tm">1:00 – 2:00 PM</div><div class="ti">Lunch — Mrs Bello</div><div class="pl">Ikoyi · leave 12:30</div></div></div>
+          <div class="r"><i class="d" style="background:#8A6A24"></i>
+            <div class="sq" style="background:#F7F0DF"><svg viewBox="0 0 24 24" stroke="#8A6A24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg></div>
+            <div class="x"><div class="tm">3:00 – 4:00 PM</div><div class="ti">Project review</div><div class="pl">Office</div></div></div>
+          <div class="r"><i class="d" style="background:#B3663A"></i>
+            <div class="sq" style="background:#F8EDE6"><svg viewBox="0 0 24 24" stroke="#B3663A"><path d="M4 11l8-6 8 6"/><path d="M6 10v9h12v-9"/></svg></div>
+            <div class="x"><div class="tm">6:00 – 7:00 PM</div><div class="ti">Family time</div><div class="pl">Home · private</div></div></div>
+          <div class="r"><i class="d" style="background:#5C6B80"></i>
+            <div class="sq" style="background:#ECEEF2"><svg viewBox="0 0 24 24" stroke="#5C6B80"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div>
+            <div class="x"><div class="tm">8:30 PM</div><div class="ti">Flight to Abuja</div><div class="pl">Driver confirmed</div></div></div>
+        </div>
+        <div class="nav">
+          <div class="nv on"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10v9h12v-9"/></svg>Home</div>
+          <div class="nv"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>Diary</div>
+          <div class="nv"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Tasks</div>
+          <div class="nv"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/></svg>More</div>
+        </div>
+      </div></div>
+      <div class="under">
+        <div class="t">This is the principal’s screen.</div>
+        <div class="s">Each assistant has a desk of their own, and a driver
+          sees one journey. Nobody is handed the whole diary because they were
+          given a login.</div>
+      </div>
+    </div>
+
+    <!-- ── Built for ── -->
+    <div class="right">
+      <div class="card">
+        <h2>Built for:</h2>
+
+        <div class="who"><div class="c"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></div>
+          <div><div class="t">Principals</div><div class="s">Executives, founders and HNWIs whose time is spoken for.</div></div></div>
+
+        <div class="who"><div class="c"><svg viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="2.8"/><path d="M2.5 19c0-3.1 2.5-5 5.5-5s5.5 1.9 5.5 5"/><circle cx="17" cy="10" r="2.4"/><path d="M15 14.4c2.9.1 6 1.4 6 4.6"/></svg></div>
+          <div><div class="t">More than one assistant</div><div class="s">PAs, EAs and a Chief of Staff on the same account, each with their own desk.</div></div></div>
+
+        <div class="who"><div class="c"><svg viewBox="0 0 24 24"><path d="M3 13l2-5h14l2 5"/><path d="M3 13h18v5H3z"/><circle cx="7" cy="18.5" r="1.6"/><circle cx="17" cy="18.5" r="1.6"/></svg></div>
+          <div><div class="t">Drivers and house staff</div><div class="s">The people who actually move the day — told only what they need.</div></div></div>
+
+        <div class="who"><div class="c"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10v9h12v-9"/><path d="M10 19v-4h4v4"/></svg></div>
+          <div><div class="t">Family</div><div class="s">Time at home kept as firmly as time at work.</div></div></div>
+
+        <div class="who"><div class="c"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg></div>
+          <div><div class="t">Offices and family offices</div><div class="s">One desk running several principals at once.</div></div></div>
+
+        <p class="note">Because your time is not only yours to spend — it is
+          somebody’s job to protect it.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Band ───────────────────────────────────────────────────── -->
+  <div class="band">
+    <div class="hdr">LESS CHASING. FEWER CLASHES. A DAY THAT HOLDS.</div>
+    <div class="four">
+      <div class="q"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <div class="t">Leave on time</div><div class="s">travel read from the road</div></div>
+      <div class="q"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
+        <div class="t">Stay on what matters</div><div class="s">requests answered once</div></div>
+      <div class="q"><svg viewBox="0 0 24 24"><path d="M4 18h16"/><path d="M6 18V9M11 18V5M16 18v-6"/></svg>
+        <div class="t">See the whole week</div><div class="s">before it arrives</div></div>
+      <div class="q"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div class="t">Keep what is private</div><div class="s">private</div></div>
+    </div>
+    <div class="sig">
+      <div class="m"><span>K</span></div>
+      <div class="n">Kairos<b>BY EXOUSIA · LAGOS</b></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

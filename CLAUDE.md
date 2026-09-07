@@ -144,6 +144,25 @@ Not renamed in code. `app/client/index.html` still titles the app "Kairos by
 Exousia" already, and internal identifiers, table names and route paths stay
 `kairos` — a name for people is not a reason to touch a schema.
 
+## It is not two people
+
+The owner's correction, 7 September, after two marketing pieces had led with
+"one diary, two people": *"its more than 2 two people. for principals with
+more than 1 assistant and staffs in their homes."*
+
+That framing was wrong and the code says so. `memberships` is many-per-
+principal across three assistant roles — `pa`, `ea`, `chief_of_staff` (see
+`lib/roles.js`, `lib/spaceAccess.js`) — so a principal may have several
+assistants at once. `household_members` carries a `job_title` and is a
+separate population again: house managers, cooks, security. `lib/drivers.js`
+is a third. Add the family, and the honest picture is **one principal and the
+whole office and household around them**, each seeing only their part.
+
+So: never describe Kairos as a two-sided tool. The principal, their
+assistants, their household staff and their family are four different
+audiences with four different screens, and the product's actual distinction
+is that it keeps them separate rather than that it joins two people up.
+
 ## Built, tested, and not yet on a screen
 
 Different from the list above: these are not decisions waiting on the owner,
