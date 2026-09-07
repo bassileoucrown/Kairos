@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Kairos by Exousia</title>
+<style>
+  /* Kairos by Exousia — the plain introduction, 1080 x 1350.
+
+     DELIBERATELY SAYS LESS. The detailed version leads on custody: passports,
+     encryption, the reveal trail. None of that is here. This one is for
+     somebody who has never heard the name, and the job is only that they
+     understand what it is and who it is for. Nothing sensitive is named.
+
+     The pictures are the argument: one phone showing the principal's day, one
+     window showing the assistant's desk. Two people, two screens, one diary. */
+
+  :root {
+    --paper:  #FAF9F6;
+    --ink:    #1C2127;
+    --muted:  #6B6659;
+    --green:  #3E6357;
+    --deep:   #24372F;
+    --gold:   #8A6A24;
+    --gold-l: #C9A548;
+    --border: #E3E0D6;
+    --soft:   #E9EFEC;
+    --line:   #EDEAE2;
+    --serif:  'Bitstream Charter', 'Charter', Georgia, serif;
+    --sans:   'Liberation Sans', Arial, Helvetica, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1080px; height: 1350px; overflow: hidden;
+    background: var(--paper); color: var(--ink); font-family: var(--sans);
+    display: flex; flex-direction: column;
+  }
+  .eyebrow {
+    font-size: 14px; font-weight: 700; letter-spacing: 3.2px;
+    text-transform: uppercase; margin: 0;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .head { background: var(--deep); color: #fff; padding: 40px 64px 36px; }
+  .head .eyebrow { color: var(--gold-l); }
+  .wordmark {
+    font-family: var(--serif); font-weight: 700;
+    font-size: 66px; line-height: 1.02; margin: 12px 0 0; letter-spacing: -1px;
+  }
+  .wordmark .by { color: var(--gold-l); font-size: 44px; }
+  .sub {
+    font-family: var(--serif); font-size: 25px; line-height: 1.34;
+    color: #DCE5E0; margin: 14px 0 0; max-width: 850px;
+  }
+
+  /* ── The two screens ────────────────────────────────────────────── */
+  .stage {
+    flex: 1; position: relative;
+    padding: 30px 64px 0;
+    display: flex; align-items: flex-start; gap: 26px;
+  }
+
+  .cap { margin: 0 0 10px; }
+  .cap .who { font-family: var(--serif); font-size: 25px; font-weight: 700; }
+  .cap .what { font-size: 16px; color: var(--muted); margin-top: 2px; }
+
+  /* A browser window — the assistant works at a desk. */
+  .win-wrap { flex: 1 1 auto; }
+  .win {
+    border: 1px solid var(--border); border-radius: 12px; background: #fff;
+    box-shadow: 0 10px 28px rgba(28,33,39,0.09); overflow: hidden;
+  }
+  .win-bar {
+    height: 30px; background: #F1EFE9; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #D6D2C7; }
+  .tabs { display: flex; border-bottom: 1px solid var(--line); background: #FCFBF8; }
+  .tab {
+    padding: 12px 19px; font-size: 15.5px; color: var(--muted);
+    border-right: 1px solid var(--line);
+  }
+  .tab.on { color: var(--green); font-weight: 700; background: #fff; }
+  .tab .pip {
+    display: inline-block; min-width: 17px; padding: 0 4px; margin-left: 6px;
+    background: var(--gold); color: #fff; border-radius: 9px;
+    font-size: 11px; font-weight: 700; text-align: center; line-height: 15px;
+  }
+  .win-body { padding: 16px 18px 18px; }
+  .win-h { font-size: 13px; font-weight: 700; letter-spacing: 1.6px;
+           text-transform: uppercase; color: var(--muted); margin: 0 0 11px; }
+  .ask {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 9px;
+  }
+  .ask .t { flex: 1; }
+  .ask .t b { display: block; font-size: 16.5px; }
+  .ask .t span { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
+  .btn {
+    font-size: 13.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
+    background: var(--green); color: #fff;
+  }
+  .btn.ghost { background: #fff; color: var(--muted); border: 1px solid var(--border); }
+
+  /* A phone — the principal reads their day. */
+  .phone-wrap { flex: 0 0 322px; }
+  .phone {
+    width: 322px; background: #1C2127; border-radius: 40px; padding: 11px;
+    box-shadow: 0 10px 28px rgba(28,33,39,0.13);
+  }
+  .screen { background: var(--paper); border-radius: 30px; overflow: hidden; }
+  .notch {
+    width: 92px; height: 6px; background: #3A4048; border-radius: 3px;
+    margin: 5px auto 8px;
+  }
+  .ph-head {
+    background: #fff; border-bottom: 1px solid var(--line); padding: 13px 16px 14px;
+  }
+  .ph-head .d { font-family: var(--serif); font-size: 23px; font-weight: 700; }
+  .ph-head .z { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  .ph-body { padding: 14px 16px 17px; }
+  .now {
+    border: 1px solid var(--green); border-left: 3px solid var(--green);
+    background: var(--soft); border-radius: 8px; padding: 11px 13px; margin-bottom: 12px;
+  }
+  .now .lab { font-size: 11.5px; font-weight: 700; letter-spacing: 1.4px;
+              color: var(--green); text-transform: uppercase; }
+  .now .ttl { font-size: 17.5px; font-weight: 700; margin-top: 3px; }
+  .now .sub2 { font-size: 14px; color: var(--muted); margin-top: 2px; }
+  .item { display: flex; gap: 11px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .item .tm { font-size: 14px; color: var(--muted); width: 48px; flex: 0 0 48px; font-weight: 700; }
+  .item .bd b { display: block; font-size: 16px; font-weight: 700; }
+  .item .bd span { display: block; font-size: 13.5px; color: var(--muted); }
+  .ph-foot {
+    margin-top: 13px; background: var(--green); color: #fff; border-radius: 999px;
+    text-align: center; font-size: 14.5px; font-weight: 700; padding: 11px;
+  }
+
+  /* ── Who it is for ──────────────────────────────────────────────── */
+  .roles { display: flex; gap: 22px; padding: 0 64px 26px; }
+  .role {
+    flex: 1; background: #fff; border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px 19px;
+  }
+  .role h3 {
+    font-family: var(--serif); font-size: 23px; margin: 0 0 2px; font-weight: 700;
+  }
+  .role .lead { font-size: 13.5px; color: var(--muted); margin: 0 0 12px; }
+  .role ul { margin: 0; padding: 0; list-style: none; }
+  .role li {
+    display: flex; gap: 9px; align-items: flex-start;
+    font-size: 15.5px; line-height: 1.32; padding: 5px 0;
+  }
+  .role li svg {
+    flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px;
+    fill: none; stroke: var(--green); stroke-width: 2.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ── How a request travels ──────────────────────────────────────── */
+  /* Numbered because this genuinely is a sequence — first somebody asks,
+     then the desk decides, then it is on the day. The arrows carry the
+     meaning; they are not decoration. */
+  .flow { padding: 4px 64px 26px; }
+  .flow > .eyebrow { color: var(--gold); margin-bottom: 14px; }
+  .rail { display: flex; align-items: stretch; gap: 12px; }
+  .step {
+    flex: 1; background: #fff; border: 1px solid var(--border);
+    border-radius: 10px; padding: 15px 17px 16px;
+  }
+  .step .n {
+    display: inline-block; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--green); color: #fff; font-size: 13px; font-weight: 700;
+    text-align: center; line-height: 24px;
+  }
+  .step.last .n { background: var(--gold); }
+  .step .t { font-size: 17px; font-weight: 700; margin-top: 9px; line-height: 1.25; }
+  .step .s { font-size: 14px; color: var(--muted); margin-top: 3px; line-height: 1.3; }
+  .arrow {
+    flex: 0 0 auto; align-self: center; width: 26px; height: 26px;
+    fill: none; stroke: var(--border); stroke-width: 2.4;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────── */
+  .foot {
+    background: var(--deep); color: #fff; padding: 20px 64px 22px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .foot .l { font-family: var(--serif); font-size: 21px; font-weight: 700; }
+  .foot .r { font-size: 14px; color: #9FB1A9; }
+</style>
+</head>
+<body>
+
+  <header class="head">
+    <p class="eyebrow">Scheduling for people whose time is spoken for</p>
+    <h1 class="wordmark">Kairos <span class="by">by Exousia</span></h1>
+    <p class="sub">
+      One diary, two people. The principal sees their day. The assistant runs
+      it — from their own desk, on their own screen.
+    </p>
+  </header>
+
+  <section class="stage">
+
+    <div class="win-wrap">
+      <div class="cap">
+        <div class="who">The assistant’s desk</div>
+        <div class="what">PA, EA or Chief of Staff — on a laptop</div>
+      </div>
+      <div class="win">
+        <div class="win-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+        <div class="tabs">
+          <div class="tab on">Approvals <span class="pip">3</span></div>
+          <div class="tab">Bookings</div>
+          <div class="tab">Briefs</div>
+          <div class="tab">Trips</div>
+        </div>
+        <div class="win-body">
+          <p class="win-h">Waiting on you</p>
+
+          <div class="ask">
+            <div class="t"><b>Intro call — Tunde A.</b><span>Thursday 11:00 · 30 min · video</span></div>
+            <span class="btn">Approve</span><span class="btn ghost">Decline</span>
+          </div>
+          <div class="ask">
+            <div class="t"><b>Site visit — Lekki</b><span>Friday 08:30 · needs a car</span></div>
+            <span class="btn">Approve</span><span class="btn ghost">Decline</span>
+          </div>
+          <div class="ask">
+            <div class="t"><b>Brief for the board meeting</b><span>Ready to send to the principal</span></div>
+            <span class="btn">Send</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="cap">
+        <div class="who">The principal’s day</div>
+        <div class="what">On the phone, in order</div>
+      </div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="ph-head">
+            <div class="d">Monday, 8 September</div>
+            <div class="z">Lagos · 4 things today</div>
+          </div>
+          <div class="ph-body">
+            <div class="now">
+              <div class="lab">Now</div>
+              <div class="ttl">Board meeting</div>
+              <div class="sub2">Ends 11:30 · Boardroom</div>
+            </div>
+            <div class="item">
+              <div class="tm">12:30</div>
+              <div class="bd"><b>Lunch — Mrs Bello</b><span>Ikoyi · leave 12:00</span></div>
+            </div>
+            <div class="item">
+              <div class="tm">15:00</div>
+              <div class="bd"><b>Call with the bank</b><span>Video</span></div>
+            </div>
+            <div class="item">
+              <div class="tm">18:30</div>
+              <div class="bd"><b>Flight to Abuja</b><span>Driver confirmed</span></div>
+            </div>
+            <div class="ph-foot">Plan the day</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <section class="flow">
+    <p class="eyebrow">How a meeting reaches the diary</p>
+    <div class="rail">
+      <div class="step">
+        <span class="n">1</span>
+        <div class="t">Someone asks for time</div>
+        <div class="s">Through your booking link, or the office adds it</div>
+      </div>
+      <svg class="arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      <div class="step">
+        <span class="n">2</span>
+        <div class="t">The desk decides</div>
+        <div class="s">Approve, decline, or offer another time</div>
+      </div>
+      <svg class="arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      <div class="step last">
+        <span class="n">3</span>
+        <div class="t">It is on the day</div>
+        <div class="s">On the principal’s phone, in order, with travel time</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="roles">
+    <div class="role">
+      <h3>If you are the principal</h3>
+      <p class="lead">You open it once and know the shape of your day.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Your day in order, with what is happening now at the top</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Nobody takes a slot just because they found your link</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Trips, drivers and travel time, so you leave on time</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>You decide what your office can see</li>
+      </ul>
+    </div>
+    <div class="role">
+      <h3>If you run the diary</h3>
+      <p class="lead">A desk of your own, not a corner of somebody else’s.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Requests arrive in one queue, to approve or decline</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Briefs, instructions and minutes kept where they belong</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Draft with help — nothing is ever sent without you</li>
+        <li><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 6"/></svg>Run more than one principal from the same desk</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="l">Kairos by Exousia</span>
+    <span class="r">Lagos, Nigeria</span>
+  </footer>
+
+</body>
+</html>

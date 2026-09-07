@@ -129,6 +129,21 @@ Also still unbuilt and not to be started unasked: desk-scoped billing; the
 written delegation recorded at setup; mail drafting and sending (the grant
 carries `sendMode` and nothing consumes it).
 
+## The name is "Kairos by Exousia"
+
+The owner's instruction, 7 September: *"name should be Kairos by Exousia going
+forward."*
+
+So it is one name, not a product with a publisher's line under it. Anything
+outward-facing — decks, infographics, the landing page, a title tag, an email
+signature — says **Kairos by Exousia**, and "Exousia Prime Emporium Ltd" is
+kept for where a legal entity is actually wanted: contracts, invoices, the
+company line in a footer.
+
+Not renamed in code. `app/client/index.html` still titles the app "Kairos by
+Exousia" already, and internal identifiers, table names and route paths stay
+`kairos` — a name for people is not a reason to touch a schema.
+
 ## Built, tested, and not yet on a screen
 
 Different from the list above: these are not decisions waiting on the owner,
