@@ -911,7 +911,19 @@ textarea { resize: vertical; min-height: 70px; }
    there are two of them stacked now — the pad dock and Tell us — so it
    covers the taller stack rather than the button it was measured against
    when there was one. See bdock. */
-.app-body { padding: 22px 28px 144px; max-width: 1100px; width: 100%; }
+/* CENTRED, AND WIDER WHERE THERE IS ROOM.
+   The cap is right — a schedule row 1400px wide is a worse row. What was
+   wrong is where the leftover went. Capped at 1100 and hugging the left, a
+   tablet turned sideways gained 534px of width and left 284 of it in one
+   dead block down the right: measured 18% of the screen at 1600x1066, and 0%
+   upright on the same device, which is exactly why rotating felt like a
+   regression. margin-inline: auto splits that leftover in two so it reads as
+   a margin instead of as a page that stopped early.
+
+   The cap then lifts once there is genuinely room for a longer line, and not
+   before: below 1400px nothing changes at all. */
+.app-body { padding: 22px 28px 144px; max-width: 1100px; width: 100%; margin-inline: auto; }
+@media (min-width: 1400px) { .app-body { max-width: 1280px; } }
 
 /* --- Declared, but not open yet ---------------------------------------- */
 /* Marked in the rail as well as on the page: somebody deciding whether to
