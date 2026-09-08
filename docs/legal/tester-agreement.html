@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Kairos by Exousia — Pilot Tester Agreement</title>
+<style>
+  /* One A4 page, print-first.
+     Every factual claim in here is checked against the code rather than
+     drafted from a template: deletion really is itemised and irreversible
+     (lib/accountDeletion.js), the vault really is unreadable without the key
+     (render.yaml, lib/objectStore.js), tier enforcement really is off so a
+     tester really does get every feature (lib/plans.js), and the pilot
+     infrastructure really may not be backed up (render.yaml). An agreement
+     that promises something the software does not do is worse than none. */
+  @page { size: A4; margin: 0; }
+  :root{
+    --ink:#14181C; --muted:#4E5257; --green:#3E6357; --deep:#24372F;
+    --line:#C9C7BF; --soft:#EEF2EF; --paper:#FFFFFF;
+    --serif:'Bitstream Charter','Charter',Georgia,serif;
+    --sans:'Liberation Sans',Arial,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    width:794px;height:1123px;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:10px;line-height:1.4;
+    padding:30px 42px 20px;overflow:hidden;display:flex;flex-direction:column;
+  }
+
+  header{display:flex;align-items:flex-start;gap:12px;
+    border-bottom:2px solid var(--deep);padding-bottom:9px}
+  .mark{flex:0 0 auto;width:42px;height:42px;border-radius:12px;
+    background:var(--green);display:grid;place-items:center}
+  .mark span{font-family:var(--serif);font-size:25px;font-weight:700;color:#fff;line-height:1}
+  .name{font-family:var(--serif);font-size:23px;font-weight:700;line-height:1.05}
+  .name i{font-style:normal;color:var(--green);font-size:16px}
+  .doc{margin-left:auto;text-align:right}
+  .doc .t{font-family:var(--serif);font-size:16px;font-weight:700;line-height:1.1}
+  .doc .s{font-size:8px;color:var(--muted);margin-top:2px;letter-spacing:.3px}
+
+  .parties{display:flex;gap:10px;margin:9px 0 8px}
+  .party{flex:1;border:1px solid var(--line);border-radius:5px;padding:6px 8px}
+  .party .lab{font-size:7.4px;font-weight:700;letter-spacing:1.1px;
+    text-transform:uppercase;color:var(--green)}
+  .party .v{margin-top:2px}
+  .fill{display:inline-block;border-bottom:1px solid var(--line);min-width:96px}
+
+  .cols{flex:1;display:flex;gap:22px;align-items:flex-start}
+  .cols > div{flex:1;min-width:0}
+  h2{font-family:var(--serif);font-size:11.6px;margin:0 0 3px;
+    break-after:avoid;page-break-after:avoid}
+  section{margin:0 0 7.5px;break-inside:avoid;page-break-inside:avoid}
+  p{margin:0 0 3px}
+  ul{margin:2px 0 0;padding-left:11px}
+  li{margin-bottom:1.5px}
+  b{font-weight:700}
+  .warn{background:var(--soft);border:1px solid #BFD2C8;border-radius:5px;
+    padding:5px 7px;margin:0 0 6px;break-inside:avoid}
+  .warn h2{color:var(--deep)}
+
+  .sign{border-top:2px solid var(--deep);margin-top:7px;padding-top:8px}
+  .sign .row{display:flex;gap:16px;margin-top:7px}
+  .sign .box{flex:1}
+  .sign .lab{font-size:7.4px;font-weight:700;letter-spacing:1.1px;
+    text-transform:uppercase;color:var(--green);margin-bottom:10px}
+  .sign .ln{border-bottom:1px solid var(--ink);height:1px}
+  .sign .cap{font-size:8px;color:var(--muted);margin-top:3px}
+  footer{font-size:7.6px;color:var(--muted);margin-top:5px;display:flex;
+    justify-content:space-between}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark"><span>K</span></div>
+  <div>
+    <div class="name">Kairos <i>by Exousia</i></div>
+    <div class="doc s" style="font-size:8px;color:var(--muted);margin-top:2px">
+      Exousia Prime Emporium Ltd · Lagos, Nigeria</div>
+  </div>
+  <div class="doc">
+    <div class="t">Pilot Tester Agreement</div>
+    <div class="s">Version 1.0 · Free pilot · Not a purchase</div>
+  </div>
+</header>
+
+<div class="parties">
+  <div class="party"><div class="lab">The Company</div>
+    <div class="v"><b>Exousia Prime Emporium Ltd</b>, Lagos, Nigeria (“we”, “us”),
+      operator of Kairos by Exousia (“Kairos”).</div></div>
+  <div class="party"><div class="lab">The Tester</div>
+    <div class="v">Name <span class="fill"></span> ·
+      Organisation <span class="fill"></span> ·
+      Email <span class="fill"></span> (“you”).</div></div>
+</div>
+
+<div class="cols">
+ <div>
+
+  <section>
+    <h2>1 · What this is</h2>
+    <p>You are being given free early access to Kairos, software for running a
+      principal’s diary and the work around it. It is <b>pre-release</b>: parts
+      are unfinished, parts will change, parts will be withdrawn. This covers
+      your use of it during the pilot and nothing else.</p>
+  </section>
+
+  <section>
+    <h2>2 · What it costs, and what you get</h2>
+    <p>Nothing. There is no billing in Kairos and no subscription is created.
+      Plan tiers exist on paper but are <b>switched off</b>, so you get every
+      feature that works — a tester blocked by a paywall on the thing we asked
+      them to test tells us nothing.</p>
+    <p>Free access ends when the pilot does. Continuing will then require a paid
+      plan, and we will tell you the price beforehand, not after.</p>
+  </section>
+
+  <section>
+    <h2>3 · How long</h2>
+    <p>From the date signed below until we close it or you leave. Either of us
+      may end it <b>at any time, for any reason, without notice</b>. Nothing
+      here obliges us to launch, to keep a feature, or to offer you terms
+      later.</p>
+  </section>
+
+  <div class="warn">
+    <h2>4 · Do not make Kairos your only copy</h2>
+    <p>The pilot runs on trial infrastructure that <b>may not be backed up</b>.
+      Data can be lost to a fault, a restart, or a mistake of ours. Keep your
+      own record of anything you cannot afford to lose. We do not guarantee
+      that what you enter will be there tomorrow, and are not liable if it is
+      not.</p>
+  </div>
+
+  <section>
+    <h2>5 · What you put in, and what we do with it</h2>
+    <p>You decide what goes in. Kairos can hold names, contact details, diaries,
+      trips, correspondence and — where enabled — identity details and
+      documents. We will:</p>
+    <ul>
+      <li>use it to run the service for you and to fix faults;</li>
+      <li>keep sensitive fields encrypted where the deployment is configured for
+        it, and record each time one is revealed;</li>
+      <li><b>not sell it, and not use it to train anything</b>;</li>
+      <li>look at it only where a fault or your own request requires it, and
+        prefer to ask first.</li>
+    </ul>
+    <p>The assistant drafts and reads; it never sends on anyone’s behalf and has
+      no access to the vault.</p>
+  </section>
+
+  <section>
+    <h2>6 · Other people’s information</h2>
+    <p>Most of what you enter is about other people — your principal, their
+      contacts, their household. You confirm you may enter it and, where the law
+      requires, that those people know. If you are an organisation you remain
+      the controller under the Nigeria Data Protection Act 2023 and we act on
+      your instructions. Ask for a data processing agreement and we will sign
+      one.</p>
+  </section>
+
+  <section>
+    <h2>7 · What we ask of you</h2>
+    <p>A pilot only works if it is used. We ask that you:</p>
+    <ul>
+      <li>run real work through it — a diary nobody depends on teaches us
+        nothing;</li>
+      <li>tell us when it is wrong, including when it is merely irritating;</li>
+      <li>give us one short conversation at the end of the pilot.</li>
+    </ul>
+    <p>None of this is a debt you owe us. Stop whenever it stops being worth
+      your time, and say so.</p>
+  </section>
+
+  <section>
+    <h2>8 · When something breaks</h2>
+    <p>Use <b>Tell us</b>, at the foot of any screen. It sends your name and
+      which screen you were on — never what you have written, and nothing from
+      the vault. Or write to us directly.</p>
+    <p>We will answer during Lagos working hours and will say honestly whether
+      a thing is being fixed, is waiting behind something else, or is not going
+      to be fixed. There is no support guarantee during a free pilot, and we
+      would rather admit that than imply one.</p>
+  </section>
+
+ </div>
+ <div>
+
+  <section>
+    <h2>9 · Please do not</h2>
+    <ul>
+      <li>use it where a failure would endanger someone, or for anything that
+        must not go wrong;</li>
+      <li>enter card numbers, passwords or bank credentials — it is not built
+        to hold them;</li>
+      <li>attack it or reach for another account’s data. Reporting a weakness
+        you find is welcome and will never be held against you;</li>
+      <li>share your login. Every person needs their own.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>10 · Confidence</h2>
+    <p>Kairos is unreleased. Keep screens, prices, features and our plans to
+      yourself until we make them public. You may always say you are testing it,
+      and may always say publicly what you think of it — this protects our
+      plans, not our reputation.</p>
+  </section>
+
+  <section>
+    <h2>11 · What you tell us</h2>
+    <p>Feedback is the point. Anything you tell us about Kairos we may use,
+      build and keep, without owing you payment or attribution. You keep what is
+      yours — this gives us no rights to your data, documents or business.</p>
+  </section>
+
+  <section>
+    <h2>12 · No promises about the software</h2>
+    <p>Kairos is provided <b>as it is</b>. We do not promise it is fit for your
+      purpose, that it will be available, or that it is free of faults. We test
+      it hard and it still surprises us. All warranties that may lawfully be
+      excluded are excluded.</p>
+  </section>
+
+  <section>
+    <h2>13 · Limits of what we owe</h2>
+    <p>You pay nothing, and our liability is limited to the fullest extent the
+      law allows. We are not liable for lost data, lost business, missed
+      meetings or any indirect loss. Nothing here limits liability for death or
+      personal injury caused by negligence, for fraud, or for anything that
+      cannot lawfully be limited.</p>
+  </section>
+
+  <section>
+    <h2>14 · Leaving, and deletion</h2>
+    <p>You may stop at any time and delete your account from inside Kairos. It
+      lists what will go before it goes, and it is <b>irreversible</b> — we
+      cannot restore a deleted account, so export first. On request we will
+      delete what remains within 30 days, except what we must keep by law.</p>
+  </section>
+
+  <section>
+    <h2>15 · The rest</h2>
+    <p>This is the whole agreement about the pilot and replaces anything said
+      before it. Governed by the laws of the Federal Republic of Nigeria; the
+      courts of Lagos State have jurisdiction. If a clause is unenforceable the
+      others stand. Neither of us is the other’s partner, agent or employee.</p>
+  </section>
+
+ </div>
+</div>
+
+<div class="sign">
+  <div class="row">
+    <div class="box">
+      <div class="lab">Signed for the Tester</div>
+      <div class="ln"></div>
+      <div class="cap">Signature · Name in full · Position</div>
+    </div>
+    <div class="box">
+      <div class="lab">Signed for Exousia Prime Emporium Ltd</div>
+      <div class="ln"></div>
+      <div class="cap">Signature · Name in full · Position</div>
+    </div>
+    <div class="box" style="flex:0 0 128px">
+      <div class="lab">Date</div>
+      <div class="ln"></div>
+      <div class="cap">DD / MM / YYYY</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Kairos by Exousia · Pilot Tester Agreement v1.0</span>
+  <span>Exousia Prime Emporium Ltd · Lagos, Nigeria · Page 1 of 1</span>
+</footer>
+
+</body>
+</html>
