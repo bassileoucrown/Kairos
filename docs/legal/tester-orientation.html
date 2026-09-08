@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Kairos by Exousia — Tester Orientation</title>
+<style>
+  /* One A4 page. A companion to the agreement, kept separate on purpose: the
+     agreement is signed once and filed, this is pinned up and used.
+
+     DELIBERATELY NOT A MANUAL. Every screen in Kairos already carries a
+     "What X does" panel that opens on first visit and folds afterwards
+     (components/WhatThisDoes.jsx — 39 of them, one per feature), and the
+     Coming screen already lists what is not available yet and why. Repeating
+     that here would duplicate work the product does better and would rot the
+     moment a screen changed.
+
+     So this covers only what the app cannot tell somebody: how to get the
+     second person in, what we are actually trying to learn, and why a lot of
+     the product will read as "not yet" on a pilot deployment. The navigation
+     names and paths below are taken from AppShell.jsx rather than remembered.
+  */
+  @page { size: A4; margin: 0; }
+  :root{
+    --ink:#14181C; --muted:#4E5257; --green:#3E6357; --deep:#24372F;
+    --line:#C9C7BF; --soft:#EEF2EF; --gold:#8A6A24; --paper:#FFFFFF;
+    --serif:'Bitstream Charter','Charter',Georgia,serif;
+    --sans:'Liberation Sans',Arial,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    width:794px;height:1123px;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:11px;line-height:1.42;
+    padding:30px 42px 20px;overflow:hidden;display:flex;flex-direction:column;
+  }
+
+  header{display:flex;align-items:flex-start;gap:12px;
+    border-bottom:2px solid var(--deep);padding-bottom:9px}
+  .mark{flex:0 0 auto;width:42px;height:42px;border-radius:12px;
+    background:var(--green);display:grid;place-items:center}
+  .mark span{font-family:var(--serif);font-size:25px;font-weight:700;color:#fff;line-height:1}
+  .name{font-family:var(--serif);font-size:23px;font-weight:700;line-height:1.05}
+  .name i{font-style:normal;color:var(--green);font-size:16px}
+  .doc{margin-left:auto;text-align:right}
+  .doc .t{font-family:var(--serif);font-size:16px;font-weight:700;line-height:1.1}
+  .doc .s{font-size:8px;color:var(--muted);margin-top:2px;letter-spacing:.3px}
+
+  .lede{font-family:var(--serif);font-size:14px;line-height:1.4;
+    margin:10px 0 0;color:var(--ink)}
+  .lede b{color:var(--green)}
+
+  .cols{flex:1;display:flex;gap:22px;align-items:flex-start;margin-top:9px}
+  .cols > div{flex:1;min-width:0}
+  h2{font-family:var(--serif);font-size:13px;margin:0 0 4px}
+  section{margin:0 0 10px}
+  p{margin:0 0 3px}
+  ol,ul{margin:2px 0 0;padding-left:13px}
+  li{margin-bottom:2.5px}
+  b{font-weight:700}
+  .k{font-weight:700;color:var(--green)}
+
+  .box{background:var(--soft);border:1px solid #BFD2C8;border-radius:5px;
+    padding:7px 9px;margin:0 0 8px}
+  .box h2{color:var(--deep)}
+  .step{display:flex;gap:8px;margin-top:5px}
+  .step .n{flex:0 0 auto;width:15px;height:15px;border-radius:50%;
+    background:var(--green);color:#fff;font-size:8.6px;font-weight:700;
+    text-align:center;line-height:15px;margin-top:1px}
+
+  table{width:100%;border-collapse:collapse;margin-top:3px}
+  td{padding:2.5px 0;vertical-align:top;border-top:1px solid var(--line)}
+  tr:first-child td{border-top:none}
+  td.w{width:96px;font-weight:700;color:var(--green);padding-right:8px}
+
+  .ask{border:1px solid var(--line);border-radius:5px;padding:7px 9px;margin-top:2px}
+  .ask h2{margin-bottom:4px}
+
+  .week{border-top:1px solid var(--line);margin-top:2px;padding-top:9px}
+  .week h2{margin-bottom:7px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px}
+  .grid > div{display:flex;align-items:flex-start;gap:9px;line-height:1.3}
+  .grid > div > span{flex:1;min-width:0}
+  .grid i{flex:0 0 auto;width:12px;height:12px;border:1.4px solid var(--green);
+    border-radius:2.5px;margin-top:2px}
+
+  footer{border-top:2px solid var(--deep);margin-top:7px;padding-top:7px;
+    font-size:8.2px;color:var(--muted);display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark"><span>K</span></div>
+  <div>
+    <div class="name">Kairos <i>by Exousia</i></div>
+    <div style="font-size:8px;color:var(--muted);margin-top:2px">
+      Exousia Prime Emporium Ltd · Lagos, Nigeria</div>
+  </div>
+  <div class="doc">
+    <div class="t">Tester Orientation</div>
+    <div class="s">Read once · Keep to hand · v1.0</div>
+  </div>
+</header>
+
+<p class="lede">You do not need training to use Kairos — every screen explains
+  itself the first time you open it. This page covers the three things a screen
+  cannot tell you: <b>how to get your assistant in</b>, what we are actually
+  trying to learn, and why some of it will say “not yet”.</p>
+
+<div class="cols">
+ <div>
+
+  <div class="box">
+    <h2>Start here — get both of you in</h2>
+    <p>Kairos is only itself when the principal <b>and</b> the person who runs
+      their diary are both on it. One of you alone tests half a product.</p>
+    <div class="step"><span class="n">1</span><div>The <b>principal</b> signs
+      up and finishes setup — handle, then a first meeting type.</div></div>
+    <div class="step"><span class="n">2</span><div>Principal opens
+      <span class="k">Account → Team</span> and sets a <b>pairing code</b>: any
+      phrase of six characters or more, like <i>THURSDAY-LAGOS-91</i>. Choose
+      what it grants and how long it lives.</div></div>
+    <div class="step"><span class="n">3</span><div>Read the code and your
+      <b>handle</b> down the phone. Both are needed — the code alone opens
+      nothing.</div></div>
+    <div class="step"><span class="n">4</span><div>The <b>assistant</b> signs up
+      as an assistant, lands on <span class="k">Workspace</span>, and enters the
+      handle and code there.</div></div>
+    <p style="margin-top:5px">The code is off by default, live only for the
+      window chosen, and spent after the joins allowed. If it stops working it
+      has most likely expired — set another. Every wrong attempt gives the same
+      message on purpose.</p>
+  </div>
+
+  <section>
+    <h2>Finding your way</h2>
+    <p>The rail is grouped, not one long list:</p>
+    <table>
+      <tr><td class="w">The day</td><td>Today, Itinerary, Trips, Movements,
+        Calendar, Pad — what is happening and when to leave.</td></tr>
+      <tr><td class="w">The desk</td><td>Workspace, Desk, Report,
+        Correspondence — where an assistant works.</td></tr>
+      <tr><td class="w">Work</td><td>Spaces and Tasks — talking and
+        chasing.</td></tr>
+      <tr><td class="w">The house</td><td>Household, Instructions,
+        Connections.</td></tr>
+      <tr><td class="w">Account</td><td>Settings, Team, Notices, Coming.</td></tr>
+    </table>
+    <p style="margin-top:4px">A principal lands on <span class="k">Today</span>.
+      An assistant lands on <span class="k">Workspace</span>. That is not a
+      mistake — you are meant to see different things.</p>
+  </section>
+
+  <section>
+    <h2>The panel at the top of each screen</h2>
+    <p><b>“What this does”</b> opens the first time you visit a screen and
+      folds itself afterwards. If you are ever unsure what you are looking at,
+      press the <b>+</b> and it comes back. There is one on all 39 screens, and
+      it is the manual — there is no other.</p>
+  </section>
+
+ </div>
+ <div>
+
+  <section>
+    <h2>Why some of it says “not yet”</h2>
+    <p>Kairos is finished software with parts that are switched off until we
+      configure them — travel time, document storage, the AI drafting, and
+      more. <b>That is not a fault and you need not report it.</b></p>
+    <p><span class="k">Account → Coming</span> lists everything that is not
+      available on your deployment, says which screen it will appear on and
+      what it is waiting for, and removes each entry by itself the moment we
+      switch it on. Trust that screen over this page — it is always current
+      and this page is not.</p>
+  </section>
+
+  <section>
+    <h2>You are seeing everything</h2>
+    <p>Plan tiers are switched off for the pilot, so nothing is behind a
+      paywall. Some of what you use freely now will sit on a paid tier later.
+      We would rather you judged the whole product than a sample of it.</p>
+  </section>
+
+  <div class="ask">
+    <h2>What we are actually asking</h2>
+    <p>Run <b>real work</b> through it for two or three weeks. A diary nobody
+      depends on teaches us nothing. Then tell us about:</p>
+    <ul>
+      <li><b>The hand-over.</b> Does the assistant have what they need without
+        asking the principal for it?</li>
+      <li><b>Today.</b> Opened once in the morning, does it tell the principal
+        the shape of the day — including when to leave?</li>
+      <li><b>The desk.</b> Do requests land in one place and get answered once,
+        or do you still end up in WhatsApp?</li>
+      <li><b>Where you stopped.</b> The screen you avoided, the thing you did
+        the old way instead. That is the most useful thing you can tell us.</li>
+    </ul>
+    <p style="margin-top:4px">Small irritations count. “It took four taps” is a
+      finding.</p>
+  </div>
+
+  <section>
+    <h2>Telling us</h2>
+    <p><b>Tell us</b> sits at the foot of every screen. It sends your name and
+      which screen you were on — never what you have written, and nothing from
+      the vault. For anything longer, write to us directly.</p>
+    <p>We answer in Lagos hours and will say plainly whether a thing is being
+      fixed, is queued behind something else, or is not going to be fixed.</p>
+  </section>
+
+  <section>
+    <h2>Two things to know before you start</h2>
+    <ul>
+      <li><b>Keep your own copy of anything critical.</b> The pilot runs on
+        trial infrastructure that may not be backed up.</li>
+      <li><b>A private trip is genuinely private.</b> Marked private, it is
+        absent from the office entirely — not dimmed, absent — until you name
+        who may see it. Worth testing on purpose.</li>
+    </ul>
+  </section>
+
+ </div>
+</div>
+
+<section class="week">
+  <h2>Your first week — tick these off</h2>
+  <div class="grid">
+    <div><i></i><span>Both accounts made, and paired with a code</span></div>
+    <div><i></i><span>Three real days in the diary — not test entries</span></div>
+    <div><i></i><span>Principal opened <b>Today</b> first thing, twice</span></div>
+    <div><i></i><span>Assistant answered a real request from the <b>Desk</b></span></div>
+    <div><i></i><span>One trip built, with a car and a driver on it</span></div>
+    <div><i></i><span>One thing marked <b>private</b>, then checked from the other account</span></div>
+    <div><i></i><span>One irritation sent with <b>Tell us</b> — however small</span></div>
+    <div><i></i><span>One screen you avoided, written down to tell us why</span></div>
+  </div>
+</section>
+
+<footer>
+  <span><b>Kairos by Exousia</b> · Tester Orientation v1.0 — companion to the
+    Pilot Tester Agreement</span>
+  <span>Lagos, Nigeria · Page 1 of 1</span>
+</footer>
+
+</body>
+</html>
