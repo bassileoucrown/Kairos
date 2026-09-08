@@ -23,7 +23,7 @@
   html,body{margin:0;padding:0}
   body{
     width:794px;height:1123px;background:var(--paper);color:var(--ink);
-    font-family:var(--sans);font-size:10px;line-height:1.4;
+    font-family:var(--sans);font-size:9.8px;line-height:1.38;
     padding:30px 42px 20px;overflow:hidden;display:flex;flex-direction:column;
   }
 
@@ -38,18 +38,27 @@
   .doc .t{font-family:var(--serif);font-size:16px;font-weight:700;line-height:1.1}
   .doc .s{font-size:8px;color:var(--muted);margin-top:2px;letter-spacing:.3px}
 
-  .parties{display:flex;gap:10px;margin:9px 0 8px}
-  .party{flex:1;border:1px solid var(--line);border-radius:5px;padding:6px 8px}
+  .parties{display:flex;gap:10px;margin:9px 0 8px;align-items:stretch}
+  .party{border:1px solid var(--line);border-radius:5px;padding:6px 9px 7px}
+  .party.company{flex:0 0 34%}
+  .party.tester{flex:1}
   .party .lab{font-size:7.4px;font-weight:700;letter-spacing:1.1px;
     text-transform:uppercase;color:var(--green)}
   .party .v{margin-top:2px}
-  .fill{display:inline-block;border-bottom:1px solid var(--line);min-width:96px}
+  /* A ruled line per field, full width of the box. */
+  .f{display:flex;align-items:baseline;gap:7px;margin-top:6px}
+  .f span{flex:0 0 auto;font-size:9px;color:var(--muted)}
+  .f i{flex:1;border-bottom:1px solid var(--line);height:12px}
+  .f.pair{gap:14px}
+  .f.pair > b{display:flex;align-items:baseline;gap:7px;flex:1;font-weight:400}
+  .f.pair > b span{flex:0 0 auto;font-size:9px;color:var(--muted)}
+  .f.pair > b i{flex:1;border-bottom:1px solid var(--line);height:12px}
 
   .cols{flex:1;display:flex;gap:22px;align-items:flex-start}
   .cols > div{flex:1;min-width:0}
-  h2{font-family:var(--serif);font-size:11.6px;margin:0 0 3px;
+  h2{font-family:var(--serif);font-size:11.2px;margin:0 0 2.5px;
     break-after:avoid;page-break-after:avoid}
-  section{margin:0 0 7.5px;break-inside:avoid;page-break-inside:avoid}
+  section{margin:0 0 6.4px;break-inside:avoid;page-break-inside:avoid}
   p{margin:0 0 3px}
   ul{margin:2px 0 0;padding-left:11px}
   li{margin-bottom:1.5px}
@@ -62,7 +71,7 @@
   .sign .row{display:flex;gap:16px;margin-top:7px}
   .sign .box{flex:1}
   .sign .lab{font-size:7.4px;font-weight:700;letter-spacing:1.1px;
-    text-transform:uppercase;color:var(--green);margin-bottom:10px}
+    text-transform:uppercase;color:var(--green);margin-bottom:9px}
   .sign .ln{border-bottom:1px solid var(--ink);height:1px}
   .sign .cap{font-size:8px;color:var(--muted);margin-top:3px}
   footer{font-size:7.6px;color:var(--muted);margin-top:5px;display:flex;
@@ -85,13 +94,21 @@
 </header>
 
 <div class="parties">
-  <div class="party"><div class="lab">The Company</div>
-    <div class="v"><b>Exousia Prime Emporium Ltd</b>, Lagos, Nigeria (“we”, “us”),
-      operator of Kairos by Exousia (“Kairos”).</div></div>
-  <div class="party"><div class="lab">The Tester</div>
-    <div class="v">Name <span class="fill"></span> ·
-      Organisation <span class="fill"></span> ·
-      Email <span class="fill"></span> (“you”).</div></div>
+  <div class="party company"><div class="lab">The Company</div>
+    <div class="v"><b>Exousia Prime Emporium Ltd</b><br>Lagos, Nigeria — “we”, “us”.
+      Operator of Kairos by Exousia (“Kairos”).</div></div>
+  <div class="party tester"><div class="lab">The Tester — “you”</div>
+    <div class="f"><span>Full name</span><i></i></div>
+    <div class="f pair">
+      <b><span>Organisation</span><i></i></b>
+      <b><span>Phone</span><i></i></b>
+    </div>
+    <!-- Email gets the whole width: an address is routinely longer than an
+         organisation's name, and a rule it does not fit on is worse than no
+         rule. Role is not asked for here — the signature block below takes a
+         position, and asking twice wastes the space this needed. -->
+    <div class="f"><span>Email</span><i></i></div>
+  </div>
 </div>
 
 <div class="cols">
