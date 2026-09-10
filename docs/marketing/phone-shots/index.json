@@ -3,78 +3,105 @@
     "name": "today",
     "route": "/today",
     "who": "boss",
-    "chars": 950
+    "chars": 1016,
+    "flags": []
   },
   {
     "name": "catch-up",
     "route": "/catch-up",
     "who": "aide",
-    "chars": 632
+    "chars": 632,
+    "flags": []
   },
   {
     "name": "team",
     "route": "/dashboard?tab=members",
     "who": "boss",
-    "chars": 1949
+    "chars": 1568,
+    "flags": []
   },
   {
     "name": "itinerary",
     "route": "/itinerary",
     "who": "boss",
-    "chars": 939
+    "chars": 945,
+    "flags": []
   },
   {
     "name": "pad",
     "route": "/pad",
     "who": "boss",
-    "chars": 670
+    "chars": 672,
+    "flags": []
   },
   {
     "name": "trips",
     "route": "/trips",
     "who": "boss",
-    "chars": 484
+    "chars": 486,
+    "flags": []
   },
   {
     "name": "desk",
     "route": "/pa",
     "who": "aide",
-    "chars": 1199
+    "chars": 1212,
+    "flags": []
   },
   {
     "name": "report",
     "route": "/report",
     "who": "boss",
-    "chars": 1035
+    "chars": 953,
+    "flags": []
+  },
+  {
+    "name": "report-parts",
+    "route": "/report",
+    "who": "boss",
+    "chars": 897,
+    "flags": []
+  },
+  {
+    "name": "report-export",
+    "route": "/report",
+    "who": "boss",
+    "chars": 953,
+    "flags": []
   },
   {
     "name": "correspondence",
     "route": "/mail",
     "who": "aide",
-    "chars": 675
+    "chars": 675,
+    "flags": []
   },
   {
     "name": "spaces",
     "route": "/spaces",
     "who": "boss",
-    "chars": 692
+    "chars": 700,
+    "flags": []
   },
   {
     "name": "tasks",
     "route": "/tasks",
     "who": "aide",
-    "chars": 1020
+    "chars": 1252,
+    "flags": []
   },
   {
     "name": "archive",
     "route": "/archive",
     "who": "boss",
-    "chars": 1120
+    "chars": 1335,
+    "flags": []
   },
   {
     "name": "connections",
     "route": "/connections",
     "who": "aide",
-    "chars": 711
+    "chars": 702,
+    "flags": []
   }
 ]

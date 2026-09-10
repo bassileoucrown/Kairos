@@ -41,8 +41,18 @@ if (!['laptop', 'phone'].includes(SHAPE)) throw new Error(`unknown shape "${SHAP
 const PHONE = SHAPE === 'phone';
 const PORT = Number(process.env.PORT || 4861);
 const BASE = `http://127.0.0.1:${PORT}`;
-const ID = Date.now().toString(36);
+// NO RANDOM SUFFIX ON ANYTHING A CAMERA CAN SEE.
+//
+// Handles and addresses are shown on these screens — the booking link, the
+// access code, the member card, a connection — and a run-id suffix turns every
+// one of them into "@adaeze-okonkwo-mtvjftc1", which reads as test data
+// because it is. The database is deleted at the top of every run, so
+// uniqueness across runs buys nothing and costs the pictures.
+//
+// example.com is the address space reserved for documentation, so no seeded
+// person can collide with a real one.
 const PW = 'password123';
+const DOM = 'example.com';
 
 // A laptop is wide enough that the nav rail is permanently open rather than
 // behind a hamburger. A phone is not, and that is not a fault to correct — it
@@ -124,17 +134,17 @@ const dateOnly = (o) => {
     // ---- an office ------------------------------------------------------
     const boss = api(), aide = api(), driver = api();
     const boss2 = api(), aide2 = api();
-    const H = `adaeze-okonkwo-${ID}`;
-    const H2 = `emeka-obi-${ID}`;
+    const H = 'adaeze-okonkwo';
+    const H2 = 'emeka-obi';
 
-    const bossU = await signUp(boss, 'Adaeze Okonkwo', `ada${ID}@x.com`, 'principal', H);
+    const bossU = await signUp(boss, 'Adaeze Okonkwo', `ada@${DOM}`, 'principal', H);
     await boss('PATCH', '/profile', { timezone: 'Africa/Lagos' });
-    const aideU = await signUp(aide, 'Tunde Bakare', `tunde${ID}@x.com`, 'pa', `tunde-bakare-${ID}`);
-    await signUp(driver, 'Femi Okon', `femi${ID}@x.com`, 'principal', `femi-okon-${ID}`);
+    const aideU = await signUp(aide, 'Tunde Bakare', `tunde@${DOM}`, 'pa', 'tunde-bakare');
+    await signUp(driver, 'Femi Okon', `femi@${DOM}`, 'principal', 'femi-okon');
 
     // A second office, so Connections has somebody real on the other side.
-    await signUp(boss2, 'Emeka Obi', `emeka${ID}@x.com`, 'principal', H2);
-    await signUp(aide2, 'Ngozi Eze', `ngozi${ID}@x.com`, 'pa', `ngozi-eze-${ID}`);
+    await signUp(boss2, 'Emeka Obi', `emeka@${DOM}`, 'principal', H2);
+    await signUp(aide2, 'Ngozi Eze', `ngozi@${DOM}`, 'pa', 'ngozi-eze');
     await boss2('POST', '/access-codes', { code: 'HARMATTAN-ABUJA-04', role: 'pa', window: '24h', uses: 2 });
     await aide2('POST', '/access-codes/redeem', { handle: H2, code: 'HARMATTAN-ABUJA-04' });
 
@@ -261,8 +271,36 @@ const dateOnly = (o) => {
       { spaceId, title: 'Book the surveyor for the Lekki walk', assigneeId: aideU.id },
     ]) await boss('POST', '/tasks', t);
 
+    // ---- WHAT THE OFFICE DID, WHICH IS WHAT REPORT COUNTS -----------------
+    //
+    // Report is not a list of the principal's meetings. It counts, per person
+    // in the office, the work they did in the period: tasks taken on and set,
+    // messages and records written, lines kept, instructions given (see
+    // lib/weeklyReport.js). Seeding ten meetings last week left every figure
+    // at zero and the screen saying "Nothing recorded this week", because none
+    // of it was the office doing anything.
+    //
+    // And the API stamps created_at as now, so there is no honest way to make
+    // last week's rows through it. The report therefore gets pointed at the
+    // week this activity is really in, with one press of "Later".
+    await aide('POST', `/threads/${threadId}/messages`,
+      { body: 'Landlord agrees the break at three. Draft is with counsel.' });
+    await aide('POST', `/threads/${threadId}/messages`,
+      { body: 'Surveyor booked for the Lekki walk on Wednesday morning.' });
+    await aide('POST', `/threads/${threadId}/messages`, {
+      body: 'Agreed: we sign once the service charge cap is in writing.',
+      register: 'record', recordType: 'decision',
+    });
+    const aideKeep = await aide('POST', `/threads/${threadId}/messages`,
+      { body: 'Chairman is away the week of the 21st — avoid that week.' });
+    await aide('POST', `/threads/${threadId}/messages/${aideKeep.d.id}/keep`, {});
+    await aide('POST', '/tasks',
+      { spaceId, title: 'Chase counsel on the redraft', assigneeId: aideU.id });
+    await aide('POST', '/tasks',
+      { spaceId, title: 'Confirm the surveyor', assigneeId: aideU.id });
+
     // ---- a connection between the two offices ----------------------------
-    await aide('POST', '/connections', { handle: `ngozi-eze-${ID}`, note: 'Thursday — our two principals' });
+    await aide('POST', '/connections', { handle: 'ngozi-eze', note: 'Thursday — our two principals' });
     const incoming = await aide2('GET', '/connections');
     if (incoming.d.incoming?.length) {
       await aide2('POST', `/connections/${incoming.d.incoming[0].id}/accept`);
@@ -270,11 +308,11 @@ const dateOnly = (o) => {
 
     // ---- the household ---------------------------------------------------
     const chef = api();
-    await signUp(chef, 'Chidi Nwosu', `chidi${ID}@x.com`, 'principal', `chidi-nwosu-${ID}`);
+    await signUp(chef, 'Chidi Nwosu', `chidi@${DOM}`, 'principal', 'chidi-nwosu');
     const hire = await boss('POST', `/household/${bossU.id}/staff`,
-      { name: 'Femi Okon', email: `femi${ID}@x.com`, jobTitle: 'Driver' });
+      { name: 'Femi Okon', email: `femi@${DOM}`, jobTitle: 'Driver' });
     const hireChef = await boss('POST', `/household/${bossU.id}/staff`,
-      { name: 'Chidi Nwosu', email: `chidi${ID}@x.com`, jobTitle: 'Chef' });
+      { name: 'Chidi Nwosu', email: `chidi@${DOM}`, jobTitle: 'Chef' });
     await driver('POST', `/invites/${hire.d.inviteLink.split('/').pop()}/accept`);
     await chef('POST', `/invites/${hireChef.d.inviteLink.split('/').pop()}/accept`);
 
@@ -293,11 +331,18 @@ const dateOnly = (o) => {
       ['boss', '/pad', 'pad', '.pad-body', 3, 300],
       ['boss', '/trips', 'trips', 'body', 1, 300],
       ['aide', '/pa', 'desk', 'body', 1, 400],
-      ['boss', '/report', 'report', 'body', 1, 300],
-      // The reporting flow, in the states a person actually puts it in.
+      // THE REPORTING FLOW, in the states a person actually puts it in.
+      //
+      // "Later" moves off the default previous week and onto the week the
+      // office's work is really in. Choosing a section also drops "The week
+      // ahead", which is where the one "not yet" badge on this screen lives —
+      // so the crop does not have to work around it.
+      ['boss', '/report', 'report', 'body', 1, 300, null,
+        ['button:has-text("Later")', 'button:has-text("What the office did")']],
       ['boss', '/report', 'report-parts', 'body', 1, 300, null,
-        'button:has-text("What the office did")'],
-      ['boss', '/report', 'report-export', 'body', 1, 300, 'text=Take it away'],
+        ['button:has-text("Later")', 'button:has-text("Needs attention")']],
+      ['boss', '/report', 'report-export', 'body', 1, 300, 'text=Take it away',
+        ['button:has-text("Later")', 'button:has-text("What the office did")']],
       ['aide', '/mail', 'correspondence', 'body', 1, 200],
       ['boss', '/spaces', 'spaces', 'body', 1, 300],
       ['aide', '/tasks', 'tasks', 'body', 1, 250],
@@ -306,7 +351,7 @@ const dateOnly = (o) => {
     ];
 
     const logins = {
-      boss: `ada${ID}@x.com`, aide: `tunde${ID}@x.com`,
+      boss: `ada@${DOM}`, aide: `tunde@${DOM}`,
     };
     const pages = {};
     for (const who of Object.keys(logins)) {
@@ -347,14 +392,18 @@ const dateOnly = (o) => {
         // Some screens are worth photographing in a state a person puts them
         // in — a section chosen, a period changed. Pressing the control is how
         // they get there, so the shot stays a photograph of the real app.
-        if (click) {
-          const btn = p.locator(click).first();
-          if (!(await btn.count())) {
-            bad(`${name}: nothing matches "${click}" to press`);
-            continue;
-          }
+        // A sequence, not a single press: reaching the state worth
+        // photographing can take two — move the period, then choose a section.
+        let pressFailed = null;
+        for (const sel2 of (click ? [].concat(click) : [])) {
+          const btn = p.locator(sel2).first();
+          if (!(await btn.count())) { pressFailed = sel2; break; }
           await btn.click({ timeout: 6000 });
           await p.waitForTimeout(1100);
+        }
+        if (pressFailed) {
+          bad(`${name}: nothing matches "${pressFailed}" to press`);
+          continue;
         }
 
         // Put the part worth photographing in the viewport. Scrolling is how a

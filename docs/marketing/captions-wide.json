@@ -27,27 +27,35 @@
     "caption": "Where did the week actually go?\n\nReport answers that with what the period held — meetings, hours, who took them, and what moved. Pick a period and the figures redraw for exactly that range.\n\nIt is for the shape of a period, not for finding a particular meeting. Different question, different screen.",
     "tags": "#Reporting #ExecutiveAssistant"
   },
-  "08-correspondence": {
+  "08-report-parts": {
+    "caption": "A report is five things, and most days you only want one of them.\n\nWhat the office did. What is still open. Who looked at what. The week ahead. What needs attention.\n\nAsk for one and the rest fall away — and whatever you send on carries the same choice, and says so on its first line, so nobody mistakes a part for the whole.",
+    "tags": "#Reporting #ExecutiveAssistant #Kairos"
+  },
+  "09-report-export": {
+    "caption": "The report does not have to stay in the app.\n\nTake it away as a document to read or a spreadsheet to add up, made out to the person it is for — everyone, or one member of the office.\n\nA report about one assistant is made for that assistant. It is not a league table.",
+    "tags": "#Reporting #ChiefOfStaff #Kairos"
+  },
+  "10-correspondence": {
     "caption": "The question about an email is rarely what it says. It is what it needs.\n\nCorrespondence shows what has come in for the principal and lets you mark what each thing needs — the principal, you, later, or nothing at all.\n\nDraft a reply against a message and it stays a draft. Nothing leaves without a person deciding it should.",
     "tags": "#ExecutiveAssistant #Kairos"
   },
-  "09-spaces": {
+  "11-spaces": {
     "caption": "Four hundred messages in one thread is not a record of anything.\n\nA space is a place per piece of work — a lease, a board matter, a site. It holds its rooms, its projects and the people who belong in it. A project inside a space has stages, and the stages move on what is decided in the rooms.\n\nSpaces are sealed from each other. Being in one tells you nothing whatsoever about any other.",
     "tags": "#Productivity #ChiefOfStaff #Kairos"
   },
-  "10-tasks": {
+  "12-tasks": {
     "caption": "You run more than one diary, and work lands on you from all of them.\n\nTasks is everything assigned to you, across every space and every principal, in one list. Each row carries where it came from, so you can open the room behind it and read what was actually agreed.\n\nGive a task a date and it will chase you.",
     "tags": "#ExecutiveAssistant #Productivity"
   },
-  "11-archive": {
+  "13-archive": {
     "caption": "The important line is usually said in passing, in a room that will be closed in three months.\n\nArchive is what the office decided was worth keeping after the conversation finished. Keep a message from a room and a copy lands here — safe from that room being deleted.\n\nArchive a document and the original is filed here rather than copied.",
     "tags": "#Records #ChiefOfStaff #Kairos"
   },
-  "12-connections": {
+  "14-connections": {
     "caption": "Two principals need to be in a room. That means two assistants have to find each other first.\n\nConnections is the line to the assistant on the other side. Get their handle from a signature or from them directly, and add it. Once connected, you can propose times across both diaries.\n\nThere is no search here, and there never will be. A directory of who runs whom is itself the sensitive thing.",
     "tags": "#ExecutiveAssistant #Privacy #Kairos"
   },
-  "13-team": {
+  "15-team": {
     "caption": "You decide who works for you, and what each of them can reach.\n\nTeam is where you appoint people and set what each one can do — scheduling only, or scheduling and the rest. A delegate handling scheduling does not get the sensitive detail, and that is a structural decision rather than a checkbox somebody could quietly change.\n\nInvite by handle. They accept and appear in your team.",
     "tags": "#Security #ExecutiveAssistant #Kairos"
   }

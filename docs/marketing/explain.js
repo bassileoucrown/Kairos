@@ -64,12 +64,48 @@ const POSTS = [
   ['trips', 'trips', 'The day'],
   ['desk', 'desk', 'The desk'],
   ['report', 'report', 'The desk'],
+  // The reporting flow. The guide has one `report` entry, so the two posts
+  // that follow carry their own words — taken from what the screen itself
+  // says, not invented: "Showing 1 of 5 parts. The document and the
+  // spreadsheet carry the same choice, and say on the first line that they
+  // are a part."
+  ['report-parts', null, 'The desk', {
+    title: 'Only the part you need',
+    does: 'A report comes in five parts. Ask for one and the rest fall away — '
+      + 'and whatever you export carries the same choice.',
+    how: [
+      'Press a part: what the office did, what is still open, who looked at what, '
+        + 'the week ahead, or what needs attention.',
+      'The line under the chips says which part you are reading and how many there are.',
+      'Press All of it to put the rest back.',
+    ],
+  }],
+  ['report-export', null, 'The desk', {
+    title: 'Take it away',
+    does: 'The same report as a document to read or a spreadsheet to count, '
+      + 'made out to the person it is for.',
+    how: [
+      'Choose who it is for — everyone, or one person in the office.',
+      'Document reads as prose. Spreadsheet is for adding up.',
+      'Whichever part you chose is the part that comes out, and it says so on its first line.',
+    ],
+    note: 'A report about one assistant is made for that assistant. It is not a '
+      + 'league table of the office.',
+    // 718, not 900: a 3360px capture fills a 736px glass from 718 exactly, and
+    // the fill check said so rather than letting a blank strip through.
+    top: 718,
+  }],
   ['correspondence', 'correspondence', 'The desk'],
   ['spaces', 'spaces', 'Work'],
   ['tasks', 'tasks', 'Work'],
   ['archive', 'archive', 'Work'],
   ['connections', 'connections', 'The house'],
-  ['team', 'members', 'Account'],
+  // Cropped below the booking-link box. That box shows whatever origin the
+  // browser used, which on a capture is http://127.0.0.1:4861 — a real thing
+  // to render and a silly thing to post. The roster and the access code are
+  // what this screen is about, and they are both below it. 718 is the largest
+  // top that still fills the glass from a 3360px capture.
+  ['team', 'members', 'Account', { top: 718 }],
 ];
 
 const CSS = `
