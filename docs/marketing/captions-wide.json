@@ -58,5 +58,9 @@
   "15-team": {
     "caption": "You decide who works for you, and what each of them can reach.\n\nTeam is where you appoint people and set what each one can do — scheduling only, or scheduling and the rest. A delegate handling scheduling does not get the sensitive detail, and that is a structural decision rather than a checkbox somebody could quietly change.\n\nInvite by handle. They accept and appear in your team.",
     "tags": "#Security #ExecutiveAssistant #Kairos"
+  },
+  "16-workspace-solo": {
+    "caption": "You do not need your principal's permission to get ready.\n\nAn assistant can sign up on their own, take a handle, and be sitting here before the person they work for has an account at all.\n\nWhen they do join, they either add you by email from their Team screen, or read you their handle and an access code down the phone. Both halves or nothing — a code on its own belongs to nobody in particular.\n\nFrom then on, everything you arrange for them runs through this one page.",
+    "tags": "#ExecutiveAssistant #PersonalAssistant #ChiefOfStaff #Kairos"
   }
 }

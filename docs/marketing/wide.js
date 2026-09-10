@@ -142,6 +142,17 @@ const dateOnly = (o) => {
     const aideU = await signUp(aide, 'Tunde Bakare', `tunde@${DOM}`, 'pa', 'tunde-bakare');
     await signUp(driver, 'Femi Okon', `femi@${DOM}`, 'principal', 'femi-okon');
 
+    // AN ASSISTANT WHOSE PRINCIPAL IS NOT HERE YET.
+    //
+    // Deliberately never paired. This is the first screen a PA sees when they
+    // have signed up on their own — before the person they work for has an
+    // account at all — and it is a state worth showing rather than hiding: an
+    // assistant can join, hold a handle and be ready, and the principal
+    // arrives later. Pairing her would destroy the only thing this account is
+    // for.
+    const solo = api();
+    await signUp(solo, 'Amara Nwosu', `amara@${DOM}`, 'pa', 'amara-nwosu');
+
     // A second office, so Connections has somebody real on the other side.
     await signUp(boss2, 'Emeka Obi', `emeka@${DOM}`, 'principal', H2);
     await signUp(aide2, 'Ngozi Eze', `ngozi@${DOM}`, 'pa', 'ngozi-eze');
@@ -331,6 +342,10 @@ const dateOnly = (o) => {
       ['boss', '/pad', 'pad', '.pad-body', 3, 300],
       ['boss', '/trips', 'trips', 'body', 1, 300],
       ['aide', '/pa', 'desk', 'body', 1, 400],
+      // Workspace, for somebody nobody has added yet. The one screen in this
+      // set that is deliberately empty: it is the first thing a PA sees when
+      // they have signed up before the person they work for has.
+      ['solo', '/workspace', 'workspace-solo', '.empty-state', 1, 250],
       // THE REPORTING FLOW, in the states a person actually puts it in.
       //
       // "Later" moves off the default previous week and onto the week the
@@ -351,7 +366,7 @@ const dateOnly = (o) => {
     ];
 
     const logins = {
-      boss: `ada@${DOM}`, aide: `tunde@${DOM}`,
+      boss: `ada@${DOM}`, aide: `tunde@${DOM}`, solo: `amara@${DOM}`,
     };
     const pages = {};
     for (const who of Object.keys(logins)) {

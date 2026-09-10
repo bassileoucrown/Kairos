@@ -49,6 +49,13 @@
     "flags": []
   },
   {
+    "name": "workspace-solo",
+    "route": "/workspace",
+    "who": "solo",
+    "chars": 720,
+    "flags": []
+  },
+  {
     "name": "report",
     "route": "/report",
     "who": "boss",

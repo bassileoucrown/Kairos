@@ -106,6 +106,27 @@ const POSTS = [
   // what this screen is about, and they are both below it. 718 is the largest
   // top that still fills the glass from a 3360px capture.
   ['team', 'members', 'Account', { top: 718 }],
+  // The one deliberately empty screen in the set, and the reason it earns a
+  // post: an assistant can be here before the person they work for is. The
+  // words are the screen's own — Workspace.jsx's empty state and the Team
+  // screen's line about a code and a handle being two halves of one thing.
+  // Appended rather than slotted in beside Workspace, so the fifteen posts
+  // already numbered and captioned keep their numbers.
+  ['workspace-solo', null, 'The desk', {
+    title: 'Your principal is not on Kairos yet',
+    does: 'Sign up anyway. An assistant can hold a handle and be ready before '
+      + 'the person they work for has an account at all.',
+    how: [
+      'Sign up as an assistant and choose your handle. That needs nobody\u2019s permission.',
+      'When your principal joins, they add you by email from their Team screen — '
+        + 'or read you their handle and an access code down the phone.',
+      'Put both in here and they appear. Everything you arrange for them runs '
+        + 'through this page from then on.',
+    ],
+    note: 'The code on its own opens nothing, and neither does the handle. '
+      + 'Together they mean one specific person joining one specific account.',
+    top: 500,
+  }],
 ];
 
 const CSS = `
