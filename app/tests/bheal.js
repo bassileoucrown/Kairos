@@ -72,7 +72,27 @@ async function status() {
       body: JSON.stringify({ name: 'Late', email: `late${Date.now()}@x.com`, password: 'password123' }),
     });
     ok('and actually serves requests afterwards', r.status === 201, `signup returned ${r.status}`);
-  } finally { proc.kill(); }
+  } finally {
+    proc.kill();
+    // LEAVE POSTGRES RUNNING, WHATEVER HAPPENED IN BETWEEN.
+    //
+    // This suite stops the cluster at the top and starts it again in the
+    // middle, and that middle line is inside the try. So any throw, any
+    // failed assertion that reached an exception, and any kill of the board
+    // left Postgres down — not just for the rest of this run, but for every
+    // run afterwards until something started it again.
+    //
+    // What that looked like was bfail skipping "no control database" on later
+    // boards while `pg_isready` said the server was fine by the time anybody
+    // checked, because this suite's own restart on the NEXT board had already
+    // repaired it. A fault that erases its own evidence one suite later is
+    // worth ten lines of comment.
+    //
+    // Starting an already-started cluster is a no-op, so this is safe on the
+    // ordinary path where line 56 already did it.
+    try { execSync('pg_ctlcluster 16 main start', { stdio: 'ignore' }); }
+    catch { /* already up, which is the normal case */ }
+  }
 
   console.log(fails === 0 ? '\nThe app heals itself when the database turns up.' : `\n${fails} FAILURES`);
   process.exit(fails === 0 ? 0 : 1);
