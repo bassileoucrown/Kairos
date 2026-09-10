@@ -462,7 +462,17 @@ textarea { resize: vertical; min-height: 70px; }
    heading on one side and the controls on the other, so this claims a row of
    its own rather than becoming a third column. */
 .stage-tasks { flex-basis: 100%; min-width: 0; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
-.task-main { flex: 1; min-width: 0; }
+/* A WIDTH THE ROW WILL WRAP FOR, not a zero it will shrink into.
+   `flex: 1` is `flex: 1 1 0%`, so this column's hypothetical size was zero —
+   which meant the wrap on .task-row never fired. The controls beside it are
+   two selects and two buttons that will not shrink, so on a phone the title
+   was squeezed to about one character wide and `overflow-wrap: anywhere`
+   spelled it down the screen a letter per line. The whole Tasks screen was
+   unusable on a phone and read as a rendering fault.
+   With a real basis the actions drop to their own line instead, and on a
+   laptop nothing changes: there the row still fits and this column still
+   grows to fill it. */
+.task-main { flex: 1 1 200px; min-width: 0; }
 .task-title { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; }
 /* The title already breaks anywhere; the meta line did not, so a long link or
    an unbroken address in it ran out over the controls beside it. Same rule for
