@@ -1,0 +1,100 @@
+[
+  {
+    "name": "today",
+    "route": "/today",
+    "who": "boss",
+    "chars": 1154,
+    "errors": 0
+  },
+  {
+    "name": "itinerary",
+    "route": "/itinerary",
+    "who": "boss",
+    "chars": 951,
+    "errors": 0
+  },
+  {
+    "name": "pad",
+    "route": "/pad",
+    "who": "boss",
+    "chars": 592,
+    "errors": 0
+  },
+  {
+    "name": "household",
+    "route": "/household",
+    "who": "boss",
+    "chars": 973,
+    "errors": 0
+  },
+  {
+    "name": "spaces",
+    "route": "/spaces",
+    "who": "boss",
+    "chars": 679,
+    "errors": 0
+  },
+  {
+    "name": "trips",
+    "route": "/trips",
+    "who": "boss",
+    "chars": 516,
+    "errors": 0
+  },
+  {
+    "name": "movements",
+    "route": "/movements",
+    "who": "boss",
+    "chars": 736,
+    "errors": 0
+  },
+  {
+    "name": "coming",
+    "route": "/coming",
+    "who": "boss",
+    "chars": 5027,
+    "errors": 0
+  },
+  {
+    "name": "report",
+    "route": "/report",
+    "who": "boss",
+    "chars": 986,
+    "errors": 0
+  },
+  {
+    "name": "team",
+    "route": "/dashboard?tab=members",
+    "who": "boss",
+    "chars": 1951,
+    "errors": 0
+  },
+  {
+    "name": "workspace",
+    "route": "/workspace",
+    "who": "aide",
+    "chars": 742,
+    "errors": 0
+  },
+  {
+    "name": "desk",
+    "route": "/pa",
+    "who": "aide",
+    "chars": 1195,
+    "errors": 0
+  },
+  {
+    "name": "instructions",
+    "route": "/instructions",
+    "who": "driver",
+    "chars": 499,
+    "errors": 0
+  },
+  {
+    "name": "booking",
+    "route": "/book/adaeze-okonkwo-mtvdv82b",
+    "who": "public",
+    "chars": 118,
+    "errors": 0
+  }
+]

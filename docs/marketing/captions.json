@@ -1,0 +1,58 @@
+{
+  "01-today": {
+    "caption": "Most calendars are built for whoever is doing the booking.\n\nKairos is built for the person whose time is being spent — and for everyone who protects it.\n\nOpen it once in the morning and the whole day is there: what is running now, what is next, and how long you actually have in between.\n\nNew from Exousia, in Lagos.",
+    "tags": "#Kairos #ExecutiveAssistant #ChiefOfStaff #Lagos"
+  },
+  "02-workspace": {
+    "caption": "If you run someone's diary, you know the problem. You do the work, and the tool gives you a corner of somebody else's calendar.\n\nKairos gives you a desk — and it holds every principal you run, not one.\n\nPAs, EAs, Chiefs of Staff: how many logins does your morning currently take?",
+    "tags": "#ExecutiveAssistant #PersonalAssistant #ChiefOfStaff"
+  },
+  "03-household": {
+    "caption": "An instruction nobody confirmed is a hope.\n\nThe car at 06:15. Dinner for six, two vegetarian. Ask the driver, the chef, the housekeeper — and see, in one place, who has actually said they have it.\n\nThe office and the house on the same page, without the house seeing the office.",
+    "tags": "#HouseholdStaff #EstateManagement #FamilyOffice"
+  },
+  "04-instructions": {
+    "caption": "This is the entire app for a driver.\n\nWhat they were asked. When it is for. A button that says they have it.\n\nNot the diary. Not the contacts. Nothing else — and that is a decision in the database, not a setting somebody could switch off by accident.",
+    "tags": "#HouseholdStaff #Privacy #Kairos"
+  },
+  "05-booking": {
+    "caption": "Not everyone who finds your link should get your Tuesday.\n\nSome meetings confirm themselves. Some arrive as a request your office answers first.\n\nA stranger and a board member are not the same person, and your booking page should not pretend they are.",
+    "tags": "#Scheduling #ExecutiveAssistant"
+  },
+  "06-itinerary": {
+    "caption": "The fortnight, not just the hour.\n\nFlights, meetings, the drive to the airport — one list, in order.\n\nAnd only the parts each person is allowed to see. A private trip is absent from the office entirely, not dimmed. Absent.",
+    "tags": "#Travel #Privacy #Kairos"
+  },
+  "07-desk": {
+    "caption": "Everything waiting on you, in one place.\n\nRequests to answer, things to approve, what moved while you were in a meeting.\n\nHow many places do you check this morning before you know what actually needs an answer today?",
+    "tags": "#ExecutiveAssistant #ChiefOfStaff"
+  },
+  "08-pad": {
+    "caption": "The thought you had in the car.\n\nOne line, written where the office will see it. It does not have to become an email before it counts, and it does not have to wait until you are at a desk.",
+    "tags": "#Productivity #Kairos"
+  },
+  "09-movements": {
+    "caption": "Which car. Whose licence. And whether the papers are still current.\n\nVehicle particulars expire quietly, and you find out at a checkpoint.\n\nKairos watches the dates the same way it watches everything else that lapses — and tells the office before the road does.",
+    "tags": "#FleetManagement #Lagos #Security"
+  },
+  "10-trips": {
+    "caption": "A trip is more than a flight.\n\nThe journey to the airport. Who is travelling. What is waiting at the other end.\n\nHeld together in one place instead of scattered across a thread nobody can find on the morning it matters.",
+    "tags": "#Travel #ExecutiveAssistant"
+  },
+  "11-team": {
+    "caption": "You decide who gets in, and for how long.\n\nA code you choose yourself, read down the phone alongside your handle. Both are needed — the code alone opens nothing.\n\nIt is off by default. It lives only for the window you set. It is spent after the joins you allowed.",
+    "tags": "#Security #Kairos"
+  },
+  "12-spaces": {
+    "caption": "The conversation, kept with the thing it is about.\n\nA lease. A trip. A board matter.\n\nNot four hundred messages in one thread that everybody has to scroll to find the one line they needed.",
+    "tags": "#Productivity #ChiefOfStaff"
+  },
+  "13-report": {
+    "caption": "The week, written for the person who was not in it.\n\nWhat happened. What moved. What is still waiting.\n\nOnce, at the end — instead of asked for on a Sunday night.",
+    "tags": "#ExecutiveAssistant #Reporting"
+  },
+  "14-coming": {
+    "caption": "This is the screen that tells you what we have not switched on yet.\n\nEvery feature that is not live on your deployment, what it is waiting for, and which screen it will appear on. It removes each entry by itself the day we turn it on.\n\nWe would rather show you this than let you find it.",
+    "tags": "#BuildInPublic #Kairos #Lagos"
+  }
+}

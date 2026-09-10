@@ -193,8 +193,8 @@ const ticks = (arr) => `<ul class="ticks">${arr.map((t) => `<li>${TICK}${t}</li>
 const POSTS = [
   { id: '01-what-it-is', week: 1, dark: true,
     kicker: 'What it is',
-    title: 'One diary.<br>Two people.',
-    lede: 'The principal sees their day. The assistant runs it — from their own desk, on their own screen.' , tag: 'Start here' },
+    title: 'One diary.<br>Everyone around it.',
+    lede: 'The principal, their assistants, the house, the family — each on their own screen, each seeing only their part.' , tag: 'Start here' },
 
   { id: '02-the-day', week: 1,
     kicker: 'The principal’s day',

@@ -26,10 +26,10 @@ than the days. Post 16 asks for a reply, so put it where you can answer.
 
 ## Week 1 — What it is
 
-**01 · One diary. Two people.** *(start here)*
+**01 · One diary. Everyone around it.** *(start here)*
 > Most calendars are built for whoever is doing the booking.
 > Kairos by Exousia is built for the person whose time is being spent — and
-> the person who protects it.
+> for everyone who protects it: their assistants, their house, their family.
 > New from Exousia, in Lagos.
 
 **02 · Open it once. Know the whole day.**
