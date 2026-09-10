@@ -15,7 +15,11 @@ const fs = require('fs');
 const path = require('path');
 
 const DAILY = path.resolve(process.argv[2] || path.join(__dirname, 'daily'));
-const CAPTIONS = require('./captions.json');
+// Which caption file goes with which folder is an argument, not a constant:
+// there are two sets now — the phone posts and the full-screen explainers —
+// and a hardcoded require would silently caption one set from the other's
+// keys, writing nothing and reporting every post missing.
+const CAPTIONS = require(path.resolve(process.argv[3] || path.join(__dirname, 'captions.json')));
 
 const files = fs.readdirSync(DAILY).filter((f) => f.endsWith('.png')).sort();
 if (!files.length) throw new Error(`no posts in ${DAILY} — run phones.js first`);

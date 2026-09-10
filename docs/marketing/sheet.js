@@ -26,7 +26,13 @@ const OUT = path.resolve(process.argv[3] || path.join(__dirname, 'daily-contact-
 
 // Kept beside the generator rather than parsed back out of it: these are the
 // captions a person posts, and they want editing without touching code.
-const CAPTIONS = require('./captions.json');
+//
+// THE FILE IS AN ARGUMENT. There are two sets now, and their keys overlap —
+// both begin with "01-today" — so a hardcoded require does not fail loudly,
+// it captions the explainer sheet's first post with the phone set's words and
+// looks entirely finished doing it.
+const CAPTIONS = require(path.resolve(process.argv[4]
+  || path.join(__dirname, 'captions.json')));
 
 (async () => {
   const files = fs.readdirSync(DAILY).filter((f) => f.endsWith('.png')).sort();

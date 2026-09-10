@@ -1,0 +1,7 @@
+A trip is not a flight. It is flights, hotels, the visas it needs, the cars at both ends, and everything that has to move if one leg slips.
+
+Build the trip, add the legs and the stays. Visas are checked against the passports already held. Arrange a car on Movements and it offers to file it here.
+
+When a leg moves, everything downstream of it is re-timed rather than left quietly wrong.
+
+#Travel #ExecutiveAssistant #FamilyOffice

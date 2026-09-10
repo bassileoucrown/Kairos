@@ -1,0 +1,80 @@
+[
+  {
+    "name": "today",
+    "route": "/today",
+    "who": "boss",
+    "chars": 1054
+  },
+  {
+    "name": "catch-up",
+    "route": "/catch-up",
+    "who": "aide",
+    "chars": 743
+  },
+  {
+    "name": "team",
+    "route": "/dashboard?tab=members",
+    "who": "boss",
+    "chars": 2128
+  },
+  {
+    "name": "itinerary",
+    "route": "/itinerary",
+    "who": "boss",
+    "chars": 1047
+  },
+  {
+    "name": "pad",
+    "route": "/pad",
+    "who": "boss",
+    "chars": 766
+  },
+  {
+    "name": "trips",
+    "route": "/trips",
+    "who": "boss",
+    "chars": 584
+  },
+  {
+    "name": "desk",
+    "route": "/pa",
+    "who": "aide",
+    "chars": 1287
+  },
+  {
+    "name": "report",
+    "route": "/report",
+    "who": "boss",
+    "chars": 1133
+  },
+  {
+    "name": "correspondence",
+    "route": "/mail",
+    "who": "aide",
+    "chars": 754
+  },
+  {
+    "name": "spaces",
+    "route": "/spaces",
+    "who": "boss",
+    "chars": 817
+  },
+  {
+    "name": "tasks",
+    "route": "/tasks",
+    "who": "aide",
+    "chars": 1130
+  },
+  {
+    "name": "archive",
+    "route": "/archive",
+    "who": "boss",
+    "chars": 1225
+  },
+  {
+    "name": "connections",
+    "route": "/connections",
+    "who": "aide",
+    "chars": 811
+  }
+]

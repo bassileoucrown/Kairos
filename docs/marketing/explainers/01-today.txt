@@ -1,0 +1,9 @@
+Most calendars show you a grid and leave you to work out the day from it.
+
+Today is the shape of one day: what is running right now with the time left on it, the whole day in order below with a marker showing where now sits, and anything needing a decision in its own column.
+
+One screen, opened once in the morning.
+
+It is scoped to one principal — switch principals in the rail and it redraws for them.
+
+#Kairos #ExecutiveAssistant #ChiefOfStaff #Lagos
