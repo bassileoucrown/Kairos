@@ -465,7 +465,20 @@ export default function Today() {
                         ? `/appointments/${data.principal.id}/${String(e.id).replace(/^booking:/, '')}`
                         : `/schedule/${data.principal.id}/${e.id}`}
                     />
-                    {e.source === 'itinerary' && row.live && (
+                    {/* AN APPOINTMENT SOMEBODY BOOKED CAN OVERRUN TOO.
+                        This read `e.source === 'itinerary' && row.live`, and
+                        the effect was worse than losing the control on a
+                        booking. `live` is claimed by the first unfinished row
+                        of ANY source a few lines up, so a booked appointment
+                        took the flag and then declined to render the button —
+                        and every itinerary item after it was no longer live
+                        either. One appointment at eleven removed "Running
+                        late" from the whole day.
+                        The server has had /bookings/:id/delay all along, and
+                        RunningLate.jsx already says what moving one means:
+                        it emails the person who booked it. Only this line
+                        never offered it. */}
+                    {row.live && (
                       <button
                         className="today-late"
                         type="button"
