@@ -141,6 +141,23 @@ const dateOnly = (o) => {
     await boss('POST', '/access-codes', { code: 'THURSDAY-LAGOS-91', role: 'chief_of_staff', window: '24h', uses: 3 });
     await aide('POST', '/access-codes/redeem', { handle: H, code: 'THURSDAY-LAGOS-91' });
 
+    // THE TWO WARNINGS ON THE TEAM SCREEN ARE STATE, NOT DECORATION.
+    // "Your booking page isn't live yet" and "You have no security question
+    // yet" are conditional on `hasAvailability === false` and
+    // `hasQuestion === false` (Dashboard.jsx). An account that has set its
+    // hours and its question does not show them — so the way to take them out
+    // of a screenshot is to finish setting the account up, which is what a
+    // real principal does in their first ten minutes. Hiding them with
+    // injected CSS would be a picture of a state the app cannot be in.
+    await boss('PUT', '/availability', {
+      rules: [1, 2, 3, 4, 5].map((dayOfWeek) => ({ dayOfWeek, startTime: '09:00', endTime: '17:00' })),
+    });
+    await boss('POST', '/security/question', {
+      question: 'What was the name of your first school?',
+      answer: 'Corona Ikoyi',
+      password: PW,
+    });
+
     for (const mt of [
       { name: 'Introduction', durationMinutes: 30, description: 'A first conversation.' },
       { name: 'Board matter', durationMinutes: 60, description: 'Requires the desk to agree it.' },
@@ -159,6 +176,39 @@ const dateOnly = (o) => {
       { kind: 'meeting', title: 'Ministry meeting', startAt: dayAt(2, 11), endAt: dayAt(2, 12), location: 'Abuja' },
       { kind: 'meeting', title: 'Site walk — Lekki', startAt: dayAt(3, 9), endAt: dayAt(3, 11), location: 'Lekki' },
     ]) await boss('POST', `/itinerary/${bossU.id}/items`, it);
+
+    // ---- LAST WEEK, WHICH IS THE WEEK REPORT OPENS ON ---------------------
+    //
+    // Report defaults to the previous Monday-to-Sunday. Everything else seeded
+    // here is today or later, so the screen opened on zeros and said "Nothing
+    // recorded this week" — an accurate picture of an empty account and a
+    // useless picture of the feature. A report is only a report of something
+    // that happened.
+    const dow = (now.getDay() + 6) % 7;          // 0 = Monday
+    const lastMonday = -dow - 7;
+    const back = (d, h, m = 0) => dayAt(lastMonday + d, h, m);
+    for (const it of [
+      { kind: 'meeting', title: 'Board — Q3 pack', startAt: back(0, 9), endAt: back(0, 11),
+        location: 'Board room · Victoria Island' },
+      { kind: 'call', title: 'Call — Lagos counsel', startAt: back(0, 14), endAt: back(0, 15),
+        location: 'Video' },
+      { kind: 'meeting', title: 'Ikoyi lease — landlord', startAt: back(1, 10), endAt: back(1, 11, 30),
+        location: 'Ikoyi' },
+      { kind: 'meal', title: 'Lunch — Mrs Bello', startAt: back(1, 13), endAt: back(1, 14, 30),
+        location: 'The Sky Lounge, Ikoyi' },
+      { kind: 'meeting', title: 'Site walk — Lekki', startAt: back(2, 8), endAt: back(2, 10, 30),
+        location: 'Lekki' },
+      { kind: 'call', title: 'Call — the chairman', startAt: back(2, 16), endAt: back(2, 16, 30),
+        location: 'Telephone' },
+      { kind: 'meeting', title: 'Quarterly review', startAt: back(3, 10), endAt: back(3, 12),
+        location: 'Office' },
+      { kind: 'meeting', title: 'Auditors', startAt: back(3, 14), endAt: back(3, 16),
+        location: 'Office' },
+      { kind: 'meeting', title: 'Ministry — permit', startAt: back(4, 11), endAt: back(4, 12, 30),
+        location: 'Abuja' },
+      { kind: 'meal', title: 'Dinner — Emeka Obi', startAt: back(4, 19), endAt: back(4, 21),
+        location: 'Ikoyi' },
+    ]) await boss('POST', `/itinerary/${bossU.id}/items`, { ...it, status: 'confirmed' });
 
     // ---- a trip, with legs on it -----------------------------------------
     const trip = await boss('POST', `/trips/${bossU.id}`, {
@@ -235,12 +285,19 @@ const dateOnly = (o) => {
     const SHOTS = [
       ['boss', '/today', 'today', '.sched-row', 3, 400],
       ['aide', '/catch-up', 'catch-up', 'body', 1, 200],
-      ['boss', '/dashboard?tab=members', 'team', 'body', 1, 400],
+      // Scrolled to the roster. The team list sits below the booking link and
+      // the access codes, so an unscrolled shot of this screen is a shot of
+      // everything except the team.
+      ['boss', '/dashboard?tab=members', 'team', '.meeting-type-card', 1, 400, '.member-toggle'],
       ['boss', '/itinerary', 'itinerary', '.sched-row', 3, 400],
       ['boss', '/pad', 'pad', '.pad-body', 3, 300],
       ['boss', '/trips', 'trips', 'body', 1, 300],
       ['aide', '/pa', 'desk', 'body', 1, 400],
       ['boss', '/report', 'report', 'body', 1, 300],
+      // The reporting flow, in the states a person actually puts it in.
+      ['boss', '/report', 'report-parts', 'body', 1, 300, null,
+        'button:has-text("What the office did")'],
+      ['boss', '/report', 'report-export', 'body', 1, 300, 'text=Take it away'],
       ['aide', '/mail', 'correspondence', 'body', 1, 200],
       ['boss', '/spaces', 'spaces', 'body', 1, 300],
       ['aide', '/tasks', 'tasks', 'body', 1, 250],
@@ -267,7 +324,7 @@ const dateOnly = (o) => {
     }
 
     const captured = [];
-    for (const [who, route, name, sel, least, minChars] of SHOTS) {
+    for (const [who, route, name, sel, least, minChars, scrollTo, click] of SHOTS) {
       const p = pages[who];
       try {
         await p.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
@@ -285,6 +342,31 @@ const dateOnly = (o) => {
         if (await p.locator('.what-this-does.is-open').count()) {
           bad(`${name}: the guide panel is still open`);
           continue;
+        }
+
+        // Some screens are worth photographing in a state a person puts them
+        // in — a section chosen, a period changed. Pressing the control is how
+        // they get there, so the shot stays a photograph of the real app.
+        if (click) {
+          const btn = p.locator(click).first();
+          if (!(await btn.count())) {
+            bad(`${name}: nothing matches "${click}" to press`);
+            continue;
+          }
+          await btn.click({ timeout: 6000 });
+          await p.waitForTimeout(1100);
+        }
+
+        // Put the part worth photographing in the viewport. Scrolling is how a
+        // person reaches it, so this is framing rather than staging.
+        if (scrollTo) {
+          const target = p.locator(scrollTo).first();
+          if (!(await target.count())) {
+            bad(`${name}: nothing matches "${scrollTo}" to scroll to`);
+            continue;
+          }
+          await target.scrollIntoViewIfNeeded();
+          await p.waitForTimeout(700);
         }
 
         const found = await p.locator(sel).count();
@@ -309,8 +391,37 @@ const dateOnly = (o) => {
           }
         }
 
+        // WHERE THE "NOT YET" MARKERS ARE, IN SOURCE PIXELS.
+        //
+        // The standing instruction for these mockups is to show how the app
+        // works rather than to advertise what is switched off. Some of those
+        // markers can be removed honestly by finishing the setup — the booking
+        // and security-question warnings above are gone that way. The rest are
+        // real badges on real features, and the honest answer for those is to
+        // frame past them, not to delete them from the picture.
+        //
+        // So this does not fail the run: it reports each marker and how far
+        // down the screenshot it sits, which is exactly what choosing a crop
+        // needs. The nav rail is excluded — it carries a permanent SOON badge
+        // and is not in frame on the phone set at all.
+        const flags = await p.evaluate((dpr) => {
+          const main = document.querySelector('.app-main') || document.body;
+          const re = /\bnot yet\b|\bsoon\b|isn't live|no security question/i;
+          const out = [];
+          for (const el of main.querySelectorAll('*')) {
+            if (el.children.length) continue;            // leaves only
+            const t = (el.textContent || '').trim();
+            if (!t || t.length > 80 || !re.test(t)) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            out.push({ text: t.slice(0, 44), y: Math.round((r.top + window.scrollY) * dpr) });
+          }
+          return out;
+        }, DPR);
+
         await p.screenshot({ path: path.join(OUT, `${name}.png`) });
-        captured.push({ name, route, who, chars: words.length });
+        captured.push({ name, route, who, chars: words.length, flags });
+        for (const fl of flags) note(`      ⚑ "${fl.text}" at y=${fl.y}`);
         note(`  ✓ ${name.padEnd(15)} ${String(found).padStart(3)}× ${sel.padEnd(14)} ${words.length} chars`);
       } catch (err) {
         bad(`${name}: ${err.message.split('\n')[0]}`);

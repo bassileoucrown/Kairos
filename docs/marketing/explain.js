@@ -42,9 +42,20 @@ if (!['window', 'phone'].includes(SHAPE)) throw new Error(`unknown shape "${SHAP
 const ONPHONE = SHAPE === 'phone';
 const W = 1080, H = 1350;
 
-// shot file, guide key, and the group it sits under in the rail — the kicker
-// is the rail's own grouping, so somebody who has seen two of these already
-// knows where in the app they are.
+// shot file, guide key, the group it sits under in the rail, and optionally an
+// override object.
+//
+// The kicker is the rail's own grouping, so somebody who has seen two of these
+// already knows where in the app they are.
+//
+// The override carries `top` — how far down the screenshot to start the phone's
+// window, in source pixels. It defaults to clearing the app header, but a
+// screen with a "not yet" badge partway down wants a crop chosen to frame past
+// it, and wide.js prints each badge's y position for exactly that.
+//
+// It can also carry `title`, `does`, `how` and `note`, for a post about
+// something the guide has no entry of its own for — the reporting flow is
+// several posts and the guide has one `report`.
 const POSTS = [
   ['today', 'today', 'The day'],
   ['catch-up', 'catch_up', 'The day'],
@@ -138,11 +149,13 @@ p.does{font-size:21.5px;line-height:1.42;color:var(--muted);margin:13px 0 0}
 // top of the glass, which reads as a rendering fault rather than a screen.
 const HEADER = 360;
 
-function page(shot, key, group) {
-  const f = guide.forFeature(key);
-  if (!f) throw new Error(`no guide entry for "${key}"`);
+function page(shot, key, group, over = {}) {
+  const base = key ? guide.forFeature(key) : null;
+  if (key && !base) throw new Error(`no guide entry for "${key}"`);
+  const f = { ...(base || {}), ...over };
+  if (!f.title || !f.does) throw new Error(`${shot}: no title or description to show`);
   const b64 = fs.readFileSync(path.join(SHOTS, `${shot}.png`)).toString('base64');
-  const OFFSET = Math.round(HEADER * (326 / 1170));
+  const OFFSET = Math.round((over.top || HEADER) * (326 / 1170));
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
   <div class="brand">
@@ -176,7 +189,7 @@ function page(shot, key, group) {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
   const p = await ctx.newPage();
 
-  for (const [i, [shot, key, group]] of POSTS.entries()) {
+  for (const [i, [shot, key, group, over]] of POSTS.entries()) {
     const n = String(i + 1).padStart(2, '0');
     const src = path.join(SHOTS, `${shot}.png`);
     if (!fs.existsSync(src)) {
@@ -186,7 +199,7 @@ function page(shot, key, group) {
     }
 
     const html = path.join(OUT, `.${n}.html`);
-    fs.writeFileSync(html, page(shot, key, group));
+    fs.writeFileSync(html, page(shot, key, group, over || {}));
     await p.goto(`file://${html}`);
     await p.waitForTimeout(300);
 
