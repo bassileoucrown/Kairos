@@ -32,6 +32,14 @@ const guide = require(path.join(__dirname, '..', '..', 'app', 'server', 'lib', '
 
 const SHOTS = path.resolve(process.argv[3] || path.join(__dirname, 'wide-shots'));
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'explainers'));
+// The media block is the only thing that differs between the two sets, so it
+// is a mode rather than a second file: the guide reading, the step layout and
+// the overflow checks are the parts worth having in one place.
+//   window — the laptop screen full-bleed, from wide-shots
+//   phone  — a device in the middle, from phone-shots
+const SHAPE = (process.argv[4] || 'window').toLowerCase();
+if (!['window', 'phone'].includes(SHAPE)) throw new Error(`unknown shape "${SHAPE}"`);
+const ONPHONE = SHAPE === 'phone';
 const W = 1080, H = 1350;
 
 // shot file, guide key, and the group it sits under in the rail — the kicker
@@ -103,12 +111,38 @@ p.does{font-size:21.5px;line-height:1.42;color:var(--muted);margin:13px 0 0}
 .note{margin:22px 0 0;padding:13px 0 13px 17px;border-left:3px solid var(--green);
   font-size:18px;line-height:1.4;color:var(--deep);background:var(--soft);
   border-radius:0 5px 5px 0;padding-right:14px}
+
+/* ---- the phone ------------------------------------------------------
+   Told its height explicitly. The screenshot inside is absolutely
+   positioned and contributes none, and a device left to size itself from
+   its contents collapses to a strip of bezel — which is how fourteen blank
+   posts once shipped from this directory. */
+.rig{margin:22px 0 0;display:flex;justify-content:center}
+.phone{position:relative;width:350px;height:760px;flex:0 0 auto;
+  background:#14181C;border-radius:42px;padding:12px;
+  box-shadow:0 22px 54px rgba(28,33,39,.26)}
+.glass{position:relative;width:326px;height:736px;overflow:hidden;
+  border-radius:31px;background:#FFFFFF}
+/* A status band the app renders below, so the notch never lands on the
+   screen's own first line. */
+.band{position:absolute;top:0;left:0;right:0;height:24px;background:#FFF;z-index:2}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:104px;height:19px;background:#14181C;border-radius:0 0 11px 11px;z-index:3}
+.view{position:absolute;top:24px;left:0;right:0;bottom:0;overflow:hidden}
+.view img{position:absolute;left:0;width:326px;display:block}
 `;
+
+// Source pixels to slide the phone's window down by. The app header — title
+// row, then search and avatar, then a divider — ends around y=340 in a 3x
+// capture, and a crop inside it leaves half a search button floating at the
+// top of the glass, which reads as a rendering fault rather than a screen.
+const HEADER = 360;
 
 function page(shot, key, group) {
   const f = guide.forFeature(key);
   if (!f) throw new Error(`no guide entry for "${key}"`);
   const b64 = fs.readFileSync(path.join(SHOTS, `${shot}.png`)).toString('base64');
+  const OFFSET = Math.round(HEADER * (326 / 1170));
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
   <div class="brand">
@@ -118,10 +152,15 @@ function page(shot, key, group) {
   <p class="kicker">${group}</p>
   <h1>${f.title}</h1>
   <p class="does">${f.does}</p>
-  <div class="win">
+  ${ONPHONE ? `<div class="rig">
+    <div class="phone"><div class="glass">
+      <div class="band"></div><div class="notch"></div>
+      <div class="view"><img src="data:image/png;base64,${b64}" style="top:-${OFFSET}px"></div>
+    </div></div>
+  </div>` : `<div class="win">
     <div class="chrome"><i></i><i></i><i></i><span class="where">${f.title}</span></div>
     <img src="data:image/png;base64,${b64}">
-  </div>
+  </div>`}
   <div class="how">
     <h2>How you use it</h2>
     <ol>${(f.how || []).map((h) => `<li>${h}</li>`).join('')}</ol>
@@ -152,15 +191,23 @@ function page(shot, key, group) {
     await p.waitForTimeout(300);
 
     const m = await p.evaluate((limit) => {
-      const im = document.querySelector('.win img');
+      const im = document.querySelector('.win img, .view img');
       const last = document.querySelector('.note') || document.querySelector('.how');
       const r = last.getBoundingClientRect();
       return {
         decoded: im ? im.naturalWidth : 0,
-        shotH: Math.round(document.querySelector('.win').getBoundingClientRect().height),
+        shotH: Math.round(document.querySelector('.win, .phone').getBoundingClientRect().height),
         docH: document.documentElement.scrollHeight,
         lastBottom: Math.round(r.bottom),
         steps: document.querySelectorAll('.how li').length,
+        // How far the screenshot falls short of the bottom of the glass, if at
+        // all. Positive means a blank strip is showing inside the device.
+        short: (() => {
+          const g = document.querySelector('.glass');
+          const v = document.querySelector('.view img');
+          if (!g || !v) return 0;
+          return Math.round(g.getBoundingClientRect().bottom - v.getBoundingClientRect().bottom);
+        })(),
         limit,
       };
     }, H);
@@ -178,6 +225,11 @@ function page(shot, key, group) {
       console.log(`  ✗ ${n} ${shot}: content overflows the canvas by ${m.docH - m.limit}px`);
       failed += 1; continue;
     }
+    if (m.short > 0) {
+      console.log(`  ✗ ${n} ${shot}: the screenshot stops ${m.short}px above the bottom of `
+        + 'the glass — a blank strip inside the phone. Capture a taller viewport.');
+      failed += 1; continue;
+    }
     if (m.lastBottom > m.limit - 8) {
       console.log(`  ✗ ${n} ${shot}: the last block ends at y=${m.lastBottom} of ${m.limit} — too close to the cut`);
       failed += 1; continue;
@@ -190,6 +242,7 @@ function page(shot, key, group) {
   }
 
   await browser.close();
-  console.log(`\n${POSTS.length - failed} of ${POSTS.length} explainers written to ${OUT}`);
+  console.log(`\n${POSTS.length - failed} of ${POSTS.length} explainers written to ${OUT}`
+    + `  (${SHAPE})`);
   process.exit(failed ? 1 : 0);
 })();

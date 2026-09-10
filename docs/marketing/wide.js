@@ -31,14 +31,30 @@ const ROOT = path.join(__dirname, '..', '..');
 const { chromium } = require(path.join(ROOT, 'node_modules', 'playwright-core'));
 
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'wide-shots'));
+// Two shapes, one seeding. The office this file builds takes a minute to make
+// and is identical either way, so the viewport is an argument rather than a
+// second copy of the file that would drift from this one by the third edit.
+//   node wide.js <out> laptop   1440x900 @2  — the rail is open, screens whole
+//   node wide.js <out> phone     390x844 @3  — the rail is a hamburger
+const SHAPE = (process.argv[3] || 'laptop').toLowerCase();
+if (!['laptop', 'phone'].includes(SHAPE)) throw new Error(`unknown shape "${SHAPE}"`);
+const PHONE = SHAPE === 'phone';
 const PORT = Number(process.env.PORT || 4861);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ID = Date.now().toString(36);
 const PW = 'password123';
 
-// A laptop. Wide enough that the nav rail is permanently open rather than
-// behind a hamburger — the rail is part of what these posts explain.
-const VW = 1440, VH = 900;
+// A laptop is wide enough that the nav rail is permanently open rather than
+// behind a hamburger. A phone is not, and that is not a fault to correct — it
+// is what the screen is on a phone.
+const VW = PHONE ? 390 : 1440;
+// The phone is captured tall on purpose. The explainer's glass shows roughly
+// 2650 source pixels starting below the app header, and a 900px viewport at 3x
+// gives only 2700 in total — so the design ran out of screenshot and put a
+// blank strip along the bottom of the device. Extra height costs nothing here
+// because the design crops anyway.
+const VH = PHONE ? 1120 : 900;
+const DPR = PHONE ? 3 : 2;
 
 let failed = 0;
 const note = (s) => console.log(s);
@@ -237,7 +253,10 @@ const dateOnly = (o) => {
     };
     const pages = {};
     for (const who of Object.keys(logins)) {
-      const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2 });
+      const ctx = await browser.newContext({
+        viewport: { width: VW, height: VH }, deviceScaleFactor: DPR,
+        ...(PHONE ? { isMobile: true, hasTouch: true } : {}),
+      });
       const p = await ctx.newPage();
       await p.goto(`${BASE}/login`);
       await p.fill('#email', logins[who]);
@@ -278,12 +297,16 @@ const dateOnly = (o) => {
           bad(`${name}: only ${words.length} chars — "${words.slice(0, 110)}"`);
           continue;
         }
-        // The rail is part of what these posts explain. If it collapsed to a
-        // hamburger the shot is of a different product.
-        const rail = await p.locator('.app-nav').count();
-        if (!rail) {
-          bad(`${name}: no nav rail on screen — the viewport is being treated as narrow`);
-          continue;
+        // On a laptop the rail is part of what these posts explain, and its
+        // absence means the viewport is being treated as narrow. On a phone
+        // the opposite is true, so asserting it either way would be asserting
+        // something that cannot fail in one of the two modes.
+        if (!PHONE) {
+          const rail = await p.locator('.app-nav').count();
+          if (!rail) {
+            bad(`${name}: no nav rail on screen — the viewport is being treated as narrow`);
+            continue;
+          }
         }
 
         await p.screenshot({ path: path.join(OUT, `${name}.png`) });
@@ -295,7 +318,8 @@ const dateOnly = (o) => {
     }
 
     fs.writeFileSync(path.join(OUT, 'index.json'), JSON.stringify(captured, null, 2));
-    note(`\n${captured.length} of ${SHOTS.length} screens captured into ${OUT}`);
+    note(`\n${captured.length} of ${SHOTS.length} screens captured into ${OUT}`
+      + `  (${SHAPE}, ${VW}x${VH} @${DPR}x)`);
   } catch (err) {
     bad('THREW: ' + (err.stack || err.message));
   } finally {

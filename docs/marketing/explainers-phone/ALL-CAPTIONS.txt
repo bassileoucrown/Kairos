@@ -1,0 +1,135 @@
+── Day 1 · 01-today.png ──────────────────────────────────
+
+Most calendars show you a grid and leave you to work out the day from it.
+
+Today is the shape of one day: what is running right now with the time left on it, the whole day in order below with a marker showing where now sits, and anything needing a decision in its own column.
+
+One screen, opened once in the morning.
+
+It is scoped to one principal — switch principals in the rail and it redraws for them.
+
+#Kairos #ExecutiveAssistant #ChiefOfStaff #Lagos
+
+── Day 2 · 02-catch-up.png ───────────────────────────────
+
+You have been on a flight, or away for four days. What did you miss?
+
+While you were away orders everything that happened by what would be worst to have missed. Decisions filed without you come first — because you are already working under them, whether you have read them or not.
+
+Press any line to go to the thing itself.
+
+It is deliberately not scoped to one principal. An assistant who has been away has been away from all of them.
+
+#ExecutiveAssistant #PersonalAssistant #ChiefOfStaff
+
+── Day 3 · 03-itinerary.png ──────────────────────────────
+
+A diary is not only meetings.
+
+Itinerary holds the appointments, the travel between them, and everything that is not a meeting at all — a school run, a block of quiet, a fitting.
+
+Give something a place and the leg before it can be timed. Move an appointment and everybody affected is told, rather than finding out.
+
+#Scheduling #ExecutiveAssistant #Kairos
+
+── Day 4 · 04-pad.png ────────────────────────────────────
+
+The thought arrives in the car, in a lift, halfway through somebody else's sentence.
+
+Pad takes one line and asks nothing else of you at that moment. That is the entire point — a capture that demands a category, a date and an owner is a capture you will not make.
+
+Come back later and turn the line into a task, a diary entry or a message.
+
+Private by default. The toggle on each line says, in words, who can read it.
+
+#Productivity #Kairos
+
+── Day 5 · 05-trips.png ──────────────────────────────────
+
+A trip is not a flight. It is flights, hotels, the visas it needs, the cars at both ends, and everything that has to move if one leg slips.
+
+Build the trip, add the legs and the stays. Visas are checked against the passports already held. Arrange a car on Movements and it offers to file it here.
+
+When a leg moves, everything downstream of it is re-timed rather than left quietly wrong.
+
+#Travel #ExecutiveAssistant #FamilyOffice
+
+── Day 6 · 06-desk.png ───────────────────────────────────
+
+If you run someone's diary, your work is not one list. It is approvals, bookings, contacts, briefs, availability, correspondence — and today's version of each.
+
+The desk puts every section on one screen with what is waiting in each. Open one and the tab strip moves you between them. The whole desk button brings you back.
+
+One principal at a time, and one screen for all of it.
+
+#ExecutiveAssistant #ChiefOfStaff #PersonalAssistant
+
+── Day 7 · 07-report.png ─────────────────────────────────
+
+Where did the week actually go?
+
+Report answers that with what the period held — meetings, hours, who took them, and what moved. Pick a period and the figures redraw for exactly that range.
+
+It is for the shape of a period, not for finding a particular meeting. Different question, different screen.
+
+#Reporting #ExecutiveAssistant
+
+── Day 8 · 08-correspondence.png ─────────────────────────
+
+The question about an email is rarely what it says. It is what it needs.
+
+Correspondence shows what has come in for the principal and lets you mark what each thing needs — the principal, you, later, or nothing at all.
+
+Draft a reply against a message and it stays a draft. Nothing leaves without a person deciding it should.
+
+#ExecutiveAssistant #Kairos
+
+── Day 9 · 09-spaces.png ─────────────────────────────────
+
+Four hundred messages in one thread is not a record of anything.
+
+A space is a place per piece of work — a lease, a board matter, a site. It holds its rooms, its projects and the people who belong in it. A project inside a space has stages, and the stages move on what is decided in the rooms.
+
+Spaces are sealed from each other. Being in one tells you nothing whatsoever about any other.
+
+#Productivity #ChiefOfStaff #Kairos
+
+── Day 10 · 10-tasks.png ──────────────────────────────────
+
+You run more than one diary, and work lands on you from all of them.
+
+Tasks is everything assigned to you, across every space and every principal, in one list. Each row carries where it came from, so you can open the room behind it and read what was actually agreed.
+
+Give a task a date and it will chase you.
+
+#ExecutiveAssistant #Productivity
+
+── Day 11 · 11-archive.png ────────────────────────────────
+
+The important line is usually said in passing, in a room that will be closed in three months.
+
+Archive is what the office decided was worth keeping after the conversation finished. Keep a message from a room and a copy lands here — safe from that room being deleted.
+
+Archive a document and the original is filed here rather than copied.
+
+#Records #ChiefOfStaff #Kairos
+
+── Day 12 · 12-connections.png ────────────────────────────
+
+Two principals need to be in a room. That means two assistants have to find each other first.
+
+Connections is the line to the assistant on the other side. Get their handle from a signature or from them directly, and add it. Once connected, you can propose times across both diaries.
+
+There is no search here, and there never will be. A directory of who runs whom is itself the sensitive thing.
+
+#ExecutiveAssistant #Privacy #Kairos
+
+── Day 13 · 13-team.png ───────────────────────────────────
+
+You decide who works for you, and what each of them can reach.
+
+Team is where you appoint people and set what each one can do — scheduling only, or scheduling and the rest. A delegate handling scheduling does not get the sensitive detail, and that is a structural decision rather than a checkbox somebody could quietly change.
+
+Invite by handle. They accept and appear in your team.
+
+#Security #ExecutiveAssistant #Kairos

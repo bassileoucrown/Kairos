@@ -1,0 +1,7 @@
+You decide who works for you, and what each of them can reach.
+
+Team is where you appoint people and set what each one can do — scheduling only, or scheduling and the rest. A delegate handling scheduling does not get the sensitive detail, and that is a structural decision rather than a checkbox somebody could quietly change.
+
+Invite by handle. They accept and appear in your team.
+
+#Security #ExecutiveAssistant #Kairos
