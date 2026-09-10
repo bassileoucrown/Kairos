@@ -179,14 +179,30 @@ async function waitReady() {
     const inv = await real('POST', '/members', { email: paEmail });
     await pa('POST', `/invites/${inv.d.inviteLink.split('/').pop()}/accept`);
 
-    const before = await real('GET', `/itinerary/${realId}/day?date=${entryDay}`);
+    // ONE DATE STRING CANNOT SERVE TWO PRINCIPALS IN DIFFERENT TIMEZONES.
+    //
+    // `entryDay` is the entry's day in Africa/Lagos, which is right for the
+    // held record — it was created with that timezone, and /day reads the
+    // principal's own. But Real Boss keeps UTC, and for one hour in every
+    // twenty-four those are different dates: an entry three hours from now is
+    // already tomorrow in Lagos while it is still today in UTC, which happens
+    // when this runs between 20:00 and 21:00 UTC.
+    //
+    // In that hour these two assertions asked Real Boss's diary for a day
+    // nothing was ever on, and an empty answer looks exactly like a hand-over
+    // that silently dropped the entry. The suite passed on every board run
+    // outside that hour, which is the worst kind of wrong.
+    const realDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' })
+      .format(new Date(entryAt));
+
+    const before = await real('GET', `/itinerary/${realId}/day?date=${realDay}`);
     ok('their own day starts without the assistant\'s working entry',
       !(before.d.entries || []).some((e) => e.title === 'Board pre-read'),
       JSON.stringify((before.d.entries || []).map((e) => e.title)));
 
     r = await pa('POST', `/pa/kept/${kept.id}/hand-over/${made.d.item.id}`, { toPrincipalId: realId });
     ok('the assistant can move one thing across', r.s === 200, JSON.stringify(r.d));
-    const after = await real('GET', `/itinerary/${realId}/day?date=${entryDay}`);
+    const after = await real('GET', `/itinerary/${realId}/day?date=${realDay}`);
     ok('and it is on the principal\'s own day now',
       (after.d.entries || []).some((e) => e.title === 'Board pre-read'),
       JSON.stringify((after.d.entries || []).map((e) => e.title)));
