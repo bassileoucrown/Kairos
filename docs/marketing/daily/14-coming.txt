@@ -1,0 +1,7 @@
+This is the screen that tells you what we have not switched on yet.
+
+Every feature that is not live on your deployment, what it is waiting for, and which screen it will appear on. It removes each entry by itself the day we turn it on.
+
+We would rather show you this than let you find it.
+
+#BuildInPublic #Kairos #Lagos

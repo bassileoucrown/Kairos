@@ -1,0 +1,139 @@
+── Day 1 · 01-today.png ──────────────────────────────────
+
+Most calendars are built for whoever is doing the booking.
+
+Kairos is built for the person whose time is being spent — and for everyone who protects it.
+
+Open it once in the morning and the whole day is there: what is running now, what is next, and how long you actually have in between.
+
+New from Exousia, in Lagos.
+
+#Kairos #ExecutiveAssistant #ChiefOfStaff #Lagos
+
+── Day 2 · 02-workspace.png ──────────────────────────────
+
+If you run someone's diary, you know the problem. You do the work, and the tool gives you a corner of somebody else's calendar.
+
+Kairos gives you a desk — and it holds every principal you run, not one.
+
+PAs, EAs, Chiefs of Staff: how many logins does your morning currently take?
+
+#ExecutiveAssistant #PersonalAssistant #ChiefOfStaff
+
+── Day 3 · 03-household.png ──────────────────────────────
+
+An instruction nobody confirmed is a hope.
+
+The car at 06:15. Dinner for six, two vegetarian. Ask the driver, the chef, the housekeeper — and see, in one place, who has actually said they have it.
+
+The office and the house on the same page, without the house seeing the office.
+
+#HouseholdStaff #EstateManagement #FamilyOffice
+
+── Day 4 · 04-instructions.png ───────────────────────────
+
+This is the entire app for a driver.
+
+What they were asked. When it is for. A button that says they have it.
+
+Not the diary. Not the contacts. Nothing else — and that is a decision in the database, not a setting somebody could switch off by accident.
+
+#HouseholdStaff #Privacy #Kairos
+
+── Day 5 · 05-booking.png ────────────────────────────────
+
+Not everyone who finds your link should get your Tuesday.
+
+Some meetings confirm themselves. Some arrive as a request your office answers first.
+
+A stranger and a board member are not the same person, and your booking page should not pretend they are.
+
+#Scheduling #ExecutiveAssistant
+
+── Day 6 · 06-itinerary.png ──────────────────────────────
+
+The fortnight, not just the hour.
+
+Flights, meetings, the drive to the airport — one list, in order.
+
+And only the parts each person is allowed to see. A private trip is absent from the office entirely, not dimmed. Absent.
+
+#Travel #Privacy #Kairos
+
+── Day 7 · 07-desk.png ───────────────────────────────────
+
+Everything waiting on you, in one place.
+
+Requests to answer, things to approve, what moved while you were in a meeting.
+
+How many places do you check this morning before you know what actually needs an answer today?
+
+#ExecutiveAssistant #ChiefOfStaff
+
+── Day 8 · 08-pad.png ────────────────────────────────────
+
+The thought you had in the car.
+
+One line, written where the office will see it. It does not have to become an email before it counts, and it does not have to wait until you are at a desk.
+
+#Productivity #Kairos
+
+── Day 9 · 09-movements.png ──────────────────────────────
+
+Which car. Whose licence. And whether the papers are still current.
+
+Vehicle particulars expire quietly, and you find out at a checkpoint.
+
+Kairos watches the dates the same way it watches everything else that lapses — and tells the office before the road does.
+
+#FleetManagement #Lagos #Security
+
+── Day 10 · 10-trips.png ──────────────────────────────────
+
+A trip is more than a flight.
+
+The journey to the airport. Who is travelling. What is waiting at the other end.
+
+Held together in one place instead of scattered across a thread nobody can find on the morning it matters.
+
+#Travel #ExecutiveAssistant
+
+── Day 11 · 11-team.png ───────────────────────────────────
+
+You decide who gets in, and for how long.
+
+A code you choose yourself, read down the phone alongside your handle. Both are needed — the code alone opens nothing.
+
+It is off by default. It lives only for the window you set. It is spent after the joins you allowed.
+
+#Security #Kairos
+
+── Day 12 · 12-spaces.png ─────────────────────────────────
+
+The conversation, kept with the thing it is about.
+
+A lease. A trip. A board matter.
+
+Not four hundred messages in one thread that everybody has to scroll to find the one line they needed.
+
+#Productivity #ChiefOfStaff
+
+── Day 13 · 13-report.png ─────────────────────────────────
+
+The week, written for the person who was not in it.
+
+What happened. What moved. What is still waiting.
+
+Once, at the end — instead of asked for on a Sunday night.
+
+#ExecutiveAssistant #Reporting
+
+── Day 14 · 14-coming.png ─────────────────────────────────
+
+This is the screen that tells you what we have not switched on yet.
+
+Every feature that is not live on your deployment, what it is waiting for, and which screen it will appear on. It removes each entry by itself the day we turn it on.
+
+We would rather show you this than let you find it.
+
+#BuildInPublic #Kairos #Lagos

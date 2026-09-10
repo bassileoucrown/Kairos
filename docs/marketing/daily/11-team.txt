@@ -1,0 +1,7 @@
+You decide who gets in, and for how long.
+
+A code you choose yourself, read down the phone alongside your handle. Both are needed — the code alone opens nothing.
+
+It is off by default. It lives only for the window you set. It is spent after the joins you allowed.
+
+#Security #Kairos
