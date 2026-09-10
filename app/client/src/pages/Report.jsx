@@ -30,30 +30,33 @@ const GROUPS = [
   {
     heading: 'The diary',
     rows: [
-      ['approved', 'requests approved'],
-      ['declined', 'requests declined'],
-      ['moved', 'meetings moved'],
-      ['calledOff', 'meetings called off'],
-      ['putIn', 'put in the diary'],
+      ['approved', 'request approved', 'requests approved'],
+      ['declined', 'request declined', 'requests declined'],
+      ['moved', 'meeting moved', 'meetings moved'],
+      ['calledOff', 'meeting called off', 'meetings called off'],
+      // No plural to change: "1 put in the diary" and "4 put in the diary"
+      // are both right, which is why the pair is written out rather than
+      // derived. English does not add an s to every one of these.
+      ['putIn', 'put in the diary', 'put in the diary'],
     ],
   },
   {
     heading: 'Work',
     rows: [
-      ['tasksDone', 'tasks finished'],
-      ['tasksSet', 'tasks handed out'],
-      ['records', 'records filed'],
-      ['messages', 'messages written'],
+      ['tasksDone', 'task finished', 'tasks finished'],
+      ['tasksSet', 'task handed out', 'tasks handed out'],
+      ['records', 'record filed', 'records filed'],
+      ['messages', 'message written', 'messages written'],
     ],
   },
   {
     heading: 'Papers',
     rows: [
-      ['documentsConfirmed', 'documents confirmed'],
-      ['documentsAdded', 'documents added'],
-      ['documentsRevealed', 'documents looked at'],
-      ['keptToArchive', 'things kept to the archive'],
-      ['houseInstructions', 'instructions to the house'],
+      ['documentsConfirmed', 'document confirmed', 'documents confirmed'],
+      ['documentsAdded', 'document added', 'documents added'],
+      ['documentsRevealed', 'document looked at', 'documents looked at'],
+      ['keptToArchive', 'thing kept to the archive', 'things kept to the archive'],
+      ['houseInstructions', 'instruction to the house', 'instructions to the house'],
     ],
   },
 ];
@@ -83,10 +86,10 @@ function PersonCard({ person }) {
               <h4>{g.heading}</h4>
               {/* Only what happened. A column of zeroes reads as an accusation
                   and buries the two numbers that are actually there. */}
-              {rows.map(([key, label]) => (
+              {rows.map(([key, one, many]) => (
                 <div className="report-line" key={key}>
                   <span className="report-n">{person.counts[key]}</span>
-                  <span>{label}</span>
+                  <span>{person.counts[key] === 1 ? one : many}</span>
                 </div>
               ))}
             </div>
@@ -145,8 +148,9 @@ function WeekAhead({ ahead, ownerId, showAhead = true, showAttention = true }) {
       {showAhead && (
       <div className="report-tiles">
         <div><strong>{ahead.appointments}</strong><span>appointment{ahead.appointments === 1 ? '' : 's'}</span></div>
-        <div><strong>{due}</strong><span>task{due === 1 ? '' : 's'} fall due</span></div>
-        <div><strong>{stages}</strong><span>stage{stages === 1 ? '' : 's'} fall due</span></div>
+        {/* The verb has to agree too: this said "1 task fall due". */}
+        <div><strong>{due}</strong><span>task{due === 1 ? ' falls' : 's fall'} due</span></div>
+        <div><strong>{stages}</strong><span>stage{stages === 1 ? ' falls' : 's fall'} due</span></div>
       </div>
       )}
 
