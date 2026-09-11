@@ -187,6 +187,19 @@ export default function RunningLate({ ownerId, item, onDone, onCancel }) {
               the first entry you will still make on time — it and everything after it stay put.
             </p>
           )}
+          {/* A hold that has stopped mattering. Shortening the delay can leave
+          the held entry in a gap that absorbs it anyway, and then no row says
+          "held" — so the hold is still set with nothing on screen to undo it.
+          Said here rather than left as a dead end. */}
+          {hold && plan.counts.held === 0 && (
+            <p className="hint">
+              The entry you held is not being pushed at this delay, so the hold is
+              doing nothing.{' '}
+              <button className="linkish" type="button" disabled={busy} onClick={() => preview(minutes, null)}>
+                clear it
+              </button>
+            </p>
+          )}
               {/* THE ONE THING KAIROS DOES SEND. Moving an appointment tells the
               person who booked it, because they would otherwise arrive at the
               old time — that is not a judgement call, it is the whole meaning
