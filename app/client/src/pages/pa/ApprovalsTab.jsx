@@ -134,8 +134,10 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
                       onChange={(e) => setRemindFor((r) => ({ ...r, [b.id]: e.target.value }))}
                       style={{ width: 'auto' }}
                     >
+                      {/* Nothing under fifteen: the sweep runs every fifteen
+                      minutes, so a shorter lead is a warning that mostly never
+                      arrives. See PRESETS in lib/appointmentReminders.js. */}
                       <option value="0">not at all</option>
-                      <option value="10">10 min before</option>
                       <option value="15">15 min before</option>
                       <option value="30">30 min before</option>
                       <option value="60">1 hr before</option>

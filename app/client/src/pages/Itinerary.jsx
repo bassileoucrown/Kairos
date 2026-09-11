@@ -227,9 +227,10 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
           value={remindMinutes}
           onChange={(e) => setRemindMinutes(e.target.value)}
         >
+          {/* Nothing under fifteen: the sweep runs every fifteen minutes, so a
+          shorter lead is a warning that mostly never arrives. See the note on
+          PRESETS in lib/appointmentReminders.js. */}
           <option value="">No reminder</option>
-          <option value="5">5 minutes before</option>
-          <option value="10">10 minutes before</option>
           <option value="15">15 minutes before</option>
           <option value="30">30 minutes before</option>
           <option value="45">45 minutes before</option>

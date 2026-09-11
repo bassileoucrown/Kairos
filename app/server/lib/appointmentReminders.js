@@ -23,7 +23,25 @@ const tripPrivacy = require('./tripPrivacy');
 
 // What the picker offers. Minutes, because that is the unit people say out
 // loud — "give me twenty minutes' notice" — even for the long ones.
-const PRESETS = [5, 10, 15, 30, 45, 60, 120, 1440];
+//
+// NOTHING SHORTER THAN THE SWEEP. A reminder fires only if a pass of the sweep
+// lands inside its window, and the window is exactly as wide as the lead. The
+// sweep runs every fifteen minutes (REMINDER_SWEEP_MS), so a five-minute lead
+// had roughly one chance in three of being caught and a ten-minute lead two in
+// three — and a miss is permanent rather than late, because the next pass finds
+// the meeting already started and skips it on purpose.
+//
+// So five and ten were removed rather than left on the list. An offer the
+// deployment cannot keep is worse than a shorter list: somebody sets a
+// five-minute warning, is told nothing twice out of three times, and learns
+// that Kairos does not remind them — which is a lesson that then applies to
+// every other lead on here, all of which do work.
+//
+// FIFTEEN IS THE FLOOR BECAUSE THE SWEEP IS FIFTEEN. If the sweep interval is
+// ever shortened — a plan where the container is not stopped between requests,
+// and a scheduler calling /api/sweep every minute — these come back, and this
+// comment is where to look. See lib/reminders.js SWEEP_INTERVAL_MS.
+const PRESETS = [15, 30, 45, 60, 120, 1440];
 
 // What a booking gets when nobody has chosen. This is the lead time the app
 // has always used for the principal, kept as the default so that turning a

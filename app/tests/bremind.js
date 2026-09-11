@@ -245,6 +245,30 @@ const rel = (mins) => new Date(Date.now() + mins * 60000).toISOString();
       JSON.stringify(presets.d));
     ok('and a default that matches what the app always did',
       presets.d.defaultMinutes === 30, String(presets.d.defaultMinutes));
+
+    // NOTHING SHORTER THAN THE SWEEP IS OFFERED.
+    //
+    // A reminder fires only if a sweep pass lands inside its window, and the
+    // window is exactly as wide as the lead. At a fifteen-minute sweep a
+    // five-minute lead was caught about one time in three and a ten-minute lead
+    // two in three — and a miss is permanent rather than late, because the next
+    // pass finds the meeting started and skips it on purpose.
+    //
+    // Asserted against the sweep interval rather than against a hardcoded 15,
+    // so that shortening the sweep and putting the short leads back is one
+    // change and not two — and so this line cannot quietly agree with a list
+    // that has drifted away from the clock that drives it.
+    const sweepMinutes = Number(process.env.REMINDER_SWEEP_MS || 15 * 60 * 1000) / 60000;
+    ok('no lead is shorter than the sweep that has to catch it',
+      presets.d.presets.every((m) => m >= sweepMinutes),
+      `${JSON.stringify(presets.d.presets)} against a ${sweepMinutes} min sweep`);
+    // The positive control. "Every preset is long enough" passes on an empty
+    // list too, and a reminder picker with nothing in it is a worse bug than
+    // one with a lead that misses.
+    ok('and the ones that are left are a real choice',
+      presets.d.presets.length >= 5 && presets.d.presets.includes(15)
+      && presets.d.presets.includes(1440),
+      JSON.stringify(presets.d.presets));
   } catch (e) {
     fails += 1;
     console.log('\nFAILED: ' + (e.stack || e.message));
