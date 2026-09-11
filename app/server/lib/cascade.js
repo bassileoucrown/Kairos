@@ -21,6 +21,22 @@ const db = require('./db');
 //   would overrun one, that is a conflict to be told about in plain words,
 //   never a time to quietly rewrite. The most expensive thing this can do is
 //   let somebody believe a plane will wait.
+//
+//   And a hold stops it on command. Being late for the eleven o'clock does not
+//   mean being late for the four o'clock — a principal skips lunch, a driver
+//   takes the expressway, and the day is back on its feet by the afternoon.
+//   Cascading the whole day regardless is the same cry-wolf failure as ignoring
+//   the gaps, arriving a different way: the office starts distrusting a screen
+//   that keeps telling them the evening has moved when it has not. So the
+//   person driving this says where the day recovers, and everything from there
+//   stays on its own clock.
+//
+// WHY THE HOLD IS A CUT POINT AND NOT A ROW OF TICK BOXES. Each shifted time
+// here is computed from a cursor that walks forward through the day — where the
+// principal actually is once the previous thing finishes. Hold a middle entry
+// while still moving a later one and that later time is derived from a position
+// the principal was never in; the number on the screen would be arithmetic
+// rather than a claim about the day. One cut point keeps every time on it true.
 
 const MS = 60000;
 
@@ -107,7 +123,7 @@ function endOf(item, startOverride) {
  * assistant can act on, and "the 15:30 car would now leave at 16:15, which
  * misses the 17:40" is.
  */
-async function planDelay({ ownerId, itemId, bookingId, minutes }) {
+async function planDelay({ ownerId, itemId, bookingId, minutes, hold }) {
   // The thing running late is either an entry this office put on the day or an
   // appointment somebody booked. Both are things a principal is physically at
   // and can therefore overrun; only the second one has a person on the other
@@ -146,23 +162,64 @@ async function planDelay({ ownerId, itemId, bookingId, minutes }) {
   let cursor = newTargetEnd;
   let stillCascading = delay > 0;
 
+  // The hold, if one was asked for. Recorded rather than assumed: an id that
+  // names nothing on this day would otherwise mean the whole afternoon moves
+  // when somebody had just said it should not, which is the one direction this
+  // must never fail in. The caller checks holdApplied and refuses.
+  const holdId = hold === undefined || hold === null || hold === '' ? null : String(hold);
+  let holdApplied = false;
+  // Why the cascade stopped, so the rows after it can say the true thing
+  // rather than a plausible one.
+  let stoppedBy = null;
+
   for (const item of rest) {
     const travel = Number(item.travel_minutes || 0);
     const earliest = shift(cursor, travel);
     const late = mins(earliest, item.start_at);
+    const isHold = holdId !== null && String(item.id) === holdId;
+    if (isHold) holdApplied = true;
 
     if (!stillCascading || late <= 0) {
-      // The gap swallowed it. Everything from here is untouched, and saying so
-      // is worth as much as the warnings.
+      // The gap swallowed it — or the day already stopped moving further back.
+      // Saying which is worth as much as the warnings.
       effects.push({
         id: item.id, title: item.title, kind: item.kind,
         source: item.source || 'item',
         startAt: item.start_at, newStartAt: item.start_at,
         effect: 'unchanged',
-        reason: stillCascading ? 'There is enough of a gap before this.' : null,
+        reason: stillCascading
+          ? 'There is enough of a gap before this.'
+          : stoppedBy === 'hold'
+            ? 'After the hold, so it keeps its own time.'
+            : null,
         isAnchor: !!item.is_anchor,
       });
       stillCascading = false;
+      continue;
+    }
+
+    // HELD ON COMMAND. Checked before the anchor branch only for entries that
+    // could otherwise have moved: holding a flight is already what a flight
+    // does, and "you would reach this after it leaves" is the more useful
+    // sentence than "held", so an anchor keeps its conflict wording.
+    if (isHold && !item.is_anchor) {
+      effects.push({
+        id: item.id, title: item.title, kind: item.kind,
+        source: item.source || 'item',
+        startAt: item.start_at, newStartAt: item.start_at,
+        effect: 'held',
+        lateBy: late,
+        // The number is the point. Holding is a claim that the time gets made
+        // up somewhere, and how much has to be made up is the thing to decide
+        // on — not a detail of the refusal.
+        reason: `Held at its own time, which means making up ${late} min before it. Nothing after this moves either.`,
+        isAnchor: false,
+        staff: item.staff_user_id && item.staff_status === 'active'
+          ? { name: item.staff_name, jobTitle: item.staff_title } : null,
+        attendee: item.booker_email ? { name: item.booker_name, email: item.booker_email } : null,
+      });
+      stillCascading = false;
+      stoppedBy = 'hold';
       continue;
     }
 
@@ -190,6 +247,7 @@ async function planDelay({ ownerId, itemId, bookingId, minutes }) {
         attendee: item.booker_email ? { name: item.booker_name, email: item.booker_email } : null,
       });
       stillCascading = false;
+      stoppedBy = 'anchor';
       continue;
     }
 
@@ -231,9 +289,16 @@ async function planDelay({ ownerId, itemId, bookingId, minutes }) {
     },
     minutes: delay,
     effects,
+    // WHAT WAS ASKED FOR, AND WHETHER IT LANDED. Separate fields because the
+    // pair "you asked to hold something, and nothing on this day is it" is the
+    // one answer the apply step must not treat as an ordinary plan.
+    holdRequested: holdId,
+    holdApplied,
+    stoppedBy,
     counts: {
       shifted: shifted.length,
       conflicts: conflicts.length,
+      held: effects.filter((e) => e.effect === 'held').length,
       unchanged: effects.filter((e) => e.effect === 'unchanged').length,
     },
     // Deduplicated: one person told once, however many of their legs moved.

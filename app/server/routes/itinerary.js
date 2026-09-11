@@ -13,6 +13,7 @@ const { isValidTimeZone, utcToZonedParts } = require('../lib/timezone');
 const recurrence = require('../lib/recurrence');
 const { planDelay } = require('../lib/cascade');
 const { rescheduleBooking } = require('../lib/rescheduleBooking');
+const { refuseIfTooSoon } = require('../lib/bookingWindow');
 const { sendEmail } = require('../lib/email');
 const { directLineFor } = require('../lib/directLine');
 const { requirePlan } = require('../lib/plans');
@@ -1048,7 +1049,9 @@ router.post('/:ownerId/items/:itemId/delay/preview', requirePaAccess, async (req
     .get(req.params.itemId, req.principal.id);
   if (!row || hiddenFromViewer(row, req)) return res.status(404).json({ error: 'Item not found.' });
 
-  const plan = await planDelay({ ownerId: req.principal.id, itemId: row.id, minutes });
+  const plan = await planDelay({
+    ownerId: req.principal.id, itemId: row.id, minutes, hold: req.body?.hold,
+  });
   res.json({ plan });
 });
 
@@ -1070,10 +1073,22 @@ router.post('/:ownerId/bookings/:bookingId/delay/preview', requirePaAccess, asyn
     return res.status(400).json({ error: 'By how many minutes?' });
   }
   const plan = await planDelay({
-    ownerId: req.principal.id, bookingId: req.params.bookingId, minutes,
+    ownerId: req.principal.id, bookingId: req.params.bookingId, minutes, hold: req.body?.hold,
   });
   if (!plan) return res.status(404).json({ error: 'Appointment not found.' });
-  res.json({ plan });
+
+  // SAID BEFORE THE BUTTON, NOT ON PRESSING IT. Inside the half hour a booker's
+  // appointment cannot be moved from here, and a preview that showed a tidy
+  // plan and then refused would be the screen lying about what it offers. The
+  // plan is still returned — what the day would do is worth seeing even when
+  // the answer is to pick up the phone.
+  const booking = await db.prepare('SELECT * FROM bookings WHERE id = ? AND owner_id = ?')
+    .get(req.params.bookingId, req.principal.id);
+  const tooSoon = booking ? refuseIfTooSoon(booking) : null;
+  res.json({
+    plan,
+    ...(tooSoon ? { tooSoon: { error: tooSoon.error, minutesLeft: tooSoon.minutesLeft, noticeMinutes: tooSoon.noticeMinutes } } : {}),
+  });
 });
 
 /**
@@ -1096,11 +1111,32 @@ router.post('/:ownerId/bookings/:bookingId/delay', requirePaAccess, async (req, 
   ).get(req.params.bookingId, req.principal.id);
   if (!booking) return res.status(404).json({ error: 'Appointment not found.' });
 
+  // THE HALF HOUR BEFORE IT BELONGS TO WHOEVER BOOKED IT. Moving this sends
+  // them a new time, and inside thirty minutes that email arrives while they
+  // are on their way. Refused here rather than in rescheduleBooking, because
+  // this is the one door where a move is a side effect of the office being
+  // late; the deliberate Move, on the appointment itself, is a different act
+  // with a person thinking about it. See lib/bookingWindow.js.
+  const tooSoon = refuseIfTooSoon(booking);
+  if (tooSoon) {
+    return res.status(tooSoon.status).json({
+      error: tooSoon.error,
+      minutesLeft: tooSoon.minutesLeft,
+      noticeMinutes: tooSoon.noticeMinutes,
+    });
+  }
+
   // Recomputed rather than trusting a plan posted back, exactly as the item
   // route does: the day may have changed in the seconds since the preview.
   const plan = await planDelay({
-    ownerId: req.principal.id, bookingId: booking.id, minutes,
+    ownerId: req.principal.id, bookingId: booking.id, minutes, hold: req.body?.hold,
   });
+  if (plan.holdRequested && !plan.holdApplied) {
+    return res.status(409).json({
+      error: 'The thing you asked to hold is no longer on this part of the day. Look again before anything moves.',
+      plan,
+    });
+  }
   if (plan.counts.conflicts > 0 && req.body?.acceptConflicts !== true) {
     return res.status(409).json({
       error: 'This would run into something that cannot move.',
@@ -1157,7 +1193,25 @@ router.post('/:ownerId/items/:itemId/delay', requirePaAccess, async (req, res) =
     .get(req.params.itemId, req.principal.id);
   if (!row || hiddenFromViewer(row, req)) return res.status(404).json({ error: 'Item not found.' });
 
-  const plan = await planDelay({ ownerId: req.principal.id, itemId: row.id, minutes });
+  // NO FLOOR HERE, DELIBERATELY. An itinerary entry is the office's own: the
+  // car, the prep hour, the drive to the airport. Nobody outside is holding a
+  // time for it, so a PA or principal may move it at any point right up until
+  // it starts — which is exactly when somebody notices they are late for it.
+  // The thirty-minute floor exists to protect a booker, and there is no booker
+  // on this route. See lib/bookingWindow.js.
+  const plan = await planDelay({
+    ownerId: req.principal.id, itemId: row.id, minutes, hold: req.body?.hold,
+  });
+
+  // Asked to hold something that is not there any more. Refused rather than
+  // applied without it: "hold the four o'clock" quietly becoming "move the
+  // four o'clock" is the one way this can go wrong that nobody would catch.
+  if (plan.holdRequested && !plan.holdApplied) {
+    return res.status(409).json({
+      error: 'The thing you asked to hold is no longer on this part of the day. Look again before anything moves.',
+      plan,
+    });
+  }
 
   // A conflict is not a reason to refuse — sometimes the plane really is going
   // to be missed and the day still has to be rearranged around it. But it is a
@@ -1225,9 +1279,17 @@ router.post('/:ownerId/items/:itemId/delay', requirePaAccess, async (req, res) =
 
   // And the team, in the room they already use for exactly this sentence.
   const line = await directLineFor(req.principal.id, req.user.id);
-  if (line?.threadId && (moved.length > 0 || plan.counts.conflicts > 0)) {
+  const held = plan.effects.filter((e) => e.effect === 'held');
+  if (line?.threadId && (moved.length > 0 || plan.counts.conflicts > 0 || held.length > 0)) {
     const parts = [`Running ${minutes} min late from ${plan.item.title}.`];
     if (moved.length > 0) parts.push(`${moved.length} thing${moved.length === 1 ? '' : 's'} moved.`);
+    // THE HOLD IS THE PART OF THIS THE OFFICE MOST NEEDS TO HEAR. "Three things
+    // moved" and "three things moved but we are still making the four o'clock"
+    // are different afternoons, and the second one is a commitment somebody has
+    // just made on everyone's behalf.
+    for (const h of held) {
+      parts.push(`Still keeping ${h.title} at its time — ${h.lateBy} min to make up.`);
+    }
     for (const c of plan.effects.filter((e) => e.effect === 'conflict')) {
       parts.push(`${c.title}: ${c.reason}`);
     }

@@ -33,6 +33,59 @@ function isOver(booking, now = Date.now()) {
   return Number.isFinite(end) && end <= now;
 }
 
+// ---------------------------------------------------------------------------
+// The half hour before an appointment belongs to whoever booked it
+// ---------------------------------------------------------------------------
+//
+// Running late moves the thing that is running late. When that thing is an
+// appointment somebody booked, moving it sends them a new time — and there is
+// a point past which a new time is not help, it is a message arriving while
+// they are in a car on the way to the old one.
+//
+// Thirty minutes is where that point was put. It is not a guess at travel time;
+// it is the smallest window in which an email still has a chance of being read
+// before somebody sets off. Inside it the honest answer is that the appointment
+// is happening and the office is late for it — which is a thing to say to a
+// person, not a row to rewrite.
+//
+// THIS IS NOT THE SAME AS THE OFFICE'S OWN DAY. An itinerary entry has nobody
+// on the other end of it: the car, the desk hour, the drive to the airport are
+// all the principal's own, and the office may shunt them at any point before
+// they start. So the floor is asked about here, by the one route that moves a
+// booker's appointment, and nowhere else. A PA pushing their principal's 09:00
+// prep at 08:55 is not doing anything to anybody.
+const MOVE_NOTICE_MINUTES = 30;
+
+/** Minutes from now until it starts. Negative once it has begun; null if unreadable. */
+function minutesUntilStart(booking, now = Date.now()) {
+  const start = Date.parse(booking?.start_at || booking?.startAt || '');
+  if (!Number.isFinite(start)) return null;
+  return Math.round((start - now) / 60000);
+}
+
+/**
+ * The refusal when there is not enough notice left to move a booker's
+ * appointment, or null.
+ *
+ * Names them, because the sentence that actually helps at 08:47 is "Adaeze is
+ * due in thirteen minutes" and not "minimum notice not met". And it says what
+ * to do instead: the meeting is not in trouble, only the email is.
+ */
+function refuseIfTooSoon(booking, now = Date.now()) {
+  const left = minutesUntilStart(booking, now);
+  if (left === null || left >= MOVE_NOTICE_MINUTES) return null;
+  const who = booking?.booker_name || booking?.bookerName || 'Whoever booked this';
+  return {
+    ok: false,
+    status: 400,
+    minutesLeft: left,
+    noticeMinutes: MOVE_NOTICE_MINUTES,
+    error: left > 0
+      ? `${who} is due in ${left} min and may already be on the way. A new time sent now would reach them too late to be any use — tell them directly instead.`
+      : `${who} is due now. A new time sent at this point arrives after they do — tell them directly instead.`,
+  };
+}
+
 /**
  * The refusal, in the words of whichever verb was attempted, or null.
  *
@@ -53,4 +106,7 @@ function refuseIfOver(booking, verb, now = Date.now()) {
   return { ok: false, status: 400, error: REFUSALS[verb] || REFUSALS.move };
 }
 
-module.exports = { isOver, refuseIfOver, REFUSALS };
+module.exports = {
+  isOver, refuseIfOver, REFUSALS,
+  MOVE_NOTICE_MINUTES, minutesUntilStart, refuseIfTooSoon,
+};

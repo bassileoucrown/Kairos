@@ -1409,11 +1409,23 @@ a.needs-card:hover { border-color: var(--accent); text-decoration: none; }
 .late-row.is-unchanged { opacity: 0.6; }
 .late-row.is-shifted { border-color: var(--warn); background: var(--warn-soft); }
 .late-row.is-conflict { border-color: var(--danger); background: var(--danger-soft); }
+/* Held reads as a decision, not a warning: the accent rather than the amber,
+   because "we are still making the four o'clock" is the office asserting
+   something about the day, not the day asserting something at them. */
+.late-row.is-held { border-color: var(--accent); background: var(--accent-soft); }
 .late-time { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .late-time s { opacity: 0.5; font-weight: 400; }
-.late-title { flex: 1; min-width: 120px; }
+.late-title { flex: 1 1 200px; min-width: 0; }
 .late-verdict { color: var(--text-muted); }
 .late-row.is-conflict .late-verdict { color: var(--danger); }
+.late-row.is-held .late-verdict { color: var(--accent); }
+/* A verb inside a sentence. A button here would be a third thing competing
+   with Apply and Cancel for the eye, when what it is is a word in the row. */
+.linkish {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--accent); text-decoration: underline;
+}
+.linkish:disabled { opacity: 0.5; cursor: default; }
 
 /* ---- Build a trip ---- */
 .trip { margin-bottom: 20px; }

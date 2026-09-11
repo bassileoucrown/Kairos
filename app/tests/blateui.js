@@ -95,6 +95,27 @@ const DAY = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     ok('and does not cry wolf when the flight is still catchable',
       !/will not wait/i.test(mild) && (await p.locator('.late button:has-text("Apply")').count()) === 1,
       mild);
+
+    // --- And the day can be stopped part way down ---
+    //
+    // Being late for the check-out is not being late for the flight. Every
+    // entry that would move carries the brake, and pulling it re-reads the
+    // plan — so what is on the screen after a hold is still what would happen,
+    // not the old cascade with one row crossed out.
+    ok('an entry that would move offers to stop the day there',
+      (await p.locator('.late-row.is-shifted button:has-text("stop here")').count()) >= 1, mild);
+    await p.locator('.late-row.is-shifted button:has-text("stop here")').first().click();
+    await p.waitForSelector('.late-row.is-held', { timeout: 15000 });
+    const heldText = await p.locator('.late').innerText();
+    ok('holding it reads as a decision with the time to make up on it',
+      /min before it/i.test(heldText), heldText);
+    ok('and the summary says the rest of the day is staying put',
+      /rest of the day is held/i.test(heldText), heldText);
+    await p.locator('.late-row.is-held button:has-text("let it move")').first().click();
+    await p.waitForSelector('.late-row.is-shifted', { timeout: 15000 });
+    ok('and it can be let back into the cascade',
+      (await p.locator('.late-row.is-held').count()) === 0);
+
     await p.click('.late button:has-text("Cancel")');
 
     // Ninety minutes on the car itself does threaten it.
