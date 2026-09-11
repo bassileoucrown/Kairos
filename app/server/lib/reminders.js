@@ -5,6 +5,7 @@ const enRoute = require('./enRoute');
 const { sendEmail } = require('./email');
 const { formatForEmail } = require('./format');
 const { buildReport, weekWindow } = require('./weeklyReport');
+const appointmentReminders = require('./appointmentReminders');
 
 // Deadline reminders for tasks, project stages, appointments and expiring
 // documents.
@@ -231,6 +232,23 @@ async function sweepAppointments(now) {
           + `Move or cancel it: /book/manage/${b.id}`,
       });
     } else {
+      // THE PRINCIPAL'S OWN CHOICE WINS OVER THE FIXED THIRTY.
+      //
+      // This rung is the default for somebody who has not said otherwise. A
+      // principal who has set their own lead time on this booking is told by
+      // sweepPersonal instead, and sending both would buzz them twice for one
+      // meeting — which is how a person learns to ignore the buzz.
+      //
+      // Still stamped, so the ladder does not reconsider this booking every
+      // fifteen minutes for the rest of the afternoon.
+      const own = await db.prepare(`
+        SELECT 1 FROM appointment_reminders
+        WHERE user_id = ? AND subject_kind = 'booking' AND subject_id = ?
+      `).get(b.owner_id, b.id);
+      if (own) {
+        await db.prepare('UPDATE bookings SET reminder_stage = ? WHERE id = ?').run(band, b.id);
+        continue;
+      }
       const mins = Math.max(1, Math.round(until / 60000));
       await knock({
         toUserId: b.owner_id,
@@ -544,9 +562,85 @@ async function sweepChecks(now) {
   return sent;
 }
 
+/**
+ * THE ONES PEOPLE SET FOR THEMSELVES.
+ *
+ * Everything else in this file decides for you: a task's lead time comes from
+ * its priority, an appointment's from a constant. This sweep carries the
+ * reminders a person asked for by name, on one appointment, in their own
+ * minutes — see lib/appointmentReminders.js for why that is a row per person
+ * rather than a column on the meeting.
+ *
+ * IT DOES NOT REPLACE THE AUTOMATIC ONES. sweepAppointments still tells the
+ * booker a day out, because they have no account to set anything with. What a
+ * personal reminder replaces is the fixed thirty minutes for the person who
+ * set it, and only for them.
+ *
+ * A reminder whose appointment has gone — cancelled, deleted, the trip called
+ * off — is deleted rather than carried. Otherwise every sweep for the rest of
+ * time reconsiders a meeting that is not happening.
+ */
+async function sweepPersonal(now) {
+  const rows = await db.prepare(`
+    SELECT r.*, u.name AS person_name, u.timezone AS person_timezone
+    FROM appointment_reminders r
+    JOIN users u ON u.id = r.user_id
+    WHERE r.reminder_stage IS NULL
+  `).all();
+
+  let sent = 0;
+  for (const r of rows) {
+    const subject = r.subject_kind === 'itinerary'
+      ? await db.prepare(
+        "SELECT title, start_at, status FROM itinerary_items WHERE id = ?",
+      ).get(r.subject_id)
+      : await db.prepare(`
+        SELECT mt.name AS title, b.start_at, b.status
+        FROM bookings b LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id
+        WHERE b.id = ?
+      `).get(r.subject_id);
+
+    if (!subject) { await appointmentReminders.forget(r.subject_kind, r.subject_id); continue; }
+    // Cancelled, declined, or still a draft nobody has published: not a
+    // commitment, so not something to be warned about.
+    if (['cancelled', 'declined', 'draft'].includes(subject.status)) continue;
+
+    const start = new Date(subject.start_at).getTime();
+    if (Number.isNaN(start)) continue;
+    // Already begun. Telling somebody their four o'clock started is a report
+    // of a failure rather than a chance to prevent one — the same rule
+    // sweepAppointments follows.
+    if (start <= now) continue;
+
+    const until = start - now;
+    if (until > r.minutes_before * 60000) continue;
+
+    const mins = Math.max(1, Math.round(until / 60000));
+    await knock({
+      toUserId: r.user_id,
+      ownerId: r.owner_id,
+      category: 'transactional',
+      subject: `In ${mins} minutes: ${subject.title || 'appointment'}`,
+      line: `${subject.title || 'An appointment'} starts at `
+        + `${formatForEmail(subject.start_at, r.person_timezone || 'UTC')}.`,
+      url: r.subject_kind === 'booking'
+        ? `/appointments/${r.owner_id}/${r.subject_id}`
+        : `/schedule/${r.owner_id}/${r.subject_id}`,
+      // Tagged per person as well as per appointment: two people reminded
+      // about the same four o'clock are two notices, and a shared tag would
+      // have let one replace the other on the phone.
+      tag: `appt-reminder-${r.id}`,
+    });
+    await db.prepare("UPDATE appointment_reminders SET reminder_stage = 'sent' WHERE id = ?").run(r.id);
+    sent += 1;
+  }
+  return sent;
+}
+
 async function runReminderSweep(now = Date.now()) {
   return {
     tasks: await sweepTasks(now),
+    personal: await sweepPersonal(now),
     stages: await sweepStages(now),
     appointments: await sweepAppointments(now),
     essentials: await sweepEssentials(now),
@@ -568,6 +662,7 @@ async function startReminderSweep() {
 
 module.exports = {
   runReminderSweep, startReminderSweep, sweepWeeklyReports, sweepMovements, sweepChecks,
+  sweepPersonal,
   dueBand, expiryBand, leadFor,
   LEAD_MS, SWEEP_INTERVAL_MS, APPOINTMENT_LEAD_MS, BOOKER_LEAD_MS,
   DOC_SOON_DAYS, DOC_URGENT_DAYS,

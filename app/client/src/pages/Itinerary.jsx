@@ -67,6 +67,10 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
   const [justAdded, setJustAdded] = useState('');
   const [repeat, setRepeat] = useState('');
   const [repeatCount, setRepeatCount] = useState(12);
+  // Off unless asked for. A reminder nobody chose is a phone buzzing for a
+  // reason its owner never agreed to, and this form is used dozens of times
+  // to build a trip — a default here would mean forty buzzes for one journey.
+  const [remindMinutes, setRemindMinutes] = useState('');
   const titleRef = useRef(null);
   const isTravel = TRAVEL_KINDS.has(kind);
 
@@ -95,6 +99,9 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
         // Left off entirely for a one-off rather than sent as "none", so the
         // server's "is this repeating" question has one answer, not two.
         recurrence: repeat ? { freq: repeat, count: Number(repeatCount) } : undefined,
+        // Left off rather than sent as 0, so the server's "did they ask for
+        // one" question has one answer.
+        reminderMinutes: remindMinutes ? Number(remindMinutes) : undefined,
       });
       // Stay open. A trip is a sequence — outbound, car, hotel, dinner — and
       // closing the form after each leg means re-opening it and re-picking the
@@ -213,6 +220,29 @@ function AddItem({ ownerId, date, timezone, onAdded, onDone, onCancel }) {
           always the second. The last-weekday option is separate again: "the
           fourth Friday" and "the last Friday" are the same day in about two
           months out of three, which is exactly what makes guessing dangerous. */}
+      <div className="field">
+        <label htmlFor="itin-remind">Remind me before it starts</label>
+        <select
+          id="itin-remind"
+          value={remindMinutes}
+          onChange={(e) => setRemindMinutes(e.target.value)}
+        >
+          <option value="">No reminder</option>
+          <option value="5">5 minutes before</option>
+          <option value="10">10 minutes before</option>
+          <option value="15">15 minutes before</option>
+          <option value="30">30 minutes before</option>
+          <option value="45">45 minutes before</option>
+          <option value="60">1 hour before</option>
+          <option value="120">2 hours before</option>
+          <option value="1440">The day before</option>
+        </select>
+        {/* Said out loud because it is the surprising half: a reminder set
+            here is the setter's own, so a PA choosing an hour does not decide
+            anything about the principal's phone. */}
+        <p className="hint">This one is yours. Anyone else on this diary sets their own.</p>
+      </div>
+
       <div className="field">
         <label htmlFor="itin-repeat">Repeats</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

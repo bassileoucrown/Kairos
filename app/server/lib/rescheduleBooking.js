@@ -97,6 +97,11 @@ async function rescheduleBooking({ booking, owner, startAt, movedByUserId = null
   // silence because the old time was already announced.
   await db.prepare('UPDATE bookings SET start_at = ?, end_at = ?, reminder_stage = NULL WHERE id = ?')
     .run(start.toISOString(), end.toISOString(), booking.id);
+  // And the ones people set for themselves, for the same reason and in the
+  // same breath. Clearing only the column above would have reset the
+  // automatic warning while leaving every personal one stamped as already
+  // sent — the half of this that somebody actually asked for.
+  await require('./appointmentReminders').reopen('booking', booking.id);
 
   // The booker is told, always. Their diary is as real as the principal's, and
   // an appointment that moves without a word is how somebody arrives at an

@@ -36,6 +36,10 @@ async function cancelBooking({ booking, cancelledByUserId = null, note = '' }) {
   if (over) return over;
 
   await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").run(booking.id);
+  // Nobody needs warning about a meeting that is not happening. The sweep
+  // would skip a cancelled booking anyway, but leaving the rows behind means
+  // every sweep from now until the heat death of the office reconsiders them.
+  await require('./appointmentReminders').forget('booking', booking.id);
   await events.record({
     bookingId: booking.id, ownerId: booking.owner_id, kind: events.KINDS.cancelled,
     actorUserId: cancelledByUserId, fromValue: booking.status, toValue: 'cancelled',

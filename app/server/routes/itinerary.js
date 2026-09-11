@@ -19,6 +19,7 @@ const { requirePlan } = require('../lib/plans');
 const plans = require('../lib/plans');
 const travelTime = require('../lib/travelTime');
 const travelBuffer = require('../lib/travelBuffer');
+const apptReminders = require('../lib/appointmentReminders');
 const places = require('../lib/places');
 
 const router = asyncRouter();
@@ -462,6 +463,34 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
   }
 
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(ids[0]);
+
+  // SET IT IN THE SAME BREATH AS FIXING THE APPOINTMENT.
+  //
+  // Optional, and it belongs to whoever made the entry rather than to the
+  // principal — see lib/appointmentReminders.js. A PA putting a meeting in the
+  // diary and wanting an hour to get the brief together does not thereby
+  // decide anything about the principal's own phone.
+  //
+  // EVERY OCCURRENCE, not just the first. A standing Tuesday meeting that
+  // reminded you once in February and never again would be worse than no
+  // reminder, because you would stop checking.
+  //
+  // A bad value is reported rather than swallowed: the entries were created,
+  // so the answer is 201 with the complaint attached, not a 400 that would
+  // read as "nothing happened".
+  let reminder = null;
+  let reminderProblem = null;
+  if (req.body?.reminderMinutes !== undefined && req.body.reminderMinutes !== null) {
+    reminderProblem = apptReminders.problem(req.body.reminderMinutes);
+    if (!reminderProblem) {
+      const minutes = Number(req.body.reminderMinutes);
+      for (const id of ids) {
+        await apptReminders.set(req.user.id, req.principal.id, 'itinerary', id, minutes);
+      }
+      reminder = await apptReminders.mine(req.user.id, 'itinerary', ids[0]);
+    }
+  }
+
   res.status(201).json({
     item: serializeItem(row, req.principal.timezone || 'UTC'),
     // Said back plainly. Creating one thing and silently getting fifty-two is
@@ -469,6 +498,8 @@ router.post('/:ownerId/items', requirePaAccess, async (req, res) => {
     // answer and the screen repeats it.
     occurrences: ids.length,
     seriesId,
+    ...(reminder ? { reminder } : {}),
+    ...(reminderProblem ? { reminderProblem } : {}),
   });
 });
 
@@ -886,6 +917,11 @@ router.patch('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
   values.push(row.id);
   await db.prepare(`UPDATE itinerary_items SET ${updates.join(', ')} WHERE id = ?`).run(...values);
   const updated = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(row.id);
+  // A MEETING THAT HAS MOVED DESERVES A FRESH WARNING. Without this a reminder
+  // that already fired for the old time stays stamped as sent, and the one
+  // occasion a person most needs telling — the time changed — is the occasion
+  // they are not told about.
+  if (updated.start_at !== row.start_at) await apptReminders.reopen('itinerary', row.id);
   res.json({ item: serializeItem(updated, req.principal.timezone || 'UTC') });
 });
 
@@ -917,6 +953,7 @@ router.delete('/:ownerId/items/:itemId', requirePaAccess, async (req, res) => {
 
   if (scope === 'one' || !row.series_id) {
     await db.prepare('DELETE FROM itinerary_items WHERE id = ?').run(row.id);
+    await apptReminders.forget('itinerary', row.id);
     return res.json({ removed: 1 });
   }
 
@@ -963,7 +1000,32 @@ router.post('/:ownerId/items/from-booking/:bookingId', requirePaAccess, async (r
     booking.id, new Date().toISOString());
 
   const row = await db.prepare('SELECT * FROM itinerary_items WHERE id = ?').get(id);
-  res.status(201).json({ item: serializeItem(row, req.principal.timezone || 'UTC') });
+  // SET IT IN THE SAME BREATH AS FIXING THE APPOINTMENT.
+  //
+  // Optional, and the reminder belongs to whoever made the entry rather than
+  // to the principal — see lib/appointmentReminders.js. A PA putting a meeting
+  // in the diary and wanting an hour's warning to get the brief together does
+  // not thereby decide anything about the principal's own phone.
+  //
+  // A bad value is reported rather than swallowed: the entry was created, so
+  // the answer is 201 with the complaint attached, not a 400 that would read
+  // as "nothing happened".
+  let reminder = null;
+  let reminderProblem = null;
+  if (req.body?.reminderMinutes !== undefined && req.body.reminderMinutes !== null) {
+    reminderProblem = apptReminders.problem(req.body.reminderMinutes);
+    if (!reminderProblem) {
+      reminder = await apptReminders.set(
+        req.user.id, req.principal.id, 'itinerary', row.id, Number(req.body.reminderMinutes),
+      );
+    }
+  }
+
+  res.status(201).json({
+    item: serializeItem(row, req.principal.timezone || 'UTC'),
+    ...(reminder ? { reminder } : {}),
+    ...(reminderProblem ? { reminderProblem } : {}),
+  });
 });
 
 
@@ -1070,6 +1132,10 @@ router.post('/:ownerId/bookings/:bookingId/delay', requirePaAccess, async (req, 
       );
     }
   });
+  // Everything the cascade moved, including the thing that was late. Running
+  // late is exactly when a reminder matters, so a stale "already sent" stamp
+  // here would silence the warning on the afternoon it was most needed.
+  for (const e of shifted) await apptReminders.reopen('itinerary', e.id);
 
   res.json({ plan, moved: shifted.length, told: plan.item.attendee });
 });

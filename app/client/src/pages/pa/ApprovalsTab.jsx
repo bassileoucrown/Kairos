@@ -19,6 +19,14 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
   const [counterFor, setCounterFor] = useState(null);
   const [counterFormat, setCounterFormat] = useState('');
   const [counterNote, setCounterNote] = useState('');
+  // A reminder per request, pre-filled with the lead time the app has always
+  // used. Offered rather than required: approving stays one press, and leaving
+  // this alone keeps exactly the behaviour that was there before.
+  //
+  // Keyed by booking because several requests are on screen at once and one
+  // shared value would have quietly applied last week's choice to today's
+  // meeting.
+  const [remindFor, setRemindFor] = useState({});
 
   function load() {
     api.get(`/pa/${ownerId}/approvals`).then((data) => setBookings(data.bookings)).catch((err) => setError(err.message));
@@ -45,7 +53,12 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
     setBusyId(id);
     setError('');
     try {
-      await api.post(`/pa/${ownerId}/approvals/${id}/${action}`);
+      // Sent only when approving. Declining a request and setting yourself a
+      // reminder for it would be a contradiction the server should not have to
+      // reason about.
+      const minutes = action === 'approve' ? Number(remindFor[id] ?? 30) : null;
+      await api.post(`/pa/${ownerId}/approvals/${id}/${action}`,
+        minutes ? { reminderMinutes: minutes } : undefined);
       closeCounter();
       load();
     } catch (err) {
@@ -111,7 +124,26 @@ export default function ApprovalsTab({ ownerId, timezone = null }) {
                 </div>
                 <div className="meta">{b.meetingTypeName} with {b.bookerName} ({b.bookerEmail})</div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {!answered && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontSize: '0.82rem' }}>
+                    Remind me
+                    <select
+                      aria-label={`Remind me before ${b.meetingTypeName} with ${b.bookerName}`}
+                      value={String(remindFor[b.id] ?? 30)}
+                      onChange={(e) => setRemindFor((r) => ({ ...r, [b.id]: e.target.value }))}
+                      style={{ width: 'auto' }}
+                    >
+                      <option value="0">not at all</option>
+                      <option value="10">10 min before</option>
+                      <option value="15">15 min before</option>
+                      <option value="30">30 min before</option>
+                      <option value="60">1 hr before</option>
+                      <option value="120">2 hr before</option>
+                      <option value="1440">the day before</option>
+                    </select>
+                  </label>
+                )}
                 <button className="btn btn-primary btn-sm" type="button" disabled={busyId === b.id} onClick={() => act(b.id, 'approve')}>
                   Approve
                 </button>

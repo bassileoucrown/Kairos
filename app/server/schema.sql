@@ -1801,3 +1801,49 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_essential ON documents(essential_id);
 CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents(owner_id);
+
+-- ============================================================
+-- A reminder somebody set for themselves, on one appointment.
+--
+-- ONE ROW PER PERSON PER APPOINTMENT, and that is the whole design. A PA
+-- wanting sixty minutes to get the brief together and a principal wanting
+-- fifteen to finish what they are doing are not in conflict — they are two
+-- people with different jobs looking at the same four o'clock. A single
+-- reminder_minutes column on the appointment would have made them argue over
+-- one number, and the loser would have turned reminders off.
+--
+-- The booker's reminder is NOT here. It stays automatic at a day out
+-- (lib/reminders.js, BOOKER_LEAD_MS): they have no account to set anything
+-- with, and somebody travelling to a meeting needs the warning early whatever
+-- the office thinks.
+--
+-- subject_kind is 'itinerary' or 'booking' because a day holds both and either
+-- can be the thing you must not be late for. It is not a foreign key for that
+-- reason; the pair is resolved in lib/appointmentReminders.js, which is also
+-- where the deletion of a dead subject is handled rather than by the database.
+--
+-- reminder_stage is null until it fires and 'sent' afterwards, so a sweep every
+-- fifteen minutes does not buzz a phone every fifteen minutes. Moving the
+-- appointment clears it, because a meeting that has moved deserves a fresh
+-- warning — the same rule the rest of lib/reminders.js follows.
+CREATE TABLE IF NOT EXISTS appointment_reminders (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Whose day the appointment sits on. Not derivable from subject_id without a
+  -- join, and every sweep and every access check needs it.
+  owner_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject_kind   TEXT NOT NULL,            -- itinerary | booking
+  subject_id     TEXT NOT NULL,
+  minutes_before INTEGER NOT NULL,
+  reminder_stage TEXT,                     -- null | sent
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+-- One person cannot hold two reminders for the same appointment: setting a new
+-- lead time replaces the old one rather than adding a second buzz.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_appt_reminder_one
+  ON appointment_reminders(user_id, subject_kind, subject_id);
+CREATE INDEX IF NOT EXISTS idx_appt_reminder_sweep
+  ON appointment_reminders(subject_kind, reminder_stage);
+CREATE INDEX IF NOT EXISTS idx_appt_reminder_subject
+  ON appointment_reminders(subject_kind, subject_id);

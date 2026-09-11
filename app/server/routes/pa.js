@@ -3,6 +3,7 @@ const { requirePlan } = require('../lib/plans');
 const { asyncRouter } = require('../lib/asyncRouter');
 const crypto = require('crypto');
 const db = require('../lib/db');
+const apptReminders = require('../lib/appointmentReminders');
 const mentions = require('../lib/mentions');
 const formats = require('../lib/meetingFormats');
 const { requireAuth } = require('../lib/auth');
@@ -302,6 +303,26 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (re
     actorUserId: req.user.id, fromValue: 'pending', toValue: 'confirmed',
   });
 
+  // A REMINDER, OFFERED RATHER THAN REQUIRED.
+  //
+  // The moment somebody says yes to a request is the moment they know what
+  // warning they want for it, so the field is on the approval panel rather
+  // than somewhere to be found afterwards. Leaving it alone is allowed: the
+  // booking keeps the thirty minutes the app has always used, and the booker
+  // keeps their automatic day-ahead email either way.
+  //
+  // What is set here is the approver's own, not the principal's — approving
+  // on somebody's behalf is not deciding when their phone rings.
+  let reminder = null;
+  if (req.body?.reminderMinutes !== undefined && req.body.reminderMinutes !== null) {
+    const problem = apptReminders.problem(req.body.reminderMinutes);
+    if (!problem) {
+      reminder = await apptReminders.set(
+        req.user.id, req.principal.id, 'booking', booking.id, Number(req.body.reminderMinutes),
+      );
+    }
+  }
+
   await sendEmail({
     ownerId: req.principal.id, sentByUserId: req.user.id, toEmail: booking.booker_email, relatedBookingId: booking.id,
     category: 'transactional',
@@ -309,7 +330,7 @@ router.post('/:ownerId/approvals/:bookingId/approve', requirePaAccess, async (re
     body: `Hi ${booking.booker_name},\n\nYou're confirmed for ${rangeForEmail(booking.start_at, booking.end_at, booking.booker_timezone)} (${booking.booker_timezone}).\n\nManage this booking: /book/manage/${booking.id}`,
   });
 
-  res.json({ ok: true });
+  res.json({ ok: true, ...(reminder ? { reminder } : {}) });
 });
 
 // Suggest a different way of meeting.
