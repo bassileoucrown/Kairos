@@ -30,6 +30,21 @@ cd "$SC"
 # development box is not an always-on service, and three boards in a row went
 # red because it had restarted mid-run. A board that cries wolf stops being
 # read, which costs more than the coverage it was protecting.
+# POSTGRES DOES NOT COME BACK BY ITSELF.
+#
+# This container sleeps between sessions, and a sleep kills the cluster without
+# a clean shutdown — the log says "database system was not properly shut down"
+# and the next start pays for crash recovery. Nothing restarts it, so the first
+# board after a night away found no database at position 26 and skipped bfail,
+# and then bheal at position 36 started it as part of its own test and the
+# evidence was gone by the time anybody looked.
+#
+# Started here rather than left to bheal, because a board that silently drops a
+# suite is a board with a hole in it. Failure is ignored on purpose: an
+# already-running cluster makes this a no-op, and a box with no Postgres at all
+# is exactly the case the skip exists for.
+pg_ctlcluster 16 main start >/dev/null 2>&1 || true
+
 pass=0; fail=0; skip=0; failed=""; skipped=""
 for f in b*.js; do
   s="${f%.js}"
