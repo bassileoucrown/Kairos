@@ -129,6 +129,50 @@ Also still unbuilt and not to be started unasked: desk-scoped billing; the
 written delegation recorded at setup; mail drafting and sending (the grant
 carries `sendMode` and nothing consumes it).
 
+## Deferred on purpose — each with the thing that brings it back
+
+Different again from both lists around it. These are not decisions waiting on
+the owner and not finished work missing a screen: they are known gaps the owner
+has looked at and chosen to leave, with a condition attached. The condition is
+the point — "later" with nothing to trigger it is how a deferral becomes an
+omission — so each entry says what has to be true before it is worth doing, and
+none of them is to be started before that.
+
+1. **`List-Unsubscribe` on broadcast mail.** Owner's decision, 12 September,
+   after publishing a notice was wired to knock: *"leave it for now"*.
+
+   There is no opt-out of any kind. Every published notice reaches every
+   address it is aimed at, and `lib/email.js` records a category while
+   suppressing nothing.
+
+   **The reason this comes back is not the legal one.** A notice that tells
+   ("maintenance Sunday") is service mail nearly everywhere and needs no
+   opt-out; a notice that sells needs one under CAN-SPAM, GDPR/ePrivacy and the
+   NDPA — so the exposure arrives with the first broadcast that sells rather
+   than tells, which the audience picker makes inevitable eventually. The
+   sharper risk is deliverability, and it is not about notices at all:
+   confirmations, invites, password resets and the running-late email to a
+   booker all leave the same domain through the same provider. A reader with no
+   unsubscribe button uses the spam button instead — that is what it is for,
+   from their side — and enough of those drops the domain's reputation and
+   stops the mail that *must* arrive. Notices poisoning the well for everything
+   else.
+
+   **The trigger: the first notice that is not strictly operational, or the
+   list outgrowing the tester group.** Google and Yahoo only *require*
+   one-click above 5,000 messages a day, so the threshold is judgement, not
+   that number.
+
+   **Do the cheap half first.** A `List-Unsubscribe` header gets Gmail and
+   Outlook to draw their own native button, which is most of the protection.
+   It is not a one-liner: `sendEmail` hands providers a fixed
+   `{from, to, subject, text}` with no headers path, so both bodies in
+   `lib/emailProviders.js` change, and the header needs somewhere to point —
+   `mailto:` is honoured and simplest, true one-click (RFC 8058) needs a POST
+   endpoint that works with no session. The full preferences table, tokenised
+   links and settings screen is the expensive half and is not worth building
+   until there is a list worth protecting.
+
 ## The name is "Kairos by Exousia"
 
 The owner's instruction, 7 September: *"name should be Kairos by Exousia going
