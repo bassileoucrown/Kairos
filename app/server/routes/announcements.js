@@ -3,8 +3,27 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 const {
-  AUDIENCES, canPublish, isConfigured, listFor, unreadCount, serialize,
+  AUDIENCES, canPublish, isConfigured, listFor, unreadCount, serialize, announce,
 } = require('../lib/announcements');
+
+/**
+ * Publishing, and then telling people.
+ *
+ * The knock is deliberately AFTER the row says published. If the send half
+ * fails or the request dies partway through a long list, what is left behind
+ * is a notice that is up and readable rather than one that quietly is not —
+ * and an author can see from announced_at that it did not finish and publish
+ * the correction that re-sends it.
+ */
+async function publishAndAnnounce(row) {
+  const now = new Date().toISOString();
+  await db.prepare('UPDATE announcements SET published_at = ?, updated_at = ? WHERE id = ?')
+    .run(now, now, row.id);
+  const reached = await announce(row);
+  await db.prepare('UPDATE announcements SET announced_at = ?, announced_count = ? WHERE id = ?')
+    .run(new Date().toISOString(), reached, row.id);
+  return reached;
+}
 
 const router = asyncRouter();
 router.use(requireAuth);
@@ -77,15 +96,27 @@ router.post('/', requireAuthor, async (req, res) => {
   const id = crypto.randomUUID();
   await db.prepare(`
     INSERT INTO announcements (id, author_id, title, body, audience, published_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.user.id, title.slice(0, 160), body.slice(0, 8000), audience,
-    publish ? now : null, now, now);
+    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+  `).run(id, req.user.id, title.slice(0, 160), body.slice(0, 8000), audience, now, now);
+
+  // Written as a draft first and published through the one function, so that
+  // "write and send in a single press" and "send a draft later" cannot drift
+  // into two different ideas of what sending means.
+  let reached = null;
+  if (publish) {
+    reached = await publishAndAnnounce(
+      await db.prepare('SELECT * FROM announcements WHERE id = ?').get(id),
+    );
+  }
 
   const row = await db.prepare(`
     SELECT a.*, u.name AS author_name FROM announcements a
     JOIN users u ON u.id = a.author_id WHERE a.id = ?
   `).get(id);
-  res.status(201).json({ announcement: serialize(row, { isAuthor: true }) });
+  res.status(201).json({
+    announcement: serialize(row, { isAuthor: true }),
+    ...(reached === null ? {} : { reached }),
+  });
 });
 
 router.patch('/:id', requireAuthor, async (req, res) => {
@@ -123,10 +154,11 @@ router.patch('/:id', requireAuthor, async (req, res) => {
 router.post('/:id/publish', requireAuthor, async (req, res) => {
   const row = await db.prepare('SELECT * FROM announcements WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found.' });
+  // Already published is refused rather than repeated. A double press must not
+  // knock everybody twice — that is the one mistake here with no undo.
   if (row.published_at) return res.status(409).json({ error: 'Already published.' });
-  await db.prepare('UPDATE announcements SET published_at = ?, updated_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), new Date().toISOString(), row.id);
-  res.json({ ok: true });
+  const reached = await publishAndAnnounce(row);
+  res.json({ ok: true, reached });
 });
 
 // Withdrawing puts it back to a draft rather than deleting it. A notice that

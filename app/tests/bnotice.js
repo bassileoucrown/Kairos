@@ -55,6 +55,10 @@ async function signUp(call, name, email, category) {
     },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
+  // Read directly, because with no mail provider configured the emails table
+  // is the only record a send leaves — which is what makes "and the assistant
+  // was emailed" assertable at all.
+  const db = require(`${ROOT}/app/server/lib/db`);
   try {
     // Two and a half minutes. Twenty seconds was plenty on an idle machine and
     // not plenty on a loaded one; a minute went the same way, twice in one day,
@@ -159,6 +163,88 @@ async function signUp(call, name, email, category) {
     head('There is no way to reply:');
     const reply = await pa('POST', `/announcements/${draft.d.announcement.id}/replies`, { body: 'hello' });
     ok('no reply endpoint exists', reply.s === 404, String(reply.s));
+
+    // -----------------------------------------------------------------------
+    // Publishing knocks
+    // -----------------------------------------------------------------------
+    //
+    // A notice used to wait on a screen until somebody happened to open Kairos.
+    // It now goes out through lib/knock.js like every other knock — an email,
+    // and a push to any phone that has granted permission. The emails table is
+    // the record either way: with no provider configured it is the only record,
+    // which is exactly what makes it assertable here.
+    head('Publishing tells people rather than waiting to be found:');
+    const mailTo = async (email) => Number((await db.prepare(
+      "SELECT COUNT(*) AS n FROM emails WHERE to_email = ? AND category = 'notice'",
+    ).get(email)).n);
+
+    const paBefore = await mailTo(`ben${ID}@x.com`);
+    const bossBefore = await mailTo(ADMIN);
+    const sent = await boss('POST', '/announcements', {
+      title: 'Kairos is moving to a new address',
+      body: 'From Monday the office is on the third floor. Nothing else changes.',
+      audience: 'everyone',
+      publish: true,
+    });
+    ok('publishing reports how many it reached', sent.d.reached >= 3, JSON.stringify(sent.d.reached));
+    ok('and the assistant was emailed', (await mailTo(`ben${ID}@x.com`)) === paBefore + 1,
+      `${paBefore} → ${await mailTo(`ben${ID}@x.com`)}`);
+    // THE AUTHOR IS NOT KNOCKED. knock() only skips a person knocking on
+    // themselves when an author is passed, and none is here — a notice comes
+    // from Kairos, not from whoever typed it — so announce() does the skip.
+    ok('and the author was not emailed their own notice',
+      (await mailTo(ADMIN)) === bossBefore, `${bossBefore} → ${await mailTo(ADMIN)}`);
+
+    const body = await db.prepare(
+      "SELECT subject, body FROM emails WHERE to_email = ? AND category = 'notice' ORDER BY created_at DESC LIMIT 1",
+    ).get(`ben${ID}@x.com`);
+    ok('the email is titled with the notice', body.subject === 'Kairos is moving to a new address',
+      body.subject);
+    // The opening words rather than "you have a new notice": that line is the
+    // push body too, and it is what lets somebody decide on a lock screen.
+    ok('and leads with the notice itself', /third floor/.test(body.body), body.body);
+    ok('asking them to read it rather than deal with it',
+      /read it/.test(body.body) && !/deal with it/.test(body.body), body.body);
+
+    head('A notice knocks exactly who it is aimed at:');
+    const driverBefore = await mailTo(`femi${ID}@x.com`);
+    const paBefore2 = await mailTo(`ben${ID}@x.com`);
+    await boss('POST', '/announcements', {
+      title: 'Parking', body: 'Use the rear gate from Monday.',
+      audience: 'household', publish: true,
+    });
+    ok('household staff are emailed', (await mailTo(`femi${ID}@x.com`)) === driverBefore + 1);
+    // THE POSITIVE CONTROL FOR THE AIM. Without it, "the driver was emailed"
+    // passes just as well for a broadcast that ignores the audience entirely
+    // and mails everybody — which is the worst failure this feature has.
+    ok('and an assistant is not', (await mailTo(`ben${ID}@x.com`)) === paBefore2,
+      `${paBefore2} → ${await mailTo(`ben${ID}@x.com`)}`);
+    // AND THE TWO DIRECTIONS AGREE. audiencesFor answers "which feeds am I
+    // in", recipientsFor answers "who is in this feed". A notice that knocks
+    // somebody who then cannot find it on their screen is worse than one that
+    // knocks nobody, and two functions reading one rule is exactly how this
+    // codebase has drifted before.
+    ok('and everybody knocked can actually see it on their screen',
+      (await driver('GET', '/announcements')).d.announcements.some((a) => a.title === 'Parking'));
+
+    head('A broadcast cannot be sent twice by pressing twice:');
+    const twicePublished = await boss('POST',
+      `/announcements/${sent.d.announcement.id}/publish`);
+    ok('a second publish is refused', twicePublished.s === 409, String(twicePublished.s));
+    ok('and nobody was emailed again', (await mailTo(`ben${ID}@x.com`)) === paBefore2,
+      `${paBefore2} → ${await mailTo(`ben${ID}@x.com`)}`);
+
+    head('And the author can see what went out:');
+    const finalList = await boss('GET', '/announcements/drafts');
+    const moved = finalList.d.announcements.find((a) => a.title === 'Kairos is moving to a new address');
+    ok('the count is recorded on the notice', moved.announcedCount >= 3, String(moved.announcedCount));
+    ok('with when it went', !!moved.announcedAt, String(moved.announcedAt));
+    // Only ever to the author: how many inboxes a notice reached is an
+    // operational fact, not something a reader has any business being told.
+    const reader = (await pa('GET', '/announcements')).d.announcements
+      .find((a) => a.title === 'Kairos is moving to a new address');
+    ok('and a reader is told neither', reader.announcedCount === undefined
+      && reader.announcedAt === undefined, JSON.stringify(reader));
   } catch (err) {
     fails++;
     console.log('  ✗ threw: ' + (err.stack || err.message));

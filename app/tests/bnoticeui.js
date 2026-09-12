@@ -93,10 +93,42 @@ async function onboard(p, name, email, roleLabel) {
     await admin.fill('#ann-title', 'Handles are live');
     await admin.fill('#ann-body', 'You can now connect with assistants at other principals.');
     await admin.selectOption('#ann-audience', 'assistants');
+    // SAID BEFORE THE PRESS. Publishing reaches an inbox and a phone, and
+    // withdrawing afterwards takes the notice off the screen without unsending
+    // the email — the one act in this product with no undo. An author finding
+    // that out afterwards is how a channel loses its author.
+    const composer = await admin.locator('.ann-composer').innerText();
+    ok('the composer says publishing emails people',
+      /emails everyone it is aimed at/i.test(composer), composer);
+    ok('and that withdrawing cannot unsend it',
+      /cannot unsend/i.test(composer), composer);
     await admin.click('.ann-composer button:has-text("Publish")');
     await admin.waitForSelector('.ann-admin', { timeout: 15000 });
     ok('the author sees it published',
       /published/i.test(await admin.locator('.ann-admin').first().innerText()));
+    ok('and how many it was emailed to',
+      /emailed to \d+/i.test(await admin.locator('.ann-admin').first().innerText()),
+      await admin.locator('.ann-admin').first().innerText());
+
+    // --- Correcting one that is already out ---
+    //
+    // The publish route refuses a second publish, so pressing Publish here
+    // used to save the edit and then show "Already published." — an error
+    // after a success, on the screen where the author's question is whether
+    // people were told again.
+    await admin.click('.ann-admin button:has-text("Edit")');
+    await admin.waitForSelector('.ann-composer', { timeout: 15000 });
+    const live = await admin.locator('.ann-composer').innerText();
+    ok('editing a live notice says it will not email anybody again',
+      /does not email anybody again|not\s*email anybody again/i.test(live), live);
+    ok('and the button no longer says Publish',
+      (await admin.locator('.ann-composer button:has-text("Save changes")').count()) === 1
+      && (await admin.locator('.ann-composer button:has-text("Publish")').count()) === 0, live);
+    await admin.fill('#ann-body', 'You can now connect with assistants anywhere.');
+    await admin.click('.ann-composer button:has-text("Save changes")');
+    await admin.waitForSelector('.ann-admin', { timeout: 15000 });
+    ok('and the correction saves without an error',
+      (await admin.locator('.alert-error').count()) === 0);
 
     // --- The reader gets it, with a badge ---
     await reader.goto(`${BASE}/today`);

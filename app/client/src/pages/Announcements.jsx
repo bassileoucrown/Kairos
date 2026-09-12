@@ -23,12 +23,22 @@ function Composer({ audiences, editing, onDone, onCancel }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Correcting something already out is not sending it again.
+  //
+  // The publish route refuses a second publish, so pressing Publish while
+  // editing a live notice saved the edit and then showed "Already published."
+  // — an error after a success, on the one screen where the question in the
+  // author's head is whether people were told. Now the button says which of
+  // the two things it is doing, and re-sending stays the deliberate path it
+  // already was: withdraw, then publish.
+  const isLive = !!editing?.publishedAt;
+
   async function save(publish) {
     setError(''); setBusy(true);
     try {
       if (editing) {
         await api.patch(`/announcements/${editing.id}`, form);
-        if (publish) await api.post(`/announcements/${editing.id}/publish`);
+        if (publish && !isLive) await api.post(`/announcements/${editing.id}/publish`);
       } else {
         await api.post('/announcements', { ...form, publish });
       }
@@ -67,13 +77,33 @@ function Composer({ audiences, editing, onDone, onCancel }) {
           what arrives is meant for the person reading it.
         </p>
       </div>
+      {/* SAID BEFORE THE PRESS, NOT DISCOVERED AFTER. Publishing used to put a
+      notice on a screen and nothing more; it now reaches an inbox and a phone,
+      and withdrawing afterwards takes it off the screen and not out of the
+      inbox. That is the one act in this product with no undo, so the button
+      says what it does. */}
+      {isLive ? (
+        <p className="hint">
+          This one is already out. Saving corrects what is on the screen and does
+          <strong> not</strong> email anybody again — to send it afresh, withdraw it first
+          and publish it again.
+        </p>
+      ) : (
+        <p className="hint">
+          <strong>Publishing emails everyone it is aimed at</strong>, and reaches the phone of
+          anyone who has allowed notifications. Withdrawing later takes it off the screen —
+          it cannot unsend the email. Save it as a draft if you are still deciding.
+        </p>
+      )}
       <div className="ann-composer-actions">
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Publish'}
+          {busy ? 'Saving…' : isLive ? 'Save changes' : 'Publish'}
         </button>
-        <button className="btn btn-sm" type="button" disabled={busy} onClick={() => save(false)}>
-          Save as draft
-        </button>
+        {!isLive && (
+          <button className="btn btn-sm" type="button" disabled={busy} onClick={() => save(false)}>
+            Save as draft
+          </button>
+        )}
         {onCancel && <button className="btn btn-danger btn-sm" type="button" onClick={onCancel}>Cancel</button>}
       </div>
     </form>
@@ -187,6 +217,12 @@ export default function Announcements() {
                 <div className="meta">
                   {a.audienceLabel} · {when(a.publishedAt)}
                   {a.publishedAt && ` · read by ${a.readCount}`}
+                  {/* Said plainly because it is the half that cannot be taken
+                  back. Withdrawing pulls a notice off the screen; it does not
+                  unsend the emails, and an author about to withdraw and
+                  republish a correction should be looking at this number. */}
+                  {a.announcedCount !== null && a.announcedCount !== undefined
+                    && ` · emailed to ${a.announcedCount}`}
                 </div>
               </div>
               <div className="ann-admin-actions">

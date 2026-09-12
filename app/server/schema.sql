@@ -785,6 +785,14 @@ CREATE TABLE IF NOT EXISTS announcements (
   -- Draft until published. Writing a notice to several thousand people is
   -- worth being able to do in two sittings.
   published_at TEXT,
+  -- WHEN THE KNOCK WENT OUT, AND TO HOW MANY. Separate from published_at
+  -- because they are separate facts: publishing puts a notice on a screen, and
+  -- knocking puts it on a phone and in an inbox. An author withdrawing and
+  -- republishing a correction is choosing to knock everybody a second time,
+  -- and they should be able to see that they have — a broadcast is the one
+  -- thing in this product that cannot be taken back once it leaves.
+  announced_at    TEXT,
+  announced_count INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL
 );

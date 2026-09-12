@@ -369,6 +369,11 @@ function ready() {
       // itself — and is deliberately done here rather than lazily on read, so
       // no request ever pays for it.
       await clearInventedContactHandles();
+      // When a notice's knock went out, and how many it reached. The table
+      // predates them, and a broadcast that cannot say whether it was sent is
+      // the one kind of uncertainty worth a retrofit — see lib/announcements.js.
+      await ensureColumn('announcements', 'announced_at', 'TEXT');
+      await ensureColumn('announcements', 'announced_count', 'INTEGER');
       await ensureColumn('users', 'account_category', "TEXT NOT NULL DEFAULT 'principal'");
       // Which plan the account is on. Existing rows land on 'founding' — see
       // lib/plans.js for why that is a fact in the row rather than a promise.

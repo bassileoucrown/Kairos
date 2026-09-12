@@ -56,6 +56,12 @@ async function knock({
   // One line per thing rather than a stack. A phone that has been in a pocket
   // should show the latest state of a deadline, not every time it was checked.
   tag = undefined,
+  // What the email asks the reader to do. Defaulted, because almost every
+  // knock in the product is something waiting on that person and "deal with
+  // it" is the honest verb. A notice is the exception: it is an announcement
+  // to read, and telling somebody to deal with it would make a broadcast look
+  // like a demand.
+  cta = null,
 }) {
   try {
     if (!toUserId) return;
@@ -72,9 +78,9 @@ async function knock({
         toEmail: to.email,
         category,
         subject,
-        body: author
-          ? `${sentence}\n\nOpen Kairos to read it and reply.`
-          : `${sentence}\n\nOpen Kairos to deal with it.`,
+        body: `${sentence}\n\n${cta || (author
+          ? 'Open Kairos to read it and reply.'
+          : 'Open Kairos to deal with it.')}`,
       });
     }
 

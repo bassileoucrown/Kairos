@@ -1,5 +1,6 @@
 const db = require('./db');
 const { isHouseholdStaff } = require('./household');
+const { knock } = require('./knock');
 
 // Who may write to everyone.
 //
@@ -58,7 +59,15 @@ function serialize(a, { read = false, isAuthor = false } = {}) {
     createdAt: a.created_at,
     authorName: a.author_name || null,
     read,
-    ...(isAuthor ? { readCount: Number(a.read_count || 0) } : {}),
+    // Only ever to the author. How many inboxes a notice reached is an
+    // operational fact about the deployment, not something a reader of it has
+    // any business being told.
+    ...(isAuthor ? {
+      readCount: Number(a.read_count || 0),
+      announcedAt: a.announced_at || null,
+      announcedCount: a.announced_count === null || a.announced_count === undefined
+        ? null : Number(a.announced_count),
+    } : {}),
   };
 }
 
@@ -96,6 +105,96 @@ async function unreadCount(user) {
   return Number(row?.n || 0);
 }
 
+// ---------------------------------------------------------------------------
+// Telling people a notice exists
+// ---------------------------------------------------------------------------
+//
+// A published notice used to wait on a screen until somebody happened to open
+// Kairos and notice the badge. That is the right behaviour for a channel
+// nobody can mute — and the wrong behaviour for the one notice that actually
+// matters, which is always the one nobody has read yet.
+//
+// So publishing knocks, through lib/knock.js like every other knock in the
+// product: an email and, for anybody whose phone has granted permission, a
+// push. Not a third implementation of the same idea.
+//
+// IT IS THE SAME AUDIENCE, ASKED THE OTHER WAY ROUND. audiencesFor answers
+// "which feeds is this person in"; this answers "who is in this feed". Both
+// read the same four rules, and they have to agree — a notice that knocks
+// somebody who cannot then find it on the screen is worse than one that knocks
+// nobody. bnotice holds them to each other.
+const AUDIENCE_MEMBERS = {
+  everyone: '1 = 1',
+  assistants: "u.account_category IN ('pa', 'ea', 'chief_of_staff')",
+  principals: "u.account_category = 'principal'",
+  household: "EXISTS (SELECT 1 FROM household_members hm"
+    + " WHERE hm.member_user_id = u.id AND hm.status = 'active')",
+};
+
+/** Everybody a notice for this audience is meant to reach. */
+async function recipientsFor(audience) {
+  const rule = AUDIENCE_MEMBERS[audience] || AUDIENCE_MEMBERS.everyone;
+  return await db.prepare(`SELECT u.id FROM users u WHERE ${rule}`).all();
+}
+
+/**
+ * The first part of the notice, flattened onto one line.
+ *
+ * A push shows a title and a line, and "you have a new notice" wastes the
+ * line — the reader already knows that from the fact their phone buzzed. The
+ * opening words of the thing itself are what let somebody decide on a lock
+ * screen whether this needs them now.
+ */
+function excerpt(body, max = 180) {
+  const flat = String(body || '').replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  return `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…`;
+}
+
+/**
+ * Knock everybody the notice is aimed at. Returns how many were reached.
+ *
+ * THE AUTHOR IS NOT KNOCKED. knock() skips a person knocking on themselves,
+ * but only when an author is passed — and no author is passed here, because a
+ * notice comes from Kairos rather than from whoever happened to type it. So
+ * the skip is done here instead.
+ *
+ * ONE AT A TIME, IN THE REQUEST. That is the same shape as the trip builder
+ * telling a household, and it is fine at the scale this is for. It is not fine
+ * at a few thousand recipients: each one is an HTTPS call to the mail provider
+ * and another to the push service, and the publish request would outlive its
+ * own timeout. When that day comes this loop becomes a queue; it is written in
+ * one place so that is one change.
+ *
+ * knock() never throws, so one bad address cannot stop the rest.
+ */
+async function announce(row) {
+  const people = (await recipientsFor(row.audience))
+    .filter((p) => p.id !== row.author_id);
+
+  for (const p of people) {
+    await knock({
+      toUserId: p.id,
+      // No principal owns a broadcast. The emails row is filed against the
+      // deployment rather than somebody's desk, which is what it is.
+      ownerId: null,
+      author: null,
+      subject: row.title,
+      line: excerpt(row.body),
+      url: '/notices',
+      // Its own category so the Outbox can tell a broadcast from the
+      // transactional mail it sits beside.
+      category: 'notice',
+      // One line per notice. Publishing a correction should replace the
+      // notification on the phone, not stack a second one under it.
+      tag: `announcement-${row.id}`,
+      cta: 'Open Kairos to read it.',
+    });
+  }
+  return people.length;
+}
+
 module.exports = {
   AUDIENCES, canPublish, isConfigured, audiencesFor, listFor, unreadCount, serialize,
+  recipientsFor, announce, excerpt,
 };
